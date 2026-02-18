@@ -1,0 +1,140 @@
+name: Release new version
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v0.0.1-test)'
+        required: true
+        default: 'v0.0.0-test'
+
+permissions: {}
+
+jobs:
+  unit-tests:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    needs: [unit-tests]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { goos: linux,   goarch: amd64, os: ubuntu-latest }
+          - { goos: linux,   goarch: arm64, os: ubuntu-latest }
+          - { goos: darwin,  goarch: amd64, os: macos-latest  }
+          - { goos: darwin,  goarch: arm64, os: macos-latest  }
+          - { goos: windows, goarch: amd64, os: windows-latest }
+    name: Build ${{ matrix.goos }}_${{ matrix.goarch }}
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+
+      - name: Install cross-compiler for Linux ARM64
+        if: matrix.goos == 'linux' && matrix.goarch == 'arm64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Get version from tag
+        id: version
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build binary
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 1
+        run: |
+          if [[ "${{ matrix.goos }}" == "linux" && "${{ matrix.goarch }}" == "arm64" ]]; then
+            export CC=aarch64-linux-gnu-gcc
+          fi
+          if [[ "${{ matrix.goos }}" == "darwin" && "${{ matrix.goarch }}" == "amd64" ]]; then
+            export CGO_CFLAGS="-arch x86_64"
+            export CGO_LDFLAGS="-arch x86_64"
+          fi
+          go build -ldflags "-s -w -X github.com/DataDog/datadog-saist-experiment/internal/model.Version=${{ steps.version.outputs.version }} -X github.com/DataDog/datadog-saist-experiment/internal/model.SCMCommit=${{ github.sha }}" -o datadog-saist${{ matrix.goos == 'windows' && '.exe' || '' }} ./cmd/datadog-saist/
+
+      - name: Create archive (Unix)
+        if: matrix.goos != 'windows'
+        run: |
+          zip -j datadog-saist_${{ matrix.goos }}_${{ matrix.goarch }}.zip datadog-saist LICENSE
+
+      - name: Create archive (Windows)
+        if: matrix.goos == 'windows'
+        run: |
+          7z a datadog-saist_${{ matrix.goos }}_${{ matrix.goarch }}.zip datadog-saist.exe LICENSE
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: datadog-saist_${{ matrix.goos }}_${{ matrix.goarch }}
+          path: datadog-saist_${{ matrix.goos }}_${{ matrix.goarch }}.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    needs: [build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display artifacts
+        run: ls -lR artifacts
+
+      - name: Generate checksums
+        run: |
+          cd artifacts
+          find . -name '*.zip' -exec mv {} . \;
+          sha256sum *.zip > checksums.txt
+          cat checksums.txt
+
+      - name: Get release version
+        id: release-version
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "tag=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create release
+        run: |
+          gh release create --draft --generate-notes \
+            ${{ steps.release-version.outputs.tag }} \
+            artifacts/*.zip \
+            artifacts/checksums.txt
+        env:
+          GH_TOKEN: ${{ github.token }}

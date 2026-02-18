@@ -1,0 +1,53 @@
+name: Datadog Driver Test
+
+on:
+  push:
+    branches:
+      - "**"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Checkout saist-playground repo
+      uses: actions/checkout@v4
+      with:
+        repository: muh-nee/saist-playground
+        path: tmp/saist-playground
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.24'
+    
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+    
+    - name: Download dependencies
+      run: go mod download
+    
+    - name: Verify dependencies
+      run: go mod verify
+    
+    - name: Test on saist-playground repository
+      env:
+        GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        DD_SITE: datad0g.com
+      run: |
+        echo '{"files": {"go-sqli/vulnerable1.go": ["datadog/go-sqli"]}}' > ${GITHUB_WORKSPACE}/tmp/saist-playground/.datadog-driver.json
+        DATADOG_DRIVER_ENABLED=true go run ./cmd/datadog-saist/main.go -directory ${GITHUB_WORKSPACE}/tmp/saist-playground -output /tmp/sample.sarif --validation-model gemini-3-flash --detection-model gemini-3-flash --debug
+        if [ $(jq '.runs[0].results | length' /tmp/sample.sarif) -ne 1 ] ; then echo "more than one file violation found with the datadog driver" ; exit 1 ; fi
+        if [ $(jq '.runs[0].artifacts | length' /tmp/sample.sarif) -ne 1 ] ; then echo "more than one file scanned when using the datadog driver" ; exit 1 ; fi
+        if [ $(jq '.runs[0].artifacts[0].properties["tags"][0]' /tmp/sample.sarif) -ne '"RULE_SUCCESS:datadog/go-sqli"' ] ; then echo "artifact does not have the right tag" ; exit 1 ; fi

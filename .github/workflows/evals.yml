@@ -1,0 +1,112 @@
+name: Run Evaluations
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 10 1,15 * *"
+
+jobs:
+  evaluations:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        reponame: [saist-playground, BenchmarkJava, vulnpy-ibmappsec, gowasp]
+        modelname: ["gemini-2.5-flash", "gemini-3-flash", "openai-gpt5.2", "openai-gpt5.2-codex", "claude-4.5-sonnet", "claude-4.5-haiku"]
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Checkout private evals repo
+      uses: actions/checkout@v4
+      with:
+        repository: DataDog/datadog-saist-evals
+        ref: 'main'
+        token: ${{ secrets.EVALS_REPO_PAT }}
+        path: tmp/datadog-saist-evals
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.24'
+        
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+          
+    - name: Download dependencies
+      run: go mod download
+      
+    - name: Run tests
+      run: go test -v -race -cover ./...
+
+    - name: Build binary
+      run: go build -o datadog-saist ./cmd/datadog-saist
+
+    - name: Build binary
+      run: cp datadog-saist ${GITHUB_WORKSPACE}/tmp/datadog-saist-evals/datadog-saist
+
+    - name: Start Datadog Agent
+      env:
+        DD_API_KEY: ${{ secrets.DD_API_KEY }}
+        DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
+        DD_SITE: ${{ vars.METRIC_UPLOAD_DD_SITE }}
+        DD_ENV: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+        DD_SERVICE: datadog-saist
+        DD_VERSION: ${{ github.sha }}
+      run: |
+        # Install Datadog Agent
+        DD_AGENT_MAJOR_VERSION=7 DD_API_KEY=$DD_API_KEY DD_SITE=$DD_SITE bash -c "$(curl -L https://s3.amazonaws.com/dd-agent/scripts/install_script.sh)"
+        
+        # Configure the agent
+        sudo tee /etc/datadog-agent/datadog.yaml > /dev/null <<EOF
+        api_key: $DD_API_KEY
+        site: $DD_SITE
+        logs_enabled: true
+        process_config:
+          enabled: true
+        apm_config:
+          enabled: true
+        tags:
+          - version:$DD_VERSION
+          - analyzer_sha:${{ github.sha }}
+        EOF
+        
+        # Start the agent
+        sudo systemctl start datadog-agent
+        sudo systemctl enable datadog-agent
+        
+        # Wait for agent to be ready
+        sleep 30
+        
+        # Verify agent status
+        sudo datadog-agent status
+        
+    - name: Run evals
+      env:
+        DD_API_KEY: ${{ secrets.DD_API_KEY }}
+        DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
+        DD_SITE: ${{ vars.DD_SITE || 'datadoghq.com' }}
+        GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      run: |
+        cd ${GITHUB_WORKSPACE}/tmp/datadog-saist-evals
+        make build-run VALIDATION_MODEL=${{ matrix.modelName }} DETECTION_MODEL=${{ matrix.modelname }} REPO=${{ matrix.reponame }} SEND_METRICS=true
+
+    - name: Flush metrics before shutdown
+      run: |
+        # Send a test metric to trigger flush
+        echo "test.flush:1|c" | nc -u -w1 localhost 8125 || true
+  
+        # Wait for natural flush cycle (happens every 15-20 seconds)
+        sleep 20
+  
+        # Check final agent status
+        sudo datadog-agent status

@@ -1,0 +1,53 @@
+name: End to end tests
+
+on:
+  push:
+    branches:
+      - "**"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        model: [ "gemini-2.5-flash", "gemini-3-flash", "openai-gpt5.2", "openai-gpt5.2-codex", "claude-4.5-sonnet", "claude-4.5-haiku" ]
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Checkout saist-playground repo
+      uses: actions/checkout@v4
+      with:
+        repository: muh-nee/saist-playground
+        path: tmp/saist-playground
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.24'
+    
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+    
+    - name: Download dependencies
+      run: go mod download
+    
+    - name: Verify dependencies
+      run: go mod verify
+    
+    - name: Test on saist-playground repository
+      env:
+        GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        DD_SITE: datad0g.com
+      run: |
+        go run ./cmd/datadog-saist/main.go -directory ${GITHUB_WORKSPACE}/tmp/saist-playground -output /tmp/sample.sarif --validation-model ${{ matrix.model }} --detection-model ${{ matrix.model }} --debug
+        if [ $(jq '.runs[0].results | length' /tmp/sample.sarif) -lt 120 ] ; then echo "less than 120 violations were detected, which indicates a regression" ; exit 1 ; fi
