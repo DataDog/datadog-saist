@@ -1,6 +1,8 @@
 name: Build and Test
 
-on: [push]
+on:
+  push:
+  workflow_call:
 
 permissions:
   contents: read

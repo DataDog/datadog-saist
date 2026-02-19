@@ -17,7 +17,7 @@ jobs:
   unit-tests:
     permissions:
       contents: read
-    uses: ./.github/workflows/ci.yml
+    uses: ./.github/workflows/build-test.yml
 
   build:
     needs: [unit-tests]
