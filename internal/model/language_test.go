@@ -24,6 +24,9 @@ func TestGetLanguagePythonFiles(t *testing.T) {
 	assert.Equal(t, Python, GetLanguage("script.py"))
 	assert.Equal(t, Python, GetLanguage("src/utils/script.py"))
 	assert.Equal(t, Python, GetLanguage("script.PY"))
+	assert.Equal(t, Python, GetLanguage("script.py3"))
+	assert.Equal(t, Python, GetLanguage("src/utils/script.py3"))
+	assert.Equal(t, Python, GetLanguage("script.PY3"))
 }
 
 func TestGetLanguageUnknownFiles(t *testing.T) {

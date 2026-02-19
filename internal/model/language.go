@@ -36,7 +36,7 @@ func GetLanguage(filePath string) Language {
 		return Java
 	case ".go":
 		return Go
-	case ".py":
+	case ".py", ".py3":
 		return Python
 
 	default:
