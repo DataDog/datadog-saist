@@ -14,13 +14,13 @@ on:
 permissions: {}
 
 jobs:
-  unit-tests:
+  tests:
     permissions:
       contents: read
     uses: ./.github/workflows/build-test.yml
 
   build:
-    needs: [unit-tests]
+    needs: [tests]
     strategy:
       fail-fast: false
       matrix:
