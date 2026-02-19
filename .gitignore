@@ -36,7 +36,7 @@ cmd/datadog-saist/datadog-saist
 *~
 
 /datadog-saist
-datadog-saist-experiment
+datadog-saist
 report.sarif
 datadog-saist-cache
 

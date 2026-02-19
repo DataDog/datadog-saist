@@ -76,7 +76,7 @@ jobs:
             export CGO_CFLAGS="-arch x86_64"
             export CGO_LDFLAGS="-arch x86_64"
           fi
-          go build -ldflags "-s -w -X github.com/DataDog/datadog-saist-experiment/internal/model.Version=${{ steps.version.outputs.version }} -X github.com/DataDog/datadog-saist-experiment/internal/model.SCMCommit=${{ github.sha }}" -o datadog-saist${{ matrix.goos == 'windows' && '.exe' || '' }} ./cmd/datadog-saist/
+          go build -ldflags "-s -w -X github.com/DataDog/datadog-saist/internal/model.Version=${{ steps.version.outputs.version }} -X github.com/DataDog/datadog-saist/internal/model.SCMCommit=${{ github.sha }}" -o datadog-saist${{ matrix.goos == 'windows' && '.exe' || '' }} ./cmd/datadog-saist/
 
       - name: Create archive (Unix)
         if: matrix.goos != 'windows'

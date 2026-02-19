@@ -3,7 +3,7 @@
 COMMIT := $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
 VERSION := snapshot-$(shell echo ${COMMIT} | cut -c1-8)
 TARGET_BIN ?= bin/datadog-saist
-CONSTANTS_PATH = github.com/DataDog/datadog-saist-experiment/internal/model
+CONSTANTS_PATH = github.com/DataDog/datadog-saist/internal/model
 
 .PHONY: help
 help: ## Show this help message
