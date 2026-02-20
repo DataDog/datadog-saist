@@ -17,19 +17,21 @@ type jsonApiResponse struct {
 		ID         string `json:"id"`
 		Type       string `json:"type"`
 		Attributes struct {
-			Category         string   `json:"category"`
-			Checksum         string   `json:"checksum"`
-			Content          string   `json:"content"`
-			Cwe              string   `json:"cwe"`
-			Description      string   `json:"description"`
-			Directories      []string `json:"directories"`
-			ExecutionMode    string   `json:"execution_mode"`
-			Globs            []string `json:"globs"`
-			IsDefault        bool     `json:"is_default"`
-			IsTesting        bool     `json:"is_testing"`
-			Severity         string   `json:"severity"`
-			ShortDescription string   `json:"short_description"`
-			Version          string   `json:"rule_version"`
+			Category              string   `json:"category"`
+			Checksum              string   `json:"checksum"`
+			Content               string   `json:"content"`
+			Cwe                   string   `json:"cwe"`
+			Description           string   `json:"description"`
+			Directories           []string `json:"directories"`
+			ExecutionMode         string   `json:"execution_mode"`
+			Globs                 []string `json:"globs"`
+			IsDefault             bool     `json:"is_default"`
+			IsTesting             bool     `json:"is_testing"`
+			Severity              string   `json:"severity"`
+			ShortDescription      string   `json:"short_description"`
+			Version               string   `json:"rule_version"`
+			ResultKeywordsExclude []string `jsonapi:"attribute" json:"result_keywords_exclude,omitempty"` //nolint:lll    // keywords used to exclude some results (e.g. false positives)
+			FileSearchKeywords    []string `jsonapi:"attribute" json:"file_search_keywords,omitempty"`    // keywords used to select files for analysis
 		} `json:"attributes"`
 	} `json:"data"`
 }
@@ -103,20 +105,22 @@ func GetPromptsFromApiData(data io.ReadCloser) ([]api.AiPrompt, error) {
 		}
 
 		prompts[i] = api.AiPrompt{
-			ID:               item.ID,
-			Content:          content,
-			Globs:            item.Attributes.Globs,
-			Directories:      item.Attributes.Directories,
-			ExecutionMode:    api.ExecutionMode(item.Attributes.ExecutionMode),
-			Cwe:              cwe,
-			Checksum:         item.Attributes.Checksum,
-			Severity:         api.Severity(item.Attributes.Severity),
-			Category:         api.Category(item.Attributes.Category),
-			IsTesting:        item.Attributes.IsTesting,
-			IsDefault:        item.Attributes.IsDefault,
-			Description:      description,
-			ShortDescription: short_description,
-			Version:          ruleVersion,
+			ID:                    item.ID,
+			Content:               content,
+			Globs:                 item.Attributes.Globs,
+			Directories:           item.Attributes.Directories,
+			ExecutionMode:         api.ExecutionMode(item.Attributes.ExecutionMode),
+			Cwe:                   cwe,
+			Checksum:              item.Attributes.Checksum,
+			Severity:              api.Severity(item.Attributes.Severity),
+			Category:              api.Category(item.Attributes.Category),
+			IsTesting:             item.Attributes.IsTesting,
+			IsDefault:             item.Attributes.IsDefault,
+			Description:           description,
+			ShortDescription:      short_description,
+			Version:               ruleVersion,
+			ResultKeywordsExclude: item.Attributes.ResultKeywordsExclude,
+			FileSearchKeywords:    item.Attributes.FileSearchKeywords,
 		}
 	}
 

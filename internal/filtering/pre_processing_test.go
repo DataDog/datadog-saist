@@ -9,28 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestShouldAnalyze_WithXpathInjectionKeywords(t *testing.T) {
-	ctx := model.DetectionContext{
-		Language: model.Go,
-		Rule:     api.AiPrompt{ID: "datadog/go-xpathi"},
-		Code:     "func main() { xpath.Compile() }",
-	}
-
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
-	assert.True(t, result, "Expected ShouldAnalyze to return true for code containing xpath keyword")
-}
-
-func TestShouldAnalyze_WithoutRelevantKeywords(t *testing.T) {
-	ctx := model.DetectionContext{
-		Language: model.Go,
-		Rule:     api.AiPrompt{ID: "datadog/go-xpathi"},
-		Code:     "func main() { fmt.Println(\"hello\") }",
-	}
-
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
-	assert.False(t, result, "Expected ShouldAnalyze to return false for code without relevant keywords")
-}
-
 func TestShouldAnalyze_CaseInsensitive(t *testing.T) {
 	ctx := model.DetectionContext{
 		Language: model.Go,
@@ -53,60 +31,11 @@ func TestShouldAnalyze_JavaCommandInjection(t *testing.T) {
 	assert.True(t, result, "Expected ShouldAnalyze to return true for Java code with process keyword")
 }
 
-func TestShouldAnalyze_PythonSqlInjection(t *testing.T) {
-	ctx := model.DetectionContext{
-		Language: model.Python,
-		Rule:     api.AiPrompt{ID: "datadog/python-sqli"},
-		Code:     "import sqlite3\nconn = sqlite3.connect('test.db')\ncursor.execute('SELECT * FROM users')",
-	}
 
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
-	assert.True(t, result, "Expected ShouldAnalyze to return true for Python code with sqlite3 and SQL keywords")
-}
 
-func TestShouldAnalyze_GenericXssKeywords(t *testing.T) {
-	ctx := model.DetectionContext{
-		Language: model.Go,
-		Rule:     api.AiPrompt{ID: "datadog/go-xss"},
-		Code:     "template := \"<html><body>Hello</body></html>\"",
-	}
 
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
-	assert.True(t, result, "Expected ShouldAnalyze to return true for code with HTML tags")
-}
 
-func TestShouldAnalyze_GenericSqlKeywords(t *testing.T) {
-	ctx := model.DetectionContext{
-		Language: model.Python,
-		Rule:     api.AiPrompt{ID: "datadog/python-sqli"},
-		Code:     "import sqlite3\nquery = \"SELECT * FROM users WHERE id = ?\"",
-	}
 
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
-	assert.True(t, result, "Expected ShouldAnalyze to return true for code with DB import and SQL SELECT keyword")
-}
-
-func TestShouldAnalyze_NoKeywordsForVulnerability(t *testing.T) {
-	ctx := model.DetectionContext{
-		Language: model.Java,
-		Rule:     api.AiPrompt{ID: "datadog/java-xss"},
-		Code:     "System.out.println(\"test\");",
-	}
-
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
-	assert.False(t, result, "Expected ShouldAnalyze to return false when no keywords match (Java XSS has generic XSS keywords but no language-specific ones)")
-}
-
-func TestShouldNotAnalyzeXssWithComments(t *testing.T) {
-	ctx := model.DetectionContext{
-		Language: model.Java,
-		Rule:     api.AiPrompt{ID: "datadog/java-xss"},
-		Code:     "/* <p> something\n*/",
-	}
-
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
-	assert.False(t, result, "Expected ShouldAnalyze to return false when no keywords match (Java XSS has generic XSS keywords but no language-specific ones)")
-}
 
 func TestShouldNotAnalyzeJavadoc(t *testing.T) {
 	ctx := model.DetectionContext{
@@ -129,17 +58,6 @@ func TestShouldAnalyzeXss(t *testing.T) {
 	assert.True(t, ShouldAnalyze(&ctx, log.NoopLogger()), "Expected Java XSS to match with HTML tags and request input")
 }
 
-func TestShouldAnalyze_UnknownLanguage(t *testing.T) {
-	ctx := model.DetectionContext{
-		Language: model.LanguageUnknown,
-		Rule:     api.AiPrompt{ID: "unknown-rule"},
-		Code:     "SELECT * FROM users",
-	}
-
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
-	assert.True(t, result, "Expected ShouldAnalyze to return true for unknown language with generic keywords")
-}
-
 func TestShouldAnalyze_UnknownVulnerability(t *testing.T) {
 	ctx := model.DetectionContext{
 		Language: model.Go,
@@ -154,23 +72,35 @@ func TestShouldAnalyze_UnknownVulnerability(t *testing.T) {
 func TestShouldAnalyze_MultipleKeywordsInCode(t *testing.T) {
 	ctx := model.DetectionContext{
 		Language: model.Go,
-		Rule:     api.AiPrompt{ID: "datadog/go-sqli"},
-		Code:     "import \"database/sql\"\ndb.Query(\"SELECT * FROM users\"); db.Exec(\"UPDATE table SET value = 1\")",
+		Rule: api.AiPrompt{ID: "datadog/go-sqli",
+			FileSearchKeywords: []string{"select", "query"}},
+		Code: "import \"database/sql\"\ndb.Query(\"SELECT * FROM users\"); db.Exec(\"UPDATE table SET value = 1\")",
 	}
 
 	result := ShouldAnalyze(&ctx, log.NoopLogger())
 	assert.True(t, result, "Expected ShouldAnalyze to return true when code contains DB import and SQL keywords")
 }
 
-func TestShouldAnalyze_CommandInjectionGenericKeywords(t *testing.T) {
+func TestShouldAnalyze_CommandInjectionKeywords(t *testing.T) {
 	ctx := model.DetectionContext{
 		Language: model.Python,
-		Rule:     api.AiPrompt{ID: "datadog/python-cmdi"},
+		Rule:     api.AiPrompt{ID: "datadog/python-cmdi", FileSearchKeywords: []string{"system"}},
 		Code:     "os.system('bash -c \"echo hello\"')",
 	}
 
 	result := ShouldAnalyze(&ctx, log.NoopLogger())
 	assert.True(t, result, "Expected ShouldAnalyze to return true for code with bash keyword")
+}
+
+func TestShouldAnalyze_CommandInjectionNoKeywordMatch(t *testing.T) {
+	ctx := model.DetectionContext{
+		Language: model.Python,
+		Rule:     api.AiPrompt{ID: "datadog/python-cmdi", FileSearchKeywords: []string{"foobar"}},
+		Code:     "os.system('bash -c \"echo hello\"')",
+	}
+
+	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	assert.False(t, result, "No keyword match")
 }
 
 func TestShouldAnalyze_LanguageSpecificOverridesGeneric(t *testing.T) {
@@ -206,23 +136,6 @@ func TestShouldAnalyze_XssHtmlTags(t *testing.T) {
 
 			result := ShouldAnalyze(&ctx, log.NoopLogger())
 			assert.True(t, result, "Expected ShouldAnalyze to return true for %s", tc.name)
-		})
-	}
-}
-
-func TestShouldAnalyze_AllSqlKeywords(t *testing.T) {
-	sqlKeywords := []string{"select", "update", "insert", "delete"}
-
-	for _, keyword := range sqlKeywords {
-		t.Run(keyword, func(t *testing.T) {
-			ctx := model.DetectionContext{
-				Language: model.Go,
-				Rule:     api.AiPrompt{ID: "datadog/go-sqli"},
-				Code:     "import \"database/sql\"\ndb.Query(\"" + keyword + " something\")",
-			}
-
-			result := ShouldAnalyze(&ctx, log.NoopLogger())
-			assert.True(t, result, "Expected ShouldAnalyze to return true for SQL keyword with DB import: %s", keyword)
 		})
 	}
 }

@@ -21,7 +21,7 @@ type ScanData struct {
 	NumberedFileText string
 
 	// Rule
-	Rule RuleData
+	Rule *api.AiPrompt
 }
 
 // RuleData contains metadata about the rule, independent of the user prompt.
