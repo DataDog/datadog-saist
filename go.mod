@@ -15,7 +15,7 @@ require (
 	github.com/tree-sitter/tree-sitter-go v0.23.4
 	github.com/tree-sitter/tree-sitter-java v0.23.5
 	github.com/tree-sitter/tree-sitter-python v0.23.6
-	go.uber.org/zap v1.27.0
+	go.uber.org/zap v1.27.1
 	google.golang.org/api v0.186.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.74.7-rc.5
 )
