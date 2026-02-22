@@ -234,11 +234,12 @@ func (rp *RuleProcessor) BuildScanDataForResult(ctx context.Context, result *Pro
 			FileText:         fileText,
 			NumberedFileText: numberedFileText,
 			Rule: model.RuleData{
-				ID:       rule.ID,
-				Version:  rule.Version,
-				Content:  rule.Content,
-				CWE:      rule.Cwe,
-				Severity: rule.Severity,
+				ID:                    rule.ID,
+				Version:               rule.Version,
+				Content:               rule.Content,
+				CWE:                   rule.Cwe,
+				Severity:              rule.Severity,
+				ResultKeywordsExclude: rule.ResultKeywordsExclude,
 			},
 		}
 		allScanData = append(allScanData, scanData)
@@ -264,7 +265,8 @@ func (rp *RuleProcessor) runScan(ctx context.Context, scanData *model.ScanData) 
 		return RunScanResult{}, err
 	}
 
-	filtered := filtering.FilterViolationsByKeywords(dr.Violations, filtering.GetKeywordsToFilter(scanData.Rule.ID))
+	// Use keywords from rule definition for result filtering
+	filtered := filtering.FilterViolationsByKeywords(dr.Violations, scanData.Rule.ResultKeywordsExclude)
 	for i := range filtered {
 		filtered[i].FileHash = scanData.FileHash
 

@@ -17,7 +17,7 @@ func FilterViolations(violations []model.Violation, predicate func(model.Violati
 }
 
 func FilterViolationsByKeywords(violations []model.Violation, keywords []string) []model.Violation {
-	if keywords == nil {
+	if len(keywords) == 0 {
 		return violations
 	}
 	return FilterViolations(violations, func(violation model.Violation) bool {

@@ -32,4 +32,6 @@ type RuleData struct {
 	Content  string
 	CWE      *string
 	Severity api.Severity
+	// ResultKeywordsExclude contains keywords to filter false positive results
+	ResultKeywordsExclude []string
 }
