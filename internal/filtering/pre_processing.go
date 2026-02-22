@@ -22,74 +22,6 @@ var (
 	reTokenSplit = regexp.MustCompile(`[^a-z0-9_]+`)
 )
 
-var keywordsPerRuleId = map[string][]string{
-	// ============================================================
-	// Java Rules
-	// ============================================================
-	"datadog/java-accesscontrol": {"getparameter", "pathvariable", "requestparam", "requestbody", "findbyid",
-		"repository", "getmapping", "postmapping", "putmapping", "deletemapping"},
-	"datadog/java-brokencrypto": {"cipher", "des", "ecb", "rc4", "arcfour", "secretkey", "ivparameterspec", "random",
-		"keypairgenerator"},
-	"datadog/java-cmdi": {"runtime", "exec", "processbuilder", "process", "shell", "bash", "cmd"},
-	"datadog/java-codei": {"scriptengine", "eval", "groovyshell", "spelexpressionparser", "parseexpression",
-		"mvel", "ognl", "class.forname", "getmethod", "invoke"},
-	"datadog/java-deserialization": {"objectinputstream", "readobject", "xstream", "fromxml", "xmldecoder",
-		"enabledefaulttyping", "yaml", "kryo"},
-	"datadog/java-insecurecookie": {"cookie", "setsecure", "sethttponly", "addcookie", "sessionid", "jsessionid"},
-	"datadog/java-ldapi": {"ldap", "dircontext", "search", "ldapcontext", "ldaptemplate",
-		"initialdircontext", "jndi"},
-	"datadog/java-pathtraversal": {"file", "fileinputstream", "fileoutputstream", "filereader", "filewriter",
-		"paths.get", "files.read", "files.write", "getparameter", "servefile"},
-	"datadog/java-sqli": {"database", "sql", "select", "update", "insert", "delete", "from", "connection",
-		"statement", "preparedstatement", "executequery"},
-	"datadog/java-trustboundary": {"session", "setattribute", "httpsession", "securitycontext", "getparameter",
-		"getheader"},
-	"datadog/java-weakhash": {"messagedigest", "md5", "sha-1", "sha1", "digestutils", "password", "hash"},
-	"datadog/java-xpathi":   {"xpath", "documentbuilderfactory", "compile", "xpathexpression"},
-	"datadog/java-xss": {"getparameter", "getheader", "getwriter", "printwriter", "response", "xss",
-		"<html", "<body", "<script", "<form", "<input", "<img", "<iframe", "<div", "<span", "<a"},
-
-	// ============================================================
-	// Go Rules
-	// ============================================================
-	"datadog/go-accesscontrol":   {"getparameter", "query", "param", "findbyid", "handler", "gin", "echo", "mux"},
-	"datadog/go-brokencrypto":    {"cipher", "des", "ecb", "rc4", "aes", "crypto", "rand", "secretkey"},
-	"datadog/go-cmdi":            {"exec", "command", "shell", "bash", "os/exec"},
-	"datadog/go-codei":           {"eval", "reflect", "plugin", "unsafe"},
-	"datadog/go-deserialization": {"gob", "decode", "unmarshal", "json", "yaml", "encoding"},
-	"datadog/go-insecurecookie":  {"cookie", "setcookie", "secure", "httponly", "session"},
-	"datadog/go-ldapi":           {"ldap", "search", "bind", "dial"},
-	"datadog/go-pathtraversal": {"os.open", "os.readfile", "os.writefile", "filepath", "ioutil", "servefile",
-		"http.dir"},
-	"datadog/go-sqli": {"sql", "select", "update", "insert", "delete", "from", "query", "exec",
-		"database/sql"},
-	"datadog/go-trustboundary": {"session", "context", "setvalue", "cookie"},
-	"datadog/go-weakhash":      {"md5", "sha1", "crypto/md5", "crypto/sha1", "hash", "password"},
-	"datadog/go-xpathi":        {"xpath", "xmlquery"},
-	"datadog/go-xss": {"responsewriter", "write", "fprintf", "template", "html",
-		"<html", "<body", "<script", "<form", "<input", "<img", "<iframe", "<div", "<span"},
-
-	// ============================================================
-	// Python Rules
-	// ============================================================
-	"datadog/python-accesscontrol":   {"request", "args", "form", "get", "query", "flask", "django", "fastapi"},
-	"datadog/python-brokencrypto":    {"des", "ecb", "rc4", "aes", "crypto", "pycrypto", "cryptography", "hashlib"},
-	"datadog/python-cmdi":            {"subprocess", "os.system", "os.popen", "shell", "bash", "exec", "eval"},
-	"datadog/python-codei":           {"eval", "exec", "compile", "code", "__import__"},
-	"datadog/python-deserialization": {"pickle", "loads", "load", "yaml", "marshal", "shelve", "dill", "jsonpickle"},
-	"datadog/python-insecurecookie":  {"cookie", "set_cookie", "secure", "httponly", "session"},
-	"datadog/python-ldapi":           {"ldap", "search", "bind", "ldap3", "python-ldap"},
-	"datadog/python-pathtraversal": {"open", "read", "write", "file", "path", "os.path", "send_file",
-		"send_from_directory"},
-	"datadog/python-sqli": {"sqlite3", "cursor", "execute", "select", "update", "insert", "delete",
-		"psycopg2", "sqlalchemy"},
-	"datadog/python-trustboundary": {"session", "flask.session", "request"},
-	"datadog/python-weakhash":      {"md5", "sha1", "hashlib", "password", "digest"},
-	"datadog/python-xpathi":        {"xpath", "lxml", "etree"},
-	"datadog/python-xss": {"render", "template", "response", "html", "jinja",
-		"<html", "<body", "<script", "<form", "<input", "<img", "<iframe"},
-}
-
 // codeUsedForDetection strips comments / docstrings etc. before keyword matching.
 func codeUsedForDetection(inputCode string, language model.Language) string {
 	switch language {
@@ -1462,8 +1394,8 @@ func ShouldAnalyze(detectionContext *model.DetectionContext, logger log.DDSource
 	}
 
 	// Fallback: keyword-based OR logic using keywordsPerRuleId.
-	keywords, ok := keywordsPerRuleId[detectionContext.Rule.ID]
-	if !ok || len(keywords) == 0 {
+	keywords := detectionContext.Rule.FileSearchKeywords
+	if len(keywords) == 0 {
 		// No filter configured: analyze everything for this rule.
 		return true
 	}

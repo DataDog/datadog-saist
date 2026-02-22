@@ -505,7 +505,7 @@ func (agent *DetectionAgent) basicDetection(ctx context.Context, scanData *model
 					Path:        scanData.RelativeFilePath,
 					Rule:        scanData.Rule.ID,
 					Message:     violation.Reason,
-					Cwe:         scanData.Rule.CWE,
+					Cwe:         scanData.Rule.Cwe,
 				})
 				mu.Unlock()
 			} else if agent.debugEnabled {

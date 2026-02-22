@@ -21,15 +21,6 @@ type ScanData struct {
 	NumberedFileText string
 
 	// Rule
-	Rule RuleData
+	Rule *api.AiPrompt
 }
 
-// RuleData contains metadata about the rule, independent of the user prompt.
-type RuleData struct {
-	ID      string
-	Version string
-	// Content is the rule's text, sent to a secondary LLM pass to verify the detection
-	Content  string
-	CWE      *string
-	Severity api.Severity
-}
