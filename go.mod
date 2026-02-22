@@ -6,7 +6,7 @@ require (
 	github.com/bmatcuk/doublestar/v4 v4.9.1
 	github.com/google/generative-ai-go v0.20.1
 	github.com/invopop/jsonschema v0.13.0
-	github.com/openai/openai-go/v3 v3.17.0
+	github.com/openai/openai-go/v3 v3.22.0
 	github.com/owenrumney/go-sarif/v2 v2.3.3
 	github.com/panjf2000/ants/v2 v2.11.3
 	github.com/pkg/errors v0.9.1
