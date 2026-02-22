@@ -22,7 +22,6 @@ var (
 	reTokenSplit = regexp.MustCompile(`[^a-z0-9_]+`)
 )
 
-
 // codeUsedForDetection strips comments / docstrings etc. before keyword matching.
 func codeUsedForDetection(inputCode string, language model.Language) string {
 	switch language {
