@@ -1813,7 +1813,7 @@ func ShouldAnalyze(detectionContext *model.DetectionContext, logger log.DDSource
 		return res
 	}
 
-	// Use keywords from rule definition for file search filtering
+	// Fallback: keyword-based OR logic using keywordsPerRuleId.
 	keywords := detectionContext.Rule.FileSearchKeywords
 	if len(keywords) == 0 {
 		// No filter configured: analyze everything for this rule.
