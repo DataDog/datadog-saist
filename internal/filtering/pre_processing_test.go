@@ -34,12 +34,6 @@ func TestShouldAnalyze_JavaCommandInjection(t *testing.T) {
 	assert.True(t, result, "Expected ShouldAnalyze to return true for Java code with process keyword")
 }
 
-
-
-
-
-
-
 func TestShouldNotAnalyzeJavadoc(t *testing.T) {
 	ctx := model.DetectionContext{
 		Language: model.Java,
