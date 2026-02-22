@@ -32,6 +32,8 @@ func codeUsedForDetection(inputCode string, language model.Language) string {
 		return stripGoComments(inputCode)
 	case model.Python:
 		return stripPythonComments(inputCode)
+	case model.CSharp:
+		return stripCSharpComments(inputCode)
 	default:
 		return inputCode
 	}
@@ -100,6 +102,24 @@ func stripPythonComments(code string) string {
 	return strings.Join(out, "\n")
 }
 
+func stripCSharpComments(code string) string {
+	// C# uses same comment syntax as Java: /* ... */ and //
+	code = reJavaBlock.ReplaceAllString(code, "")
+	code = reJavaLine.ReplaceAllString(code, "")
+
+	lines := strings.Split(code, "\n")
+	out := lines[:0]
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		// Skip empty and XML doc comment lines (/// or bare *)
+		if trimmed == "" || trimmed == "*" || strings.HasPrefix(trimmed, "///") {
+			continue
+		}
+		out = append(out, line)
+	}
+	return strings.Join(out, "\n")
+}
+
 func containsAny(code string, keywords []string) bool {
 	for _, kw := range keywords {
 		if strings.Contains(code, kw) {
@@ -133,66 +153,79 @@ var ruleFilters = map[string]ruleFilterFunc{
 	"datadog/python-sqli": shouldAnalyzePythonSqliCtx,
 	"datadog/go-sqli":     shouldAnalyzeGoSqliCtx,
 	"datadog/java-sqli":   shouldAnalyzeJavaSqliCtx,
+	"datadog/csharp-sqli": shouldAnalyzeCSharpSqliCtx,
 
 	// XSS
 	"datadog/java-xss":   shouldAnalyzeJavaXssCtx,
 	"datadog/go-xss":     shouldAnalyzeGoXssCtx,
 	"datadog/python-xss": shouldAnalyzePythonXssCtx,
+	"datadog/csharp-xss": shouldAnalyzeCSharpXssCtx,
 
 	// Deserialization
 	"datadog/java-deserialization":   shouldAnalyzeJavaDeserializationCtx,
 	"datadog/go-deserialization":     shouldAnalyzeGoDeserializationCtx,
 	"datadog/python-deserialization": shouldAnalyzePythonDeserializationCtx,
+	"datadog/csharp-deserialization": shouldAnalyzeCSharpDeserializationCtx,
 
 	// Broken Cryptography
 	"datadog/java-brokencrypto":   shouldAnalyzeJavaBrokencryptoCtx,
 	"datadog/go-brokencrypto":     shouldAnalyzeGoBrokencryptoCtx,
 	"datadog/python-brokencrypto": shouldAnalyzePythonBrokencryptoCtx,
+	"datadog/csharp-brokencrypto": shouldAnalyzeCSharpBrokencryptoCtx,
 
 	// Path Traversal
 	"datadog/java-pathtraversal":   shouldAnalyzeJavaPathtraversalCtx,
 	"datadog/go-pathtraversal":     shouldAnalyzeGoPathtraversalCtx,
 	"datadog/python-pathtraversal": shouldAnalyzePythonPathtraversalCtx,
+	"datadog/csharp-pathtraversal": shouldAnalyzeCSharpPathtraversalCtx,
 
 	// Code Injection
 	"datadog/java-codei":   shouldAnalyzeJavaCodeiCtx,
 	"datadog/go-codei":     shouldAnalyzeGoCodeiCtx,
 	"datadog/python-codei": shouldAnalyzePythonCodeiCtx,
+	"datadog/csharp-codei": shouldAnalyzeCSharpCodeiCtx,
 
 	// LDAP Injection
 	"datadog/java-ldapi":   shouldAnalyzeJavaLdapiCtx,
 	"datadog/go-ldapi":     shouldAnalyzeGoLdapiCtx,
 	"datadog/python-ldapi": shouldAnalyzePythonLdapiCtx,
+	"datadog/csharp-ldapi": shouldAnalyzeCSharpLdapiCtx,
 
 	// XPath Injection
 	"datadog/java-xpathi":   shouldAnalyzeJavaXpathiCtx,
 	"datadog/go-xpathi":     shouldAnalyzeGoXpathiCtx,
 	"datadog/python-xpathi": shouldAnalyzePythonXpathiCtx,
+	"datadog/csharp-xpathi": shouldAnalyzeCSharpXpathiCtx,
 
 	// Weak Hash
 	"datadog/java-weakhash":   shouldAnalyzeJavaWeakhashCtx,
 	"datadog/go-weakhash":     shouldAnalyzeGoWeakhashCtx,
 	"datadog/python-weakhash": shouldAnalyzePythonWeakhashCtx,
+	"datadog/csharp-weakhash": shouldAnalyzeCSharpWeakhashCtx,
 
 	// Insecure Cookie
 	"datadog/java-insecurecookie":   shouldAnalyzeJavaInsecurecookieCtx,
 	"datadog/go-insecurecookie":     shouldAnalyzeGoInsecurecookieCtx,
 	"datadog/python-insecurecookie": shouldAnalyzePythonInsecurecookieCtx,
+	"datadog/csharp-insecurecookie": shouldAnalyzeCSharpInsecurecookieCtx,
 
 	// Access Control
 	"datadog/java-accesscontrol":   shouldAnalyzeJavaAccesscontrolCtx,
 	"datadog/go-accesscontrol":     shouldAnalyzeGoAccesscontrolCtx,
 	"datadog/python-accesscontrol": shouldAnalyzePythonAccesscontrolCtx,
+	"datadog/csharp-accesscontrol": shouldAnalyzeCSharpAccesscontrolCtx,
 
 	// Trust Boundary
 	"datadog/java-trustboundary":   shouldAnalyzeJavaTrustboundaryCtx,
 	"datadog/go-trustboundary":     shouldAnalyzeGoTrustboundaryCtx,
 	"datadog/python-trustboundary": shouldAnalyzePythonTrustboundaryCtx,
+	"datadog/csharp-trustboundary": shouldAnalyzeCSharpTrustboundaryCtx,
 
 	// Weak Randomness
 	"datadog/java-weakrandomness":   shouldAnalyzeJavaWeakrandomnessCtx,
 	"datadog/go-weakrandomness":     shouldAnalyzeGoWeakrandomnessCtx,
 	"datadog/python-weakrandomness": shouldAnalyzePythonWeakrandomnessCtx,
+	"datadog/csharp-weakrandomness": shouldAnalyzeCSharpWeakrandomnessCtx,
 }
 
 // Python SQLi: require DB-ish hints AND SQL-ish verbs.
@@ -1373,6 +1406,393 @@ func shouldAnalyzePythonWeakrandomnessCtx(ctx *model.DetectionContext) bool {
 		"nonce",
 		"api_key",
 		"apikey",
+	}
+
+	hasWeakRandom := containsAny(code, weakRandomSources)
+	hasSecurityContext := containsAny(code, securityContext)
+
+	return hasWeakRandom && hasSecurityContext
+}
+
+// ============================================================
+// C# Rules
+// ============================================================
+
+// C# SQLi: require DB interaction AND SQL verbs
+func shouldAnalyzeCSharpSqliCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	// Database interaction indicators
+	dbHints := []string{
+		"sqlconnection",
+		"sqlcommand",
+		"sqldataadapter",
+		"sqldatareader",
+		"executenonquery(",
+		"executereader(",
+		"executescalar(",
+		"dbcontext",
+		"entity framework",
+		"linq to sql",
+		"dapper",
+		"npgsqlconnection",
+		"mysqlconnection",
+		"oledbconnection",
+	}
+
+	// SQL verbs
+	sqlVerbs := []string{"select", "update", "insert", "delete", "from", "where"}
+
+	hasDb := containsAny(code, dbHints)
+	if !hasDb {
+		return false
+	}
+
+	return containsAnyWord(code, sqlVerbs)
+}
+
+// C# XSS: look for HTML content, response writing, or user input handling
+func shouldAnalyzeCSharpXssCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	// HTML indicators
+	htmlHints := []string{
+		"<html", "<body", "<script", "<form", "<input", "<img", "<iframe",
+		"<div", "<span", "<a ", "<p>",
+	}
+
+	// Response writing sinks
+	responseSinks := []string{
+		"response.write",
+		"htmlhelper",
+		"@html.raw",
+		"content(",
+		"contentresult",
+		"viewbag",
+		"viewdata",
+	}
+
+	// User input sources
+	inputSources := []string{
+		"request.querystring",
+		"request.form",
+		"request[",
+		"httpcontext",
+		"frombody",
+		"fromquery",
+		"fromroute",
+		"fromform",
+	}
+
+	hasHTML := containsAny(code, htmlHints)
+	hasSink := containsAny(code, responseSinks)
+	hasInput := containsAny(code, inputSources)
+
+	return hasHTML || (hasSink && hasInput)
+}
+
+// C# Deserialization: require deserialization operations
+func shouldAnalyzeCSharpDeserializationCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	// Dangerous deserialization sinks
+	deserializationSinks := []string{
+		"binaryformatter",
+		"objectstateformatter",
+		"soapformatter",
+		"netdatacontractserializer",
+		"losformatter",
+		"jsonconvert.deserializeobject",
+		"javascriptserializer",
+		"xmlserializer",
+		"datacontractserializer",
+		"typenamehanding",
+	}
+
+	// Input sources
+	inputSources := []string{
+		"stream",
+		"request.",
+		"file.",
+		"httpcontext",
+	}
+
+	hasSink := containsAny(code, deserializationSinks)
+	hasInput := containsAny(code, inputSources)
+
+	// BinaryFormatter is critical enough to flag even without obvious input
+	hasCriticalSink := containsAny(code, []string{"binaryformatter", "objectstateformatter"})
+
+	return (hasSink && hasInput) || hasCriticalSink
+}
+
+// C# Broken Cryptography: require crypto operations with weak algorithms
+func shouldAnalyzeCSharpBrokencryptoCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	// Crypto operation indicators
+	cryptoOps := []string{
+		"symmetricalgorithm",
+		"aes.create",
+		"des.create",
+		"tripledes",
+		"rijndael",
+		"rsacryptoserviceprovider",
+		"dsacryptoserviceprovider",
+	}
+
+	// Weak algorithm indicators
+	weakPatterns := []string{
+		"descryptoserviceprovider",
+		"rc2cryptoserviceprovider",
+		"ciphermode.ecb",
+		"new byte[16]", // Potential zero IV
+		"new random(",  // Weak RNG for crypto
+		"keysize = 1024",
+		"keysize = 512",
+	}
+
+	hasCrypto := containsAny(code, cryptoOps)
+	hasWeak := containsAny(code, weakPatterns)
+
+	return hasCrypto && hasWeak
+}
+
+// C# Path Traversal: require file operations with user input
+func shouldAnalyzeCSharpPathtraversalCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	// File operation sinks
+	fileSinks := []string{
+		"file.open",
+		"file.read",
+		"file.write",
+		"file.delete",
+		"file.exists",
+		"file.copy",
+		"file.move",
+		"filestream",
+		"streamreader",
+		"streamwriter",
+		"directory.",
+		"path.combine",
+		"path.getfullpath",
+	}
+
+	// User input sources
+	inputSources := []string{
+		"request.querystring",
+		"request.form",
+		"request[",
+		"frombody",
+		"fromquery",
+		"fromroute",
+		"fromform",
+		"httpcontext",
+	}
+
+	hasSink := containsAny(code, fileSinks)
+	hasInput := containsAny(code, inputSources)
+
+	return hasSink && hasInput
+}
+
+// C# Code Injection: require code execution APIs with user input
+func shouldAnalyzeCSharpCodeiCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	// Code execution APIs
+	codeExecAPIs := []string{
+		"csharpcodeprovider",
+		"compileassemblyfromsource",
+		"assembly.load",
+		"activator.createinstance",
+		"type.invokemember",
+		"methodinfo.invoke",
+		"expression.compile",
+		"roslyn",
+	}
+
+	// User input sources
+	inputSources := []string{
+		"request.",
+		"frombody",
+		"fromquery",
+		"httpcontext",
+	}
+
+	hasCodeExec := containsAny(code, codeExecAPIs)
+	hasInput := containsAny(code, inputSources)
+
+	return hasCodeExec && hasInput
+}
+
+// C# LDAP Injection: require LDAP APIs
+func shouldAnalyzeCSharpLdapiCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	// LDAP APIs
+	ldapAPIs := []string{
+		"directoryentry",
+		"directorysearcher",
+		"ldapconnection",
+		"system.directoryservices",
+		".findall(",
+		".findone(",
+	}
+
+	return containsAny(code, ldapAPIs)
+}
+
+// C# XPath Injection: require XPath APIs
+func shouldAnalyzeCSharpXpathiCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	// XPath APIs
+	xpathAPIs := []string{
+		"xpathnavigator",
+		"xpathdocument",
+		"selectsinglenode",
+		"selectnodes",
+		"xpathexpression",
+		"xpath",
+		"xmldocument",
+	}
+
+	return containsAny(code, xpathAPIs)
+}
+
+// C# Weak Hash: require hash operations with weak algorithms in security context
+func shouldAnalyzeCSharpWeakhashCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	// Hash operations
+	hashOps := []string{
+		"md5.create",
+		"sha1.create",
+		"md5cryptoserviceprovider",
+		"sha1cryptoserviceprovider",
+		"sha1managed",
+		"md5cng",
+	}
+
+	// Security context indicators
+	securityContext := []string{
+		"password",
+		"credential",
+		"token",
+		"auth",
+		"secret",
+	}
+
+	hasHash := containsAny(code, hashOps)
+	hasSecurityContext := containsAny(code, securityContext)
+
+	return hasHash && hasSecurityContext
+}
+
+// C# Insecure Cookie: require cookie operations
+func shouldAnalyzeCSharpInsecurecookieCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	// Cookie sinks
+	cookieSinks := []string{
+		"response.cookies.append",
+		"response.cookies.add",
+		"new cookie(",
+		"cookieoptions",
+		"httpcontext.response.cookies",
+	}
+
+	return containsAny(code, cookieSinks)
+}
+
+// C# Access Control (IDOR): require endpoint with ID access
+func shouldAnalyzeCSharpAccesscontrolCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	// Endpoint indicators
+	endpointIndicators := []string{
+		"[httpget]",
+		"[httppost]",
+		"[httpput]",
+		"[httpdelete]",
+		"[route(",
+		"[apicontroller]",
+		"controllerbase",
+		"controller",
+	}
+
+	// ID access patterns
+	idAccessPatterns := []string{
+		"fromroute",
+		"fromquery",
+		"findbyid",
+		"getbyid",
+		"find(",
+		"firstordefault(",
+		"singleordefault(",
+	}
+
+	hasEndpoint := containsAny(code, endpointIndicators)
+	hasIdAccess := containsAny(code, idAccessPatterns)
+
+	return hasEndpoint && hasIdAccess
+}
+
+// C# Trust Boundary: require session storage with user input
+func shouldAnalyzeCSharpTrustboundaryCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	// Session storage
+	sessionStorage := []string{
+		"session[",
+		"session.set",
+		"httpcontext.session",
+		"tempdata[",
+	}
+
+	// User input sources
+	inputSources := []string{
+		"request.querystring",
+		"request.form",
+		"request[",
+		"frombody",
+		"fromquery",
+		"fromform",
+	}
+
+	hasSession := containsAny(code, sessionStorage)
+	hasInput := containsAny(code, inputSources)
+
+	return hasSession && hasInput
+}
+
+// C# Weak Randomness: detect System.Random in security contexts
+func shouldAnalyzeCSharpWeakrandomnessCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	// Weak random sources
+	weakRandomSources := []string{
+		"new random(",
+		"random.next",
+		"random.nextdouble",
+		"random.nextbytes",
+	}
+
+	// Security context indicators
+	securityContext := []string{
+		"token",
+		"password",
+		"session",
+		"secret",
+		"key",
+		"otp",
+		"verification",
+		"csrf",
+		"nonce",
+		"apikey",
+		"api_key",
 	}
 
 	hasWeakRandom := containsAny(code, weakRandomSources)
