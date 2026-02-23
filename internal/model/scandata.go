@@ -23,4 +23,3 @@ type ScanData struct {
 	// Rule
 	Rule *api.AiPrompt
 }
-

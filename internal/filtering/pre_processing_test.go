@@ -23,19 +23,16 @@ func TestShouldAnalyze_CaseInsensitive(t *testing.T) {
 func TestShouldAnalyze_JavaCommandInjection(t *testing.T) {
 	ctx := model.DetectionContext{
 		Language: model.Java,
-		Rule:     api.AiPrompt{ID: "datadog/java-cmdi"},
-		Code:     "ProcessBuilder process = new ProcessBuilder();",
+		Rule: api.AiPrompt{
+			ID:                 "datadog/java-cmdi",
+			FileSearchKeywords: []string{"runtime", "exec", "processbuilder", "process", "shell", "bash", "cmd"},
+		},
+		Code: "ProcessBuilder process = new ProcessBuilder();",
 	}
 
 	result := ShouldAnalyze(&ctx, log.NoopLogger())
 	assert.True(t, result, "Expected ShouldAnalyze to return true for Java code with process keyword")
 }
-
-
-
-
-
-
 
 func TestShouldNotAnalyzeJavadoc(t *testing.T) {
 	ctx := model.DetectionContext{
@@ -106,8 +103,11 @@ func TestShouldAnalyze_CommandInjectionNoKeywordMatch(t *testing.T) {
 func TestShouldAnalyze_LanguageSpecificOverridesGeneric(t *testing.T) {
 	ctx := model.DetectionContext{
 		Language: model.Go,
-		Rule:     api.AiPrompt{ID: "datadog/go-cmdi"},
-		Code:     "exec.Command(\"ls\")",
+		Rule: api.AiPrompt{
+			ID:                 "datadog/go-cmdi",
+			FileSearchKeywords: []string{"exec", "command", "shell", "bash", "os/exec"},
+		},
+		Code: "exec.Command(\"ls\")",
 	}
 
 	result := ShouldAnalyze(&ctx, log.NoopLogger())
@@ -160,4 +160,206 @@ func TestShouldAnalyze_KeywordAsPartOfLargerWord(t *testing.T) {
 
 	result := ShouldAnalyze(&ctx, log.NoopLogger())
 	assert.True(t, result, "Expected ShouldAnalyze to return true with DB import and select keyword")
+}
+
+func TestShouldAnalyze_WithFileSearchKeywordsFromRule(t *testing.T) {
+	// Test that FileSearchKeywords from rule definition are used for filtering
+	ctx := model.DetectionContext{
+		Language: model.Go,
+		Rule: api.AiPrompt{
+			ID:                 "datadog/custom-rule",
+			FileSearchKeywords: []string{"customkeyword", "anotherkeyword"},
+		},
+		Code: "func main() { customkeyword() }",
+	}
+
+	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	assert.True(t, result, "Expected ShouldAnalyze to return true when FileSearchKeywords from rule matches")
+}
+
+func TestShouldAnalyze_WithFileSearchKeywordsNotMatching(t *testing.T) {
+	// Test that files without matching keywords are filtered out
+	ctx := model.DetectionContext{
+		Language: model.Go,
+		Rule: api.AiPrompt{
+			ID:                 "datadog/custom-rule",
+			FileSearchKeywords: []string{"customkeyword", "anotherkeyword"},
+		},
+		Code: "func main() { fmt.Println(\"hello\") }",
+	}
+
+	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	assert.False(t, result, "Expected ShouldAnalyze to return false when FileSearchKeywords from rule don't match")
+}
+
+func TestShouldAnalyze_NoKeywordsAnalyzesEverything(t *testing.T) {
+	// Test that rules without FileSearchKeywords (and no specialized filter) analyze everything
+	ctx := model.DetectionContext{
+		Language: model.Go,
+		Rule: api.AiPrompt{
+			ID: "datadog/unknown-rule-no-filter",
+		},
+		Code: "func main() { fmt.Println(\"hello\") }",
+	}
+
+	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	assert.True(t, result, "Expected ShouldAnalyze to return true when no keywords are defined (analyze everything)")
+}
+
+// ============================================================
+// C# Tests
+// ============================================================
+
+func TestShouldAnalyze_CSharpSqlInjection(t *testing.T) {
+	ctx := model.DetectionContext{
+		Language: model.CSharp,
+		Rule:     api.AiPrompt{ID: "datadog/csharp-sqli"},
+		Code:     "var cmd = new SqlCommand(\"SELECT * FROM users WHERE id = \" + userId, connection);",
+	}
+
+	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	assert.True(t, result, "Expected ShouldAnalyze to return true for C# code with SqlCommand and SQL keywords")
+}
+
+func TestShouldAnalyze_CSharpSqlInjection_NoMatch(t *testing.T) {
+	ctx := model.DetectionContext{
+		Language: model.CSharp,
+		Rule:     api.AiPrompt{ID: "datadog/csharp-sqli"},
+		Code:     "Console.WriteLine(\"Hello World\");",
+	}
+
+	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	assert.False(t, result, "Expected ShouldAnalyze to return false for C# code without SQL keywords")
+}
+
+func TestShouldAnalyze_CSharpXss(t *testing.T) {
+	ctx := model.DetectionContext{
+		Language: model.CSharp,
+		Rule:     api.AiPrompt{ID: "datadog/csharp-xss"},
+		Code:     "Response.Write(\"<div>\" + Request.QueryString[\"name\"] + \"</div>\");",
+	}
+
+	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	assert.True(t, result, "Expected ShouldAnalyze to return true for C# XSS pattern")
+}
+
+func TestShouldAnalyze_CSharpDeserialization(t *testing.T) {
+	ctx := model.DetectionContext{
+		Language: model.CSharp,
+		Rule:     api.AiPrompt{ID: "datadog/csharp-deserialization"},
+		Code:     "BinaryFormatter formatter = new BinaryFormatter();\nobject obj = formatter.Deserialize(stream);",
+	}
+
+	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	assert.True(t, result, "Expected ShouldAnalyze to return true for C# BinaryFormatter deserialization")
+}
+
+func TestShouldAnalyze_CSharpPathTraversal(t *testing.T) {
+	ctx := model.DetectionContext{
+		Language: model.CSharp,
+		Rule:     api.AiPrompt{ID: "datadog/csharp-pathtraversal"},
+		Code:     "string path = Path.Combine(basePath, Request.QueryString[\"file\"]);\nFile.ReadAllText(path);",
+	}
+
+	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	assert.True(t, result, "Expected ShouldAnalyze to return true for C# path traversal pattern")
+}
+
+func TestShouldAnalyze_CSharpWeakHash(t *testing.T) {
+	ctx := model.DetectionContext{
+		Language: model.CSharp,
+		Rule:     api.AiPrompt{ID: "datadog/csharp-weakhash"},
+		Code:     "var md5 = MD5.Create();\nvar hash = md5.ComputeHash(Encoding.UTF8.GetBytes(password));",
+	}
+
+	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	assert.True(t, result, "Expected ShouldAnalyze to return true for C# weak hash with password")
+}
+
+func TestShouldAnalyze_CSharpInsecureCookie(t *testing.T) {
+	ctx := model.DetectionContext{
+		Language: model.CSharp,
+		Rule:     api.AiPrompt{ID: "datadog/csharp-insecurecookie"},
+		Code:     "Response.Cookies.Append(\"session\", sessionId, new CookieOptions { });",
+	}
+
+	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	assert.True(t, result, "Expected ShouldAnalyze to return true for C# cookie operations")
+}
+
+func TestShouldAnalyze_CSharpWeakRandomness(t *testing.T) {
+	ctx := model.DetectionContext{
+		Language: model.CSharp,
+		Rule:     api.AiPrompt{ID: "datadog/csharp-weakrandomness"},
+		Code:     "var random = new Random();\nvar token = random.Next().ToString();",
+	}
+
+	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	assert.True(t, result, "Expected ShouldAnalyze to return true for C# weak randomness with token")
+}
+
+func TestShouldAnalyze_CSharpLdapInjection(t *testing.T) {
+	ctx := model.DetectionContext{
+		Language: model.CSharp,
+		Rule:     api.AiPrompt{ID: "datadog/csharp-ldapi"},
+		Code:     "var searcher = new DirectorySearcher(entry);\nsearcher.Filter = \"(cn=\" + userName + \")\";",
+	}
+
+	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	assert.True(t, result, "Expected ShouldAnalyze to return true for C# LDAP injection pattern")
+}
+
+func TestShouldAnalyze_CSharpXPathInjection(t *testing.T) {
+	ctx := model.DetectionContext{
+		Language: model.CSharp,
+		Rule:     api.AiPrompt{ID: "datadog/csharp-xpathi"},
+		Code:     "XmlDocument doc = new XmlDocument();\nvar nodes = doc.SelectNodes(\"/users/user[@id='\" + userId + \"']\");",
+	}
+
+	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	assert.True(t, result, "Expected ShouldAnalyze to return true for C# XPath injection pattern")
+}
+
+func TestShouldAnalyze_CSharpAccessControl(t *testing.T) {
+	ctx := model.DetectionContext{
+		Language: model.CSharp,
+		Rule:     api.AiPrompt{ID: "datadog/csharp-accesscontrol"},
+		Code:     "[HttpGet]\npublic IActionResult GetUser([FromRoute] int id)\n{\n    return Ok(db.Users.FindById(id));\n}",
+	}
+
+	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	assert.True(t, result, "Expected ShouldAnalyze to return true for C# access control pattern")
+}
+
+func TestShouldAnalyze_CSharpTrustBoundary(t *testing.T) {
+	ctx := model.DetectionContext{
+		Language: model.CSharp,
+		Rule:     api.AiPrompt{ID: "datadog/csharp-trustboundary"},
+		Code:     "HttpContext.Session.SetString(\"user\", Request.Form[\"username\"]);",
+	}
+
+	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	assert.True(t, result, "Expected ShouldAnalyze to return true for C# trust boundary pattern")
+}
+
+func TestShouldAnalyze_CSharpCodeInjection(t *testing.T) {
+	ctx := model.DetectionContext{
+		Language: model.CSharp,
+		Rule:     api.AiPrompt{ID: "datadog/csharp-codei"},
+		Code:     "var provider = new CSharpCodeProvider();\nvar results = provider.CompileAssemblyFromSource(parameters, Request.Form[\"code\"]);",
+	}
+
+	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	assert.True(t, result, "Expected ShouldAnalyze to return true for C# code injection pattern")
+}
+
+func TestShouldAnalyze_CSharpBrokenCrypto(t *testing.T) {
+	ctx := model.DetectionContext{
+		Language: model.CSharp,
+		Rule:     api.AiPrompt{ID: "datadog/csharp-brokencrypto"},
+		Code:     "var des = DESCryptoServiceProvider.Create();\nvar aes = Aes.Create();\naes.Mode = CipherMode.ECB;",
+	}
+
+	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	assert.True(t, result, "Expected ShouldAnalyze to return true for C# broken crypto pattern")
 }
