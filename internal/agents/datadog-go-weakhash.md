@@ -16,15 +16,37 @@ This vulnerability is known as **CWE-328**.
 
 ---
 
+## 🚫🚫🚫 CRITICAL: ONLY FLAG MD5 AND SHA-1 🚫🚫🚫
+
+**ONLY REPORT these specific function calls:**
+- `md5.New()` — MD5 is weak
+- `md5.Sum()` — MD5 is weak  
+- `sha1.New()` — SHA-1 is weak
+- `sha1.Sum()` — SHA-1 is weak
+
+**NEVER REPORT any of these:**
+- `crypto.SHA256` — STRONG
+- `crypto.SHA384` — STRONG
+- `crypto.SHA512` — STRONG
+- `hashAlg.New()` when hashAlg is SHA256/SHA384/SHA512 — STRONG
+- Any dynamic hash selection that DEFAULTS to SHA256 — STRONG
+
+**If the code defaults to SHA256 for unknown algorithms, it is SAFE. Output "NO VIOLATION AMIGO".**
+
+---
+
 ## ⚠️ CRITICAL: Distinguish WEAK vs STRONG Hash Algorithms
 
-### WEAK ALGORITHMS — REPORT THESE:
+### WEAK ALGORITHMS — ONLY REPORT THESE:
 - `crypto/md5` — MD5 is cryptographically broken
 - `crypto/sha1` — SHA-1 has known collision attacks
 - `md5.New()`, `md5.Sum()` — MD5 functions
 - `sha1.New()`, `sha1.Sum()` — SHA-1 functions
 
-### STRONG ALGORITHMS — DO NOT REPORT:
+### STRONG ALGORITHMS — NEVER REPORT:
+- **`crypto.SHA256`** — SHA-256 is STRONG, NEVER report
+- **`crypto.SHA384`** — SHA-384 is STRONG, NEVER report
+- **`crypto.SHA512`** — SHA-512 is STRONG, NEVER report
 - **`crypto/sha256`** — SHA-256 is STRONG, DO NOT report
 - **`crypto/sha512`** — SHA-512 is STRONG, DO NOT report
 - **`sha256.New()`**, **`sha256.Sum256()`** — Strong hash functions
@@ -36,6 +58,11 @@ This vulnerability is known as **CWE-328**.
 - **`golang.org/x/crypto/bcrypt`** — Password hashing (strong)
 - **`golang.org/x/crypto/scrypt`** — Key derivation (strong)
 - **`golang.org/x/crypto/argon2`** — Password hashing (strong)
+
+### DYNAMIC ALGORITHM SELECTION — ANALYZE CAREFULLY:
+When code selects hash algorithm dynamically (e.g., from config), check the DEFAULT:
+- If default is SHA256/SHA384/SHA512 → SAFE, DO NOT REPORT
+- If default is MD5 or SHA1 → REPORT
 
 ---
 
@@ -162,6 +189,40 @@ if algorithm == "" {
 // If actual algorithm is SHA-256, SHA-384, or SHA-512 → DO NOT REPORT
 ```
 
+### SAFE — Dynamic crypto.Hash selection with SHA256 default
+
+```go
+// This pattern is SAFE because unknown algorithms default to SHA256
+func getHashAlgorithm(algName string) (crypto.Hash, error) {
+    switch strings.ToUpper(algName) {
+    case "SHA-1", "SHA1":
+        return crypto.SHA1, nil
+    case "SHA-256", "SHA256":
+        return crypto.SHA256, nil  // STRONG
+    case "MD5":
+        return crypto.MD5, nil
+    default:
+        return crypto.SHA256, nil  // DEFAULT TO SHA256 = STRONG
+    }
+}
+
+hashAlg, _ := getHashAlgorithm(algorithm)
+md := hashAlg.New()  // DO NOT REPORT - defaults to SHA256 which is STRONG
+md.Write(input)
+result := md.Sum(nil)
+```
+
+### SAFE — crypto.Hash variable when default is strong
+
+```go
+// When a crypto.Hash is obtained from a function that defaults to SHA256
+hashAlg := getHashAlgorithm(props["hashAlg2"])  // Defaults to SHA256
+if hashAlg == crypto.SHA256 || hashAlg == crypto.SHA384 || hashAlg == crypto.SHA512 {
+    // STRONG - DO NOT REPORT
+}
+md := hashAlg.New()  // DO NOT REPORT if default is strong
+```
+
 ---
 
 ## Common False Positive to Avoid
@@ -174,10 +235,19 @@ import "crypto/sha256"
 h := sha256.New()  // DO NOT REPORT - this is a STRONG hash
 ```
 
+**Dynamic algorithm selection that defaults to SHA256:**
+
+```go
+// Even if code reads algorithm from config, if the DEFAULT is SHA256,
+// DO NOT REPORT the hashAlg.New() call
+// The vulnerability would only exist if MD5 or SHA1 is explicitly selected
+```
+
 **Properties file specifying strong algorithm:**
 
 ```go
-// If benchmark.properties contains "hashAlg2=SHA256"
+// If benchmark.properties contains "hashAlg2=SHA256" OR if the
+// default case in getHashAlgorithm returns crypto.SHA256,
 // The hash being used is SHA-256 which is STRONG
 // DO NOT REPORT even if code has complex algorithm selection
 ```

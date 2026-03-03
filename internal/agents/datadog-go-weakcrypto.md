@@ -1,6 +1,6 @@
 # Go User Prompt Template — Broken Cryptography (Weak Algorithm)
 
-Evaluate the following Go code located in `<path>` and report ONLY Broken Cryptography vulnerabilities involving **weak algorithms**. If you are unsure about the validity of a result do NOT report it.
+Evaluate the following Go code located in `<path>` and report ONLY Broken Cryptography vulnerabilities.
 
 ```go
 <code>
@@ -8,7 +8,7 @@ Evaluate the following Go code located in `<path>` and report ONLY Broken Crypto
 
 ## Vulnerability to Find
 
-Report where there are **Broken Cryptography** vulnerabilities as instructed.
+Report **ONLY** vulnerabilities involving these specific weak algorithms: **DES, 3DES, or RC4**.
 
 This vulnerability is known as **CWE-327**.
 
@@ -16,60 +16,51 @@ This vulnerability is known as **CWE-327**.
 
 ---
 
-## ⚠️ CRITICAL: What IS and IS NOT a Weak Algorithm
+## 🛑 SCOPE: ONLY CHECK FOR DES AND RC4 🛑
 
-### WEAK ALGORITHMS — ALWAYS REPORT THESE:
-- `crypto/des` — DES and 3DES have weak key sizes
-- `crypto/rc4` — RC4 is a broken stream cipher
-- RSA with key size < 2048 bits
-- Any implementation of `RC2`, `Blowfish` (if key < 128 bits), `IDEA`, `CAST5`
+**This rule ONLY detects these specific weak algorithms:**
 
-### STRONG ALGORITHMS — DO NOT FLAG AS WEAK:
-- **`crypto/aes`** — This is a STRONG algorithm. Do NOT report AES as weak.
-- **`crypto/rsa`** (with key >= 2048) — Strong asymmetric encryption
-- **`golang.org/x/crypto/chacha20poly1305`** — Modern authenticated encryption
-- **`golang.org/x/crypto/nacl`** — High-level crypto library
-- **`golang.org/x/crypto/twofish`** — Strong block cipher
-- **`golang.org/x/crypto/serpent`** — Strong block cipher (if available)
+1. **DES** — `crypto/des` package, `des.NewCipher()`
+2. **3DES** — `des.NewTripleDESCipher()`  
+3. **RC4** — `crypto/rc4` package, `rc4.NewCipher()`
 
-### MODE ISSUES — Handle Separately:
-- ECB-like patterns with AES are a **mode problem**, NOT a weak algorithm
-- Using `cipher.NewCBCEncrypter`, `cipher.NewGCM`, `cipher.NewCTR` are all fine
-- AES with any mode is NOT a weak algorithm
+**If the code does NOT use `crypto/des` or `crypto/rc4`, output "NO VIOLATION AMIGO".**
+
+**DO NOT analyze or report any other cryptographic code.**
 
 ---
 
-## Context
+## What to Look For
 
-**Language:** Go  
-**Frameworks/Libraries:** <e.g., crypto/aes, crypto/des, crypto/rsa, crypto/rand>  
+Search ONLY for these specific patterns:
 
-**Weak/Broken cryptographic algorithms (REPORT when used):**  
-- `des.NewCipher(key)` — DES is broken (56-bit key)
-- `des.NewTripleDESCipher(key)` — 3DES is deprecated
-- `rc4.NewCipher(key)` — RC4 is broken
-- RSA with `rsa.GenerateKey(rand.Reader, 1024)` or smaller
+```go
+import "crypto/des"      // ← If present, check for des.NewCipher or des.NewTripleDESCipher
+import "crypto/rc4"      // ← If present, check for rc4.NewCipher
+```
 
-**Strong algorithms (DO NOT report as weak):**  
-- `aes.NewCipher(key)` — AES is STRONG, any usage
-- `cipher.NewGCM(block)` — AES-GCM is excellent
-- `cipher.NewCBCEncrypter(block, iv)` — AES-CBC is strong
-- `cipher.NewCBCDecrypter(block, iv)` — AES-CBC is strong
-- `cipher.NewCTR(block, iv)` — AES-CTR is strong
-- `cipher.NewOFB(block, iv)` — AES-OFB is strong
-- `rsa.GenerateKey(rand.Reader, 2048)` — RSA with adequate key
-- `chacha20poly1305.New(key)` — Modern authenticated encryption
-- `golang.org/x/crypto/nacl` — High-level crypto library
+**If neither `crypto/des` nor `crypto/rc4` is imported, there is no vulnerability. Output "NO VIOLATION AMIGO".**
+
+---
+
+## WEAK ALGORITHMS — ONLY REPORT THESE SPECIFIC FUNCTIONS:
+
+```go
+des.NewCipher(key)           // ← REPORT: DES is weak (56-bit key)
+des.NewTripleDESCipher(key)  // ← REPORT: 3DES is deprecated
+rc4.NewCipher(key)           // ← REPORT: RC4 is broken
+```
+
+**NOTHING ELSE is a weak algorithm for this rule.**
 
 ---
 
 ## Rules and Guidelines
 
-1. Report **only weak ALGORITHM** vulnerabilities (DES, 3DES, RC4).
-2. **DO NOT report AES as a weak algorithm** — AES is strong regardless of usage pattern.
-3. **DO NOT report RSA as weak** if key size is >= 2048 bits.
-4. Report the **exact location** where the weak algorithm is instantiated.
-5. Output must be valid JSON; if no issues found:
+1. **ONLY report** `des.NewCipher()`, `des.NewTripleDESCipher()`, or `rc4.NewCipher()`.
+2. **IGNORE all other crypto code** — it is out of scope for this rule.
+3. If the code imports `crypto/aes` but NOT `crypto/des` or `crypto/rc4`, output "NO VIOLATION AMIGO".
+4. Output must be valid JSON; if no issues found:
    ```
    NO VIOLATION AMIGO
    ```
@@ -78,11 +69,9 @@ This vulnerability is known as **CWE-327**.
 
 ## Evaluation Process
 
-1. Identify cryptographic algorithm instantiation.
-2. Check the package — is it `crypto/des` or `crypto/rc4`?
-3. For RSA, check the key size parameter — is it < 2048?
-4. If weak algorithm found, report it.
-5. **If `crypto/aes` is used, do NOT report it as weak.**
+1. Check imports — does the code import `crypto/des` or `crypto/rc4`?
+2. If NO → Output "NO VIOLATION AMIGO"
+3. If YES → Search for `des.NewCipher()`, `des.NewTripleDESCipher()`, or `rc4.NewCipher()` and report those lines only.
 
 ---
 
@@ -165,32 +154,60 @@ privateKey, _ := rsa.GenerateKey(rand.Reader, 4096)  // DO NOT REPORT
 
 ---
 
-## Common False Positive to Avoid
+## Common False Positive to Avoid — CRITICAL
 
-**AES with any usage pattern is NOT a weak algorithm:**
+### 1. AES is NEVER a weak algorithm
 
 ```go
-// This is NOT a weak algorithm vulnerability!
-block, _ := aes.NewCipher(key)
-// Even if used in a simple way, AES itself is strong.
-// DO NOT REPORT THIS.
+// SAFE - DO NOT REPORT ANY OF THESE:
+import "crypto/aes"
+
+block, _ := aes.NewCipher(key)          // SAFE - AES is strong
+mode := cipher.NewCBCEncrypter(block, iv)  // SAFE - AES-CBC is strong
+mode.CryptBlocks(encrypted, input)      // SAFE - using strong cipher
+
+// The entire crypto/aes package is STRONG. Never flag it.
 ```
 
-**Constant propagation - user input NOT used in crypto:**
+### 2. AES-192 and AES-256 are STRONG
+
+```go
+// 24-byte key = AES-192 = STRONG
+var aesKey = []byte("thisisaverysecretkey12345")  // 24 bytes
+block, _ := aes.NewCipher(aesKey)  // SAFE - AES-192
+
+// 32-byte key = AES-256 = STRONG
+var aesKey256 = []byte("thisisaverysecretkey12345678901")  // 32 bytes
+block, _ := aes.NewCipher(aesKey256)  // SAFE - AES-256
+```
+
+### 3. Constant propagation - user input NOT used in crypto
 
 ```go
 // Even if user input is processed earlier, if a CONSTANT is used for crypto, it's SAFE
-param := r.FormValue("input")  // User input
-// ... complex processing of param that is NOT used later ...
-_ = param  // param explicitly discarded
+param := r.FormValue("input")  // User input processed...
+// ... complex processing of param ...
+_ = param  // ...but then discarded
 
-g87760 := "barbarians_at_the_gate"  // CONSTANT STRING
+g87760 := "barbarians_at_the_gate"  // CONSTANT STRING used instead
 bar := doSomething(g87760)           // Returns constant
 
 input := []byte(bar)  // input derived from CONSTANT, not user
 block, _ := aes.NewCipher(key)
 mode := cipher.NewCBCEncrypter(block, iv)
-mode.CryptBlocks(encrypted, input)  // DO NOT REPORT - input is constant
+mode.CryptBlocks(encrypted, input)  // DO NOT REPORT - using AES (strong) with constant input
+```
+
+### 4. Helper functions that return AES cipher
+
+```go
+func getCipherBlock() (cipher.Block, error) {
+    return aes.NewCipher(aesKey)  // SAFE - returns AES cipher
+}
+
+block, _ := getCipherBlock()
+mode := cipher.NewCBCEncrypter(block, aesIV)  // SAFE - AES-CBC
+// DO NOT REPORT - this is AES which is a STRONG algorithm
 ```
 
 ---

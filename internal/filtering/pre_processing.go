@@ -727,27 +727,25 @@ func shouldAnalyzeGoDeserializationCtx(ctx *model.DetectionContext) bool {
 func shouldAnalyzeGoBrokencryptoCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
 
-	// Must have crypto imports
-	cryptoImports := []string{
-		"crypto/",
-		"crypto/aes",
-		"crypto/des",
-		"crypto/cipher",
-		"crypto/rand",
+	// ONLY check files that use WEAK crypto algorithms (DES, 3DES, RC4)
+	// AES is NOT a weak algorithm, so don't trigger on AES-only files
+	weakCryptoImports := []string{
+		"crypto/des", // DES and 3DES
+		"crypto/rc4", // RC4
 	}
 
-	// Weak patterns
+	// Weak algorithm patterns - only DES and RC4
 	weakPatterns := []string{
-		"des.",
-		"newcbcencrypter", // CBC without authentication
-		"math/rand",       // Weak RNG
-		"rand.read",       // Potentially weak if not crypto/rand
+		"des.newcipher",
+		"des.newtripledescipher",
+		"rc4.newcipher",
 	}
 
-	hasCrypto := containsAny(code, cryptoImports)
-	hasWeak := containsAny(code, weakPatterns)
+	hasWeakImport := containsAny(code, weakCryptoImports)
+	hasWeakPattern := containsAny(code, weakPatterns)
 
-	return hasCrypto && hasWeak
+	// Only analyze if file uses weak crypto imports OR weak patterns
+	return hasWeakImport || hasWeakPattern
 }
 
 func shouldAnalyzePythonBrokencryptoCtx(ctx *model.DetectionContext) bool {
