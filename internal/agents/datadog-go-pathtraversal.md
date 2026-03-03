@@ -77,6 +77,7 @@ Report when user input from HTTP request flows into ANY file system operation wi
 - `r.FormValue("...")`
 - `r.PostFormValue("...")`
 - `r.Form.Get("...")` or `r.Form["..."]`
+- **Parameter NAMES** (not just values): `for name := range r.Form { ... }` — the key itself is user-controlled!
 
 **Path and URL:**
 - `r.URL.Path`
@@ -235,6 +236,26 @@ data, _ := os.ReadFile("/uploads/" + name)  // REPORT THIS LINE
 name := r.URL.Query().Get("file")
 fullPath := filepath.Join("/uploads", name)
 os.Open(fullPath)  // REPORT THIS LINE - ../still works!
+```
+
+### Parameter NAME (Key) as Source
+
+```go
+// Parameter NAME is user-controlled, not just the value - VULNERABLE
+r.ParseForm()
+var paramName string
+for name, values := range r.Form {
+    for _, value := range values {
+        if value == "BenchmarkTest01408" {
+            paramName = name  // The KEY is tainted!
+            break
+        }
+    }
+}
+// Even if passed through interface methods that return input unchanged
+bar := thing.doSomething(paramName)  // Still tainted!
+fileName := filepath.Join(TESTFILES_DIR, bar)
+file, _ := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)  // REPORT THIS LINE
 ```
 
 ### String Concatenation

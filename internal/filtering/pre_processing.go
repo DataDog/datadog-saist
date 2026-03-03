@@ -1561,39 +1561,26 @@ func shouldAnalyzeCSharpBrokencryptoCtx(ctx *model.DetectionContext) bool {
 func shouldAnalyzeCSharpPathtraversalCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
 
-	// File operation sinks
-	fileSinks := []string{
+	// Keywords from dd-source + additional patterns for better coverage
+	// dd-source uses OR logic: file matches if ANY keyword is present
+	keywords := []string{
 		"file.open",
 		"file.read",
 		"file.write",
 		"file.delete",
-		"file.exists",
-		"file.copy",
-		"file.move",
 		"filestream",
 		"streamreader",
 		"streamwriter",
-		"directory.",
 		"path.combine",
 		"path.getfullpath",
+		// Additional patterns for coverage
+		"fileinfo",
+		"directoryinfo",
+		"physicalfile",
+		"directory.",
 	}
 
-	// User input sources
-	inputSources := []string{
-		"request.querystring",
-		"request.form",
-		"request[",
-		"frombody",
-		"fromquery",
-		"fromroute",
-		"fromform",
-		"httpcontext",
-	}
-
-	hasSink := containsAny(code, fileSinks)
-	hasInput := containsAny(code, inputSources)
-
-	return hasSink && hasInput
+	return containsAny(code, keywords)
 }
 
 // C# Code Injection: require code execution APIs with user input
@@ -1739,32 +1726,29 @@ func shouldAnalyzeCSharpAccesscontrolCtx(ctx *model.DetectionContext) bool {
 	return hasEndpoint && hasIdAccess
 }
 
-// C# Trust Boundary: require session storage with user input
+// C# Trust Boundary: keywords from dd-source using OR logic
 func shouldAnalyzeCSharpTrustboundaryCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
 
-	// Session storage
-	sessionStorage := []string{
-		"session[",
-		"session.set",
+	// Keywords from dd-source + additional patterns for better coverage
+	// dd-source uses OR logic: file matches if ANY keyword is present
+	keywords := []string{
+		"session",
 		"httpcontext.session",
-		"tempdata[",
-	}
-
-	// User input sources
-	inputSources := []string{
-		"request.querystring",
+		"ihttpsessionfeature",
+		"tempdata",
 		"request.form",
-		"request[",
-		"frombody",
-		"fromquery",
-		"fromform",
+		"request.query",
+		"claimsprincipal",
+		"httpcontext.user",
+		// Additional patterns for coverage
+		"setstring",
+		"setint32",
+		"viewdata",
+		"viewbag",
 	}
 
-	hasSession := containsAny(code, sessionStorage)
-	hasInput := containsAny(code, inputSources)
-
-	return hasSession && hasInput
+	return containsAny(code, keywords)
 }
 
 // C# Weak Randomness: detect System.Random in security contexts

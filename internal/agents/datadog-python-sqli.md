@@ -21,10 +21,16 @@ This vulnerability is known as **CWE-89**.
 **Language:** Python  
 **Frameworks/Libraries:** <e.g., sqlite3, psycopg2, MySQLdb, SQLAlchemy, Django ORM>  
 **User-controlled sources (tainted inputs):**  
-- Web request inputs (`request.args`, `request.form`, `request.get_json()`, JSON body), Django `request.GET/POST`
+- Web request inputs (`request.args`, `request.form`, `request.values`, `request.get_json()`, JSON body), Django `request.GET/POST`
+- Raw query string parsing (`request.query_string` with manual string manipulation)
 - HTTP headers (`request.headers.get()`, `request.environ.get()`)
 - CLI args, env vars, files loaded from user-controlled locations
 - `urllib.parse.unquote()` / `urllib.parse.unquote_plus()` - does NOT sanitize, only URL decodes
+
+**NOT sanitizers (taint is MAINTAINED):**
+- List operations (append, pop, indexing) — if tainted value added to list, accessing it is still tainted
+- String decode (`bytes.decode('utf-8')`) — converting bytes to string preserves taint
+- Manual string parsing (`.find()`, `[]` slicing) — preserves taint
 
 **SQL execution sinks (ordered by frequency):**  
 - `cursor.execute(query)` — **most common sink** (sqlite3, psycopg2, mysql-connector)
@@ -119,6 +125,23 @@ cursor.callproc(proc_name)  # <-- SINK
 ```python
 query = f"INSERT INTO {request.args.get('table')} VALUES (%s)"
 cursor.executemany(query, data)  # <-- SINK
+```
+
+### Vulnerable (Manual query string parsing with list manipulation)
+```python
+# Raw query string parsing - still tainted!
+query_string = request.query_string.decode('utf-8')
+param_loc = query_string.find("param=")
+param = query_string[param_loc + len("param="):]
+param = urllib.parse.unquote(param)  # URL decode does NOT sanitize
+
+# List manipulation does NOT break taint
+values_list = ["safe", param, "moresafe"]
+values_list.pop(0)  # Remove first element
+bar = values_list[0]  # Get 'param' - still tainted!
+
+sql = "SELECT * FROM users WHERE PASSWORD='" + bar + "'"
+cursor.execute(sql)  # <-- SINK: Vulnerable to SQL injection
 ```
 
 ### Safe (Parameterized queries)

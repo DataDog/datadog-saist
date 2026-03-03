@@ -23,10 +23,17 @@ This vulnerability is known as **CWE-89**.
 
 **User-controlled sources (tainted inputs):**  
 - HTTP input fields and query parameters (`r.URL.Query().Get`, `r.FormValue`, `json.NewDecoder(r.Body).Decode`)  
+- Manual query string parsing (`r.URL.RawQuery` with string manipulation like `strings.Index`)
+- Form data (`r.ParseForm()` then `r.Form["key"]`)
 - Cookies and headers (`r.Header.Get`, `r.Cookies()`)  
 - Environment variables (`os.Getenv`)  
 - Command-line arguments (`os.Args`)  
-- Any deserialized or user-controlled file content  
+- Any deserialized or user-controlled file content
+
+**NOT sanitizers (taint is MAINTAINED):**
+- `url.QueryUnescape()` — URL decoding does NOT sanitize
+- Passthrough functions that just return their input
+- `strings.Index`, `strings.Split` — string operations preserve taint  
 
 **SQL execution sinks (ordered by frequency):**  
 - `db.Query(query)` — **most common sink**
@@ -150,6 +157,21 @@ db.Exec(sqlQuery)
 param := r.URL.Query().Get("id")
 sqlQuery := "SELECT * FROM users WHERE PASSWORD='" + param + "'"
 fmt.Fprintf(w, "Query: %s", sqlQuery)  // <-- Still VULNERABLE - query was constructed
+```
+
+### Vulnerable (Manual query string parsing with URL decode)
+```go
+// Manual extraction from RawQuery - still tainted!
+queryString := r.URL.RawQuery
+paramLoc := strings.Index(queryString, "param=")
+param := queryString[paramLoc+len("param="):]
+decodedParam, _ := url.QueryUnescape(param)  // URL decode does NOT sanitize
+
+bar := doSomething(r, decodedParam)  // Passthrough function - still tainted!
+
+// Stored procedure call pattern
+sqlQuery := fmt.Sprintf("{call %s}", bar)  // <-- VULNERABLE
+fmt.Fprintf(w, "Query: %s", sqlQuery)  // Simulated execution - still vulnerable!
 ```
 
 ### Safe (Parameterized query with placeholder)

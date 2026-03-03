@@ -24,6 +24,7 @@ This vulnerability is known as **CWE-79**.
 
 **XSS sinks (ordered by frequency):**  
 - `flask.Response(data)` — **most common sink** - Direct response with user data
+- `response.data = bar` — Direct response data assignment (Flask Response object)
 - `flask.make_response(data)` — Response builder
 - `render_template_string(template)` — **VERY DANGEROUS** - Jinja2 string rendering with user input
 - `Markup(data)` — Marking string as safe HTML (bypasses escaping)
@@ -33,6 +34,16 @@ This vulnerability is known as **CWE-79**.
 - `response.write(content)` — direct response writing
 - Jinja2/Django templates with `|safe` or `mark_safe` on tainted data  
 - String concatenation of HTML with untrusted values
+
+**User-controlled sources (additional):**
+- `request.headers.get('Referer')` — HTTP Referer header (commonly misspelled "Referrer")
+- `request.headers.get('User-Agent')` — Browser user agent string
+- All HTTP headers are user-controlled input!
+
+**NOT sanitizers (taint is MAINTAINED):**
+- `urllib.parse.unquote()` — URL decoding does NOT sanitize
+- String concatenation (`param + "_suffix"`) — appending safe strings does NOT sanitize
+- Function passthrough (`do_something(param)` that returns `param + "..."`) — still tainted
 
 **Recognized sanitizers:**  
 - Framework auto-escaping (`render_template` with default settings, Django templates without `safe`)  

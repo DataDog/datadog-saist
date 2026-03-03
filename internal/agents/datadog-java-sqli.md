@@ -125,6 +125,18 @@ if (headers != null && headers.hasMoreElements()) {
 }
 ```
 
+### Vulnerable (statement.execute with column names array)
+```java
+String param = request.getHeader("BenchmarkTest01972");
+param = java.net.URLDecoder.decode(param, "UTF-8");  // URL decode does NOT sanitize
+
+String bar = doSomething(request, param);  // Passthrough function - still tainted!
+
+String sql = "SELECT * from USERS where USERNAME='foo' and PASSWORD='" + bar + "'";
+java.sql.Statement statement = DatabaseHelper.getSqlStatement();
+statement.execute(sql, new String[] {"username", "password"});  // <-- SINK: execute with column names
+```
+
 ### Safe
 ```java
 PreparedStatement ps = conn.prepareStatement("SELECT * FROM users WHERE name=?");

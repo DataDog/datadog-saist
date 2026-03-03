@@ -22,8 +22,15 @@ This vulnerability is known as **CWE-79**.
 **Frameworks/Libraries:** <e.g., net/http, html/template>  
 **User-controlled sources (tainted inputs):**  
 - HTTP query parameters (`r.URL.Query().Get`, `r.FormValue`)  
+- Manual query string parsing (`r.URL.RawQuery` with string manipulation)
+- Form data (`r.ParseForm()` then `r.Form["key"]`)
 - JSON body fields or unescaped template variables  
 - Any unvalidated user input reflected into HTML
+
+**NOT sanitizers (taint is MAINTAINED):**
+- `url.QueryUnescape()` — URL decoding does NOT sanitize
+- Base64 encode/decode (`base64.StdEncoding.Encode/Decode`) — taint preserved
+- String operations (substring, index extraction) — taint preserved
 
 **XSS sinks (ordered by frequency):**  
 - `fmt.Fprintf(w, format, args...)` — **most common sink** - ResponseWriter output
@@ -89,6 +96,26 @@ fmt.Fprintf(w, "<html><body>Hello %s</body></html>", param)  // <-- SINK: XSS
 param := r.URL.Query().Get("input")
 bar := processInput(param)  // If processInput passes through param, still tainted
 fmt.Fprint(w, bar)  // <-- SINK: XSS via fmt.Fprint
+```
+
+### Vulnerable (Manual query string parsing with Base64)
+```go
+// Manual extraction from RawQuery - still tainted!
+queryString := r.URL.RawQuery
+paramLoc := strings.Index(queryString, "param=")
+param := queryString[paramLoc+len("param="):]
+param, _ = url.QueryUnescape(param)  // URL decode does NOT sanitize
+
+// Base64 encode/decode does NOT break taint
+paramBytes := []byte(param)
+encodedBytes := make([]byte, base64.StdEncoding.EncodedLen(len(paramBytes)))
+base64.StdEncoding.Encode(encodedBytes, paramBytes)
+decodedBytes := make([]byte, base64.StdEncoding.DecodedLen(len(encodedBytes)))
+n, _ := base64.StdEncoding.Decode(decodedBytes, encodedBytes)
+bar := string(decodedBytes[:n])  // Still tainted!
+
+w.Header().Set("X-XSS-Protection", "0")
+fmt.Fprint(w, bar)  // <-- SINK: XSS
 ```
 
 ### Vulnerable (fmt.Fprintln)

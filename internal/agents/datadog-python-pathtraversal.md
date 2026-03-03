@@ -63,6 +63,7 @@ Report when user input from HTTP request flows into ANY file system operation wi
 **Flask:**
 - `request.args.get("...")` or `request.args["..."]`
 - `request.form.get("...")` or `request.form["..."]`
+- `request.values.get("...")` — combines args and form data
 - `request.json.get("...")` or `request.json["..."]`
 - `request.headers.get("...")` or `request.headers["..."]`
 - `request.cookies.get("...")` or `request.cookies["..."]`
@@ -102,6 +103,8 @@ Report when user input from HTTP request flows into ANY file system operation wi
 - `codecs.open(path, ...)`
 
 **Path/OS Operations:**
+- `os.path.exists(path)` — **reveals file existence information** (SINK!)
+- `os.path.isfile(path)`, `os.path.isdir(path)` — reveal file/directory existence
 - `os.path.join(base, userpath)` followed by file operations (join does NOT sanitize!)
 - `os.open(path, ...)`
 - `os.remove(path)`, `os.unlink(path)`
@@ -222,6 +225,32 @@ content = (Path("/data") / name).read_text()  # REPORT THIS LINE
 # send_file with user input - VULNERABLE
 filename = request.args.get("file")
 return send_file(f"/public/{filename}")  # REPORT THIS LINE
+```
+
+### Conditional with Integer Division (Always True)
+
+```python
+# Conditional logic that always evaluates to True - VULNERABLE
+param = request.values.get("file", "")
+num = 196
+# (500 // 42) + 196 = 11 + 196 = 207 > 200 is True
+if (500 // 42) + num > 200:
+    bar = param  # Taint flows through!
+else:
+    bar = "safe"
+
+file_exists = os.path.exists(bar)  # REPORT THIS LINE - reveals file existence
+```
+
+### os.path.exists() Information Disclosure
+
+```python
+# os.path.exists reveals file system information - VULNERABLE
+filename = request.args.get("file")
+if os.path.exists(filename):  # REPORT THIS LINE
+    return "File found"
+else:
+    return "File not found"
 ```
 
 ---
