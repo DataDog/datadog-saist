@@ -179,6 +179,25 @@ string bar = HtmlEncoder.Default.Encode(param);  // HTML encode does NOT sanitiz
 HttpContext.Session.SetString(bar, "10340");  // <-- SINK: still user-controlled
 ```
 
+### Vulnerable (HttpUtility.HtmlEncode in DoSomething - value to session)
+```csharp
+// Query parameter with HtmlEncode passthrough - still vulnerable!
+string param = "";
+if (Request.Query.ContainsKey("BenchmarkTest02262"))
+{
+    param = Request.Query["BenchmarkTest02262"];
+}
+string bar = DoSomething(Request, param);
+// Storing user-controlled data as SESSION VALUE (not key)
+HttpContext.Session.SetString("userid", bar);  // <-- SINK: user controls session value
+
+private static string DoSomething(HttpRequest request, string param)
+{
+    string bar = HttpUtility.HtmlEncode(param);  // HtmlEncode does NOT sanitize for trust boundary!
+    return bar;  // Still tainted
+}
+```
+
 ### Vulnerable (Cookie iteration through foreach loop)
 ```csharp
 string param = "noCookieValueSupplied";

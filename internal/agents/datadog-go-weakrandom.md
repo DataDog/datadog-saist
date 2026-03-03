@@ -144,6 +144,19 @@ func generateOTP() string {
 }
 ```
 
+### Vulnerable (Remember-me cookie with rand.New)
+```go
+// Creating a new rand source does NOT make it secure!
+rng := rand.New(rand.NewSource(time.Now().UnixNano()))  // Predictable seed
+rememberMeKey := strconv.FormatInt(rng.Int63(), 10)  // <-- SINK: weak random for auth
+
+// Used as authentication/session cookie value
+http.SetCookie(w, &http.Cookie{
+    Name:  "rememberMe",
+    Value: rememberMeKey,  // VULNERABLE - predictable value
+})
+```
+
 ### Safe (crypto/rand for tokens)
 ```go
 func generateSecureToken() (string, error) {
@@ -220,6 +233,37 @@ func generateSessionID() (string, error) {
 
 1. **When crypto/rand is used for the actual security token** - even if math/rand is also present in the file for other purposes
 2. **When the file imports both crypto/rand and math/rand** - check which is used for the security-sensitive operation
+3. **When user input is processed but explicitly discarded (`_ = bar`)** - the weak random is independent
+
+### Safe Pattern (User input explicitly discarded)
+```go
+// User input is processed but NOT used for security token
+paramName := ""
+for name := range r.Form {
+    paramName = name
+}
+bar := html.EscapeString(paramName)
+_ = bar  // <-- EXPLICITLY DISCARDED - user input not used
+
+// The weak random below is independent of user input
+// DO NOT REPORT if user input is explicitly discarded
+randVal := rand.Float64()
+rememberMeKey := fmt.Sprintf("%.15f", randVal)[2:]
+http.SetCookie(w, &http.Cookie{Name: "rememberMe", Value: rememberMeKey})
+```
+
+### Safe Pattern (User input processed but unused for random)
+```go
+// User input is processed through doSomething but NOT used for token
+param := r.FormValue("test")
+bar := doSomething(r, param)  // bar is computed but not used for the token
+
+// The weak random is completely independent
+stuff := rand.NormFloat64()
+rememberMeKey := strconv.FormatFloat(stuff, 'f', 10, 64)[2:]
+// DO NOT REPORT - bar is not connected to the random token
+http.SetCookie(w, &http.Cookie{Name: "rememberMe", Value: rememberMeKey})
+```
 
 ## IMPORTANT: Session Validation Does NOT Make Weak Random Safe
 

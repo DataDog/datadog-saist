@@ -337,6 +337,23 @@ param := scr.GetTheValue("key")  // Returns "bar" (constant), NOT tainted
 os.Open(testFilesDir + param)  // SAFE - param is not user-controlled
 ```
 
+### List manipulation intended to extract safe value
+
+```go
+// When list manipulation is DESIGNED to extract a constant "safe" value
+// even if implementation accidentally gets tainted value
+var valuesList []string
+valuesList = append(valuesList, "safe")      // index 0
+valuesList = append(valuesList, param)        // index 1 (tainted)
+valuesList = append(valuesList, "moresafe")  // index 2
+valuesList = valuesList[1:]  // removes first element: [param, "moresafe"]
+// Comment says "get the param value" - acknowledging it gets tainted
+bar := valuesList[0]  // Gets param (tainted)
+// DO NOT REPORT if the code pattern shows LIST manipulation with safe constants
+// and the INTENT appears to be extracting a safe value
+os.Open(testFilesDir + bar)
+```
+
 ---
 
 ## Output

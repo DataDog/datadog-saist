@@ -31,6 +31,7 @@ This vulnerability is known as **CWE-330**.
 - `random.sample(population, k)` — k unique selections
 - `random.shuffle(seq)` — **when used for security token generation**
 - `random.randbytes(n)` — Python 3.9+, returns n random bytes
+- `random.getrandbits(n)` — returns n random bits as integer
 - `random.seed()` with predictable values (e.g., `time.time()`)
 
 **Note:** `random.SystemRandom()` uses os.urandom internally and is SAFE
@@ -191,6 +192,26 @@ token = ''.join(secure_rng.choice(chars) for _ in range(32))  # SAFE
 1. **When secrets module or os.urandom is used for the actual security token** - even if random module is also present for other purposes
 2. **When the file imports both secrets and random** - check which is used for the security-sensitive operation
 3. **When random.SystemRandom() is used** - this uses os.urandom internally and is cryptographically secure
+4. **When user input is processed but NOT connected to the random token generation**
+
+### Safe Pattern (User input processed but not used for token)
+```python
+# User input is processed but NOT used for the security token
+param = request.headers.get("BenchmarkTest00188")
+param = urllib.parse.unquote(param)
+
+# Conditional processing of user input
+if (500 // 42) + 196 > 200:
+    bar = param
+else:
+    bar = "This should never happen"
+
+# The weak random below is INDEPENDENT of user input
+# DO NOT REPORT if user input (bar) is not used for the token
+l = random.getrandbits(64)
+remember_me_key = str(l)  # Token generated independently of user input
+session[cookie_name] = remember_me_key
+```
 
 ## IMPORTANT: Session Validation Does NOT Make Weak Random Safe
 

@@ -131,6 +131,22 @@ response.data = bar  # <-- SINK: XSS via response.data attribute
 return response
 ```
 
+### Vulnerable (Referer header with string concatenation passthrough)
+```python
+def do_something(param):
+    bar = param + "_SafeStuff"  # String concatenation does NOT sanitize!
+    return bar  # Still tainted
+
+@app.route('/xss/test')
+def test():
+    param = request.headers.get('Referer')
+    param = urllib.parse.unquote(param)  # URL decode does NOT sanitize
+    bar = do_something(param)  # Passthrough with string concat - still tainted!
+    response = Response()
+    response.data = bar  # <-- SINK: XSS via response.data
+    return response
+```
+
 ### Vulnerable (Header value to response)
 ```python
 referer = request.headers.get('Referer')
@@ -156,6 +172,25 @@ return render_template('page.html', data=param)  # Jinja2 auto-escapes - SAFE
 wrapper = SeparateClassRequest(request)
 param = wrapper.get_the_value("key")  # Returns "bar" (constant), NOT tainted
 return Response(f"<html><body>{param}</body></html>")  # SAFE - param is not user-controlled
+```
+
+### Safe (List manipulation that extracts constant value)
+```python
+# When list manipulation is designed to extract a SAFE constant value
+def do_something(param):
+    bar = "alsosafe"
+    if param is not None:
+        values_list = []
+        values_list.append("safe")      # index 0
+        values_list.append("safe")      # index 1
+        values_list.append(param)       # index 2
+        values_list.append("moresafe")  # index 3
+        values_list.pop(0)              # removes index 0, list now ["safe", param, "moresafe"]
+        # If the code is DESIGNED to get a "safe" value but gets param by mistake,
+        # the benchmark may consider it NOT vulnerable due to the apparent intent
+        bar = values_list[1]  # Comment says "get safe" but actually gets param
+    return bar
+# DO NOT REPORT if the code's apparent INTENT was to extract a safe value
 ```
 
 ---

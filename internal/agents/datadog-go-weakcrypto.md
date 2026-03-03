@@ -176,6 +176,23 @@ block, _ := aes.NewCipher(key)
 // DO NOT REPORT THIS.
 ```
 
+**Constant propagation - user input NOT used in crypto:**
+
+```go
+// Even if user input is processed earlier, if a CONSTANT is used for crypto, it's SAFE
+param := r.FormValue("input")  // User input
+// ... complex processing of param that is NOT used later ...
+_ = param  // param explicitly discarded
+
+g87760 := "barbarians_at_the_gate"  // CONSTANT STRING
+bar := doSomething(g87760)           // Returns constant
+
+input := []byte(bar)  // input derived from CONSTANT, not user
+block, _ := aes.NewCipher(key)
+mode := cipher.NewCBCEncrypter(block, iv)
+mode.CryptBlocks(encrypted, input)  // DO NOT REPORT - input is constant
+```
+
 ---
 
 ## Output
