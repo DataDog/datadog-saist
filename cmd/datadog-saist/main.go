@@ -32,6 +32,7 @@ func main() {
 	var aiGuardEnabled bool
 	var jwtToken string
 	var useLocalPrompts bool
+	var localPromptsOnly bool
 
 	startTimestamp := time.Now()
 
@@ -57,7 +58,14 @@ func main() {
 	flag.StringVar(&jwtToken, "jwt-token", "", "JWT Token to use when fetching prompts")
 	flag.BoolVar(&useLocalPrompts, "local-prompts", false,
 		"Use local markdown files for rule content instead of API content")
+	flag.BoolVar(&localPromptsOnly, "local-prompts-only", false,
+		"Use ONLY local prompts, skip fetching rules from API (implies -local-prompts)")
 	flag.Parse()
+
+	// -local-prompts-only implies -local-prompts
+	if localPromptsOnly {
+		useLocalPrompts = true
+	}
 
 	if directory == "" {
 		fmt.Fprintf(os.Stderr, "Error: --directory flag is required\n")
@@ -108,7 +116,7 @@ func main() {
 
 	result, err := analysis.RunAnalysis(context.Background(), directory, detectionModelStr, validationModelStr,
 		output, debug, openaiBaseURL, requestTimeoutSec, fileConcurrency, writePrompts, isAIGateway,
-		aiGuardEnabled, apiKey, jwtToken, 2, "test-repo", useLocalPrompts)
+		aiGuardEnabled, apiKey, jwtToken, 2, "test-repo", useLocalPrompts, localPromptsOnly)
 
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "error calling RunAnalysis: %s", err)
