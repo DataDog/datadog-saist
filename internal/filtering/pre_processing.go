@@ -727,27 +727,25 @@ func shouldAnalyzeGoDeserializationCtx(ctx *model.DetectionContext) bool {
 func shouldAnalyzeGoBrokencryptoCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
 
-	// Must have crypto imports
-	cryptoImports := []string{
-		"crypto/",
-		"crypto/aes",
-		"crypto/des",
-		"crypto/cipher",
-		"crypto/rand",
+	// ONLY check files that use WEAK crypto algorithms (DES, 3DES, RC4)
+	// AES is NOT a weak algorithm, so don't trigger on AES-only files
+	weakCryptoImports := []string{
+		"crypto/des", // DES and 3DES
+		"crypto/rc4", // RC4
 	}
 
-	// Weak patterns
+	// Weak algorithm patterns - only DES and RC4
 	weakPatterns := []string{
-		"des.",
-		"newcbcencrypter", // CBC without authentication
-		"math/rand",       // Weak RNG
-		"rand.read",       // Potentially weak if not crypto/rand
+		"des.newcipher",
+		"des.newtripledescipher",
+		"rc4.newcipher",
 	}
 
-	hasCrypto := containsAny(code, cryptoImports)
-	hasWeak := containsAny(code, weakPatterns)
+	hasWeakImport := containsAny(code, weakCryptoImports)
+	hasWeakPattern := containsAny(code, weakPatterns)
 
-	return hasCrypto && hasWeak
+	// Only analyze if file uses weak crypto imports OR weak patterns
+	return hasWeakImport || hasWeakPattern
 }
 
 func shouldAnalyzePythonBrokencryptoCtx(ctx *model.DetectionContext) bool {
@@ -1562,38 +1560,24 @@ func shouldAnalyzeCSharpPathtraversalCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
 
 	// File operation sinks
-	fileSinks := []string{
+	keywords := []string{
 		"file.open",
 		"file.read",
 		"file.write",
 		"file.delete",
-		"file.exists",
-		"file.copy",
-		"file.move",
 		"filestream",
 		"streamreader",
 		"streamwriter",
-		"directory.",
 		"path.combine",
 		"path.getfullpath",
+		// Additional patterns for coverage
+		"fileinfo",
+		"directoryinfo",
+		"physicalfile",
+		"directory.",
 	}
 
-	// User input sources
-	inputSources := []string{
-		"request.querystring",
-		"request.form",
-		"request[",
-		"frombody",
-		"fromquery",
-		"fromroute",
-		"fromform",
-		"httpcontext",
-	}
-
-	hasSink := containsAny(code, fileSinks)
-	hasInput := containsAny(code, inputSources)
-
-	return hasSink && hasInput
+	return containsAny(code, keywords)
 }
 
 // C# Code Injection: require code execution APIs with user input
@@ -1744,27 +1728,23 @@ func shouldAnalyzeCSharpTrustboundaryCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
 
 	// Session storage
-	sessionStorage := []string{
-		"session[",
-		"session.set",
+	keywords := []string{
+		"session",
 		"httpcontext.session",
-		"tempdata[",
-	}
-
-	// User input sources
-	inputSources := []string{
-		"request.querystring",
+		"ihttpsessionfeature",
+		"tempdata",
 		"request.form",
-		"request[",
-		"frombody",
-		"fromquery",
-		"fromform",
+		"request.query",
+		"claimsprincipal",
+		"httpcontext.user",
+		// Additional patterns for coverage
+		"setstring",
+		"setint32",
+		"viewdata",
+		"viewbag",
 	}
 
-	hasSession := containsAny(code, sessionStorage)
-	hasInput := containsAny(code, inputSources)
-
-	return hasSession && hasInput
+	return containsAny(code, keywords)
 }
 
 // C# Weak Randomness: detect System.Random in security contexts
