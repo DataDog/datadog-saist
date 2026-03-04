@@ -496,6 +496,11 @@ func (agent *DetectionAgent) basicDetection(ctx context.Context, scanData *model
 			}
 
 			if vResult.Confirmed {
+				// Prefer verification reason (more detailed with taint analysis) over detection reason
+				message := vResult.Reason
+				if message == "" {
+					message = violation.Reason
+				}
 				mu.Lock()
 				violations = append(violations, model.Violation{
 					StartLine:   violation.StartLine,
@@ -504,7 +509,7 @@ func (agent *DetectionAgent) basicDetection(ctx context.Context, scanData *model
 					EndColumn:   violation.EndColumn,
 					Path:        scanData.RelativeFilePath,
 					Rule:        scanData.Rule.ID,
-					Message:     violation.Reason,
+					Message:     message,
 					Cwe:         scanData.Rule.Cwe,
 				})
 				mu.Unlock()
