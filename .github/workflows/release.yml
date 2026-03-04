@@ -67,7 +67,8 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: 1
+          # CGO is disabled on Windows because go-libddwaf doesn't support Windows
+          CGO_ENABLED: ${{ matrix.goos == 'windows' && '0' || '1' }}
         run: |
           if [[ "${{ matrix.goos }}" == "linux" && "${{ matrix.goarch }}" == "arm64" ]]; then
             export CC=aarch64-linux-gnu-gcc
