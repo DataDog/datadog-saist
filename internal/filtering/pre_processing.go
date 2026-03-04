@@ -154,6 +154,12 @@ var ruleFilters = map[string]ruleFilterFunc{
 	"datadog/java-sqli":   shouldAnalyzeJavaSqliCtx,
 	"datadog/csharp-sqli": shouldAnalyzeCSharpSqliCtx,
 
+	// Command Injection
+	"datadog/java-cmdi":   shouldAnalyzeJavaCmdiCtx,
+	"datadog/go-cmdi":     shouldAnalyzeGoCmdiCtx,
+	"datadog/python-cmdi": shouldAnalyzePythonCmdiCtx,
+	"datadog/csharp-cmdi": shouldAnalyzeCSharpCmdiCtx,
+
 	// XSS
 	"datadog/java-xss":   shouldAnalyzeJavaXssCtx,
 	"datadog/go-xss":     shouldAnalyzeGoXssCtx,
@@ -227,28 +233,74 @@ var ruleFilters = map[string]ruleFilterFunc{
 	"datadog/csharp-weakrandomness": shouldAnalyzeCSharpWeakrandomnessCtx,
 }
 
-// Python SQLi: require DB-ish hints AND SQL-ish verbs.
+// shouldAnalyzePythonSqliCtx checks for Python SQL injection patterns.
+// Analyzes files with SQL string construction or database interaction.
 func shouldAnalyzePythonSqliCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
 
-	dbHints := []string{
+	// Database interaction patterns
+	dbPatterns := []string{
+		// Database modules
 		"sqlite3",
+		"psycopg2",
+		"mysql",
+		"pymysql",
+		"cx_oracle",
+		"pyodbc",
+		"sqlalchemy",
+		// Cursor/execute patterns
 		"cursor(",
 		".cursor(",
 		"execute(",
 		"executemany(",
-		"psycopg2",
-		"sqlalchemy",
+		"callproc(",
+		// Django ORM
+		".raw(",
+		".extra(",
+		"rawsql",
+		// Connection patterns
+		"connection",
+		"conn.",
+		"db.",
 	}
-	sqlWords := []string{"select", "update", "insert", "delete"}
 
-	if !containsAny(code, dbHints) {
-		return false
+	// SQL keywords - use word-based matching
+	sqlWords := []string{"select", "update", "insert", "delete", "from", "where", "call"}
+
+	// String formatting patterns that suggest SQL injection risk
+	stringFormattingPatterns := []string{
+		"% (",   // % formatting with tuple
+		".format(",
+		"f\"",
+		"f'",
+		"+ bar", // String concatenation with variable
+		"+ param",
+		"' +",   // String concatenation patterns
+		"\" +",
 	}
-	if !containsAnyWord(code, sqlWords) {
-		return false
+
+	// SQL string construction patterns (direct SQL in string)
+	sqlStringPatterns := []string{
+		"\"select ",
+		"'select ",
+		"\"insert ",
+		"'insert ",
+		"\"update ",
+		"'update ",
+		"\"delete ",
+		"'delete ",
 	}
-	return true
+
+	hasDbPattern := containsAny(code, dbPatterns)
+	hasSqlWord := containsAnyWord(code, sqlWords)
+	hasStringFormatting := containsAny(code, stringFormattingPatterns)
+	hasSqlString := containsAny(code, sqlStringPatterns)
+
+	// Analyze if:
+	// 1. DB pattern AND (SQL word OR string formatting), OR
+	// 2. SQL string construction with string formatting (no DB pattern required)
+	return (hasDbPattern && (hasSqlWord || hasStringFormatting)) ||
+		(hasSqlString && hasStringFormatting)
 }
 
 // Go SQLi: require some SQL / DB hints AND SQL verbs.
@@ -372,82 +424,99 @@ func shouldAnalyzeJavaSqliCtx(ctx *model.DetectionContext) bool {
 	return true
 }
 
-// Go XSS: look for HTML content, response writing, or user input handling
+// shouldAnalyzeGoXssCtx checks for Go XSS patterns.
+// Triggers on HTML content, response writing sinks, or user input sources.
 func shouldAnalyzeGoXssCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
 
-	// HTML indicators - if HTML is present, likely worth checking
+	// HTML indicators
 	htmlHints := []string{
 		"<html", "<body", "<script", "<form", "<input", "<img", "<iframe",
-		"<div", "<span", "<a ", "<p>",
+		"<div", "<span", "<a ", "<p>", "<h1", "<h2",
 	}
 
-	// Response writing sinks
+	// Response writing sinks - be more inclusive
 	responseSinks := []string{
 		"responsewriter",
-		"write(",
-		"fprintf(",
-		"fprint(",
+		"http.responsewriter",
+		"w.write(",
+		"fmt.fprintf(",
+		"fmt.fprint(",
+		"fmt.fprintln(",
+		"io.writestring(",
 		"template.execute",
+		"template.html(",
 		"html/template",
 		"text/template",
 	}
 
-	// User input sources
+	// User input sources - be more inclusive
 	inputSources := []string{
 		"r.url.query",
+		"r.url.rawquery",
 		"r.formvalue",
 		"r.postformvalue",
 		"r.header.get",
-		"request.",
-		"gin.context",
-		"echo.context",
+		"r.parseform",
+		"r.form[",
+		"mux.vars(",
+		"chi.urlparam(",
+		"c.query(",
+		"c.param(",
 	}
 
 	hasHTML := containsAny(code, htmlHints)
 	hasSink := containsAny(code, responseSinks)
 	hasInput := containsAny(code, inputSources)
 
-	// HTML content alone is worth analyzing, or sink+input combo
-	return hasHTML || (hasSink && hasInput)
+	// HTML content alone, or any sink with input
+	return hasHTML || hasSink || hasInput
 }
 
-// Python XSS: look for HTML content, template rendering, or response writing
+// shouldAnalyzePythonXssCtx checks for Python XSS patterns.
+// Triggers on HTML content, response sinks, or user input sources.
 func shouldAnalyzePythonXssCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
 
-	// HTML indicators - if HTML is present, likely worth checking
+	// HTML indicators
 	htmlHints := []string{
 		"<html", "<body", "<script", "<form", "<input", "<img", "<iframe",
-		"<div", "<span", "<a ",
+		"<div", "<span", "<a ", "<h1", "<h2", "<p>",
 	}
 
-	// Template/response sinks
-	sinks := []string{
-		"render_template",
-		"render(",
+	// Response sinks - be more inclusive
+	responseSinks := []string{
 		"response(",
+		"response.",
 		"make_response",
-		"jinja",
-		"template",
-		"htmlresponse",
+		"render_template",
+		"render_template_string",
+		"httpresponse",
+		"jsonresponse",
+		"markup(",
+		".write(",
+		"return f\"",
+		"return f'",
 	}
 
-	// User input sources
+	// User input sources - be more inclusive
 	inputSources := []string{
 		"request.args",
 		"request.form",
 		"request.values",
 		"request.get_json",
 		"request.data",
+		"request.headers",
+		"request.cookies",
+		"flask.request",
 	}
 
 	hasHTML := containsAny(code, htmlHints)
-	hasSink := containsAny(code, sinks)
+	hasSink := containsAny(code, responseSinks)
 	hasInput := containsAny(code, inputSources)
 
-	// HTML content alone is worth analyzing, or sink+input combo
-	return hasHTML || (hasSink && hasInput)
+	// HTML content alone, or any sink with input
+	return hasHTML || hasSink || hasInput
 }
 
 // Java Deserialization: require deserialization operations
@@ -519,38 +588,40 @@ func shouldAnalyzePythonDeserializationCtx(ctx *model.DetectionContext) bool {
 	return hasSink && !hasSafe
 }
 
-// Java Broken Cryptography: require crypto operations with weak algorithms
+// Java Broken Cryptography: ONLY check for weak algorithms (DES, 3DES, RC4, RC2)
+// AES is NOT a weak algorithm, so don't trigger on AES-only files
 func shouldAnalyzeJavaBrokencryptoCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
 
-	// Crypto operation indicators
-	cryptoOps := []string{
-		"cipher.getinstance",
-		"messagedigest.getinstance",
-		"secretkeyspec",
-		"ivparameterspec",
-		"keypairgenerator",
-		"keygenerator",
-	}
-
-	// Weak algorithm indicators
-	weakAlgorithms := []string{
+	// ONLY check files that use WEAK crypto algorithms
+	// AES is STRONG - do not include it here
+	weakCryptoPatterns := []string{
+		// DES (weak - 56-bit key)
 		"\"des\"",
+		"\"des/",
+		"cipher.getinstance(\"des",
+		// 3DES/DESede (deprecated)
 		"\"desede\"",
+		"\"desede/",
+		"cipher.getinstance(\"desede",
+		// RC4/ARCFOUR (broken)
 		"\"rc4\"",
 		"\"arcfour\"",
-		"/ecb/",
-		"\"aes\")",         // AES without mode defaults to ECB
-		"new byte[16]",     // Potential zero IV
-		"java.util.random", // Weak RNG for crypto
-		"initialize(1024",  // Weak RSA key size
+		"cipher.getinstance(\"rc4",
+		"cipher.getinstance(\"arcfour",
+		// RC2 (weak)
+		"\"rc2\"",
+		"cipher.getinstance(\"rc2",
+		// Blowfish (outdated)
+		"\"blowfish\"",
+		"cipher.getinstance(\"blowfish",
+		// Small RSA key sizes
 		"initialize(512",
+		"initialize(1024",
 	}
 
-	hasCrypto := containsAny(code, cryptoOps)
-	hasWeak := containsAny(code, weakAlgorithms)
-
-	return hasCrypto && hasWeak
+	// Only analyze if file uses weak crypto patterns
+	return containsAny(code, weakCryptoPatterns)
 }
 
 // Java Path Traversal: require file operations with user input
@@ -666,6 +737,16 @@ func shouldAnalyzePythonPathtraversalCtx(ctx *model.DetectionContext) bool {
 		"send_file(",
 		"send_from_directory(",
 		"os.path.join(",
+		"os.path.exists(",
+		"os.path.isfile(",
+		"os.path.isdir(",
+		"os.path.abspath(",
+		"os.path.realpath(",
+		"os.listdir(",
+		"os.remove(",
+		"os.unlink(",
+		"os.rename(",
+		"os.makedirs(",
 		"pathlib",
 		"shutil.",
 	}
@@ -751,29 +832,32 @@ func shouldAnalyzeGoBrokencryptoCtx(ctx *model.DetectionContext) bool {
 func shouldAnalyzePythonBrokencryptoCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
 
-	// Crypto imports
-	cryptoImports := []string{
-		"from crypto",
-		"import crypto",
-		"pycrypto",
-		"cryptography",
-		"from cryptography",
+	// ONLY check files that use WEAK crypto algorithms (DES, 3DES, RC4, RC2, Blowfish)
+	// AES is NOT a weak algorithm, so don't trigger on AES-only files
+	weakCryptoPatterns := []string{
+		// DES imports and usage
+		"from crypto.cipher import des",
+		"import des",
+		"des.new(",
+		// 3DES imports and usage
+		"from crypto.cipher import des3",
+		"des3.new(",
+		// RC4/ARC4 imports and usage
+		"from crypto.cipher import arc4",
+		"arc4.new(",
+		// RC2 imports and usage
+		"from crypto.cipher import arc2",
+		"arc2.new(",
+		// Blowfish imports and usage
+		"from crypto.cipher import blowfish",
+		"blowfish.new(",
+		// Small RSA key sizes
+		"key_size=512",
+		"key_size=1024",
 	}
 
-	// Weak patterns
-	weakPatterns := []string{
-		"des.",
-		"des3.",
-		"arc4",
-		"mode_ecb",
-		"aes.new(", // Check for ECB mode
-		"random.",  // Weak RNG
-	}
-
-	hasCrypto := containsAny(code, cryptoImports)
-	hasWeak := containsAny(code, weakPatterns)
-
-	return hasCrypto && hasWeak
+	// Only analyze if file uses weak crypto patterns
+	return containsAny(code, weakCryptoPatterns)
 }
 
 // ============================================================
@@ -885,31 +969,63 @@ func shouldAnalyzeJavaLdapiCtx(ctx *model.DetectionContext) bool {
 func shouldAnalyzeGoLdapiCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
 
-	// Go LDAP packages
-	ldapAPIs := []string{
+	// Go LDAP patterns: imports, operations, and DN components
+	ldapPatterns := []string{
+		// LDAP packages
 		"ldap.",
 		"go-ldap",
+		"gopkg.in/ldap",
+		// LDAP operations
 		"ldap.dial",
 		"ldap.search",
+		"ldap.bind",
+		"searchrequest",
+		".search(",
+		".bind(",
+		// LDAP filter patterns
+		"filter",
+		"ldapfilter",
+		// DN patterns
+		"basedn",
+		"dc=",
+		"cn=",
+		"ou=",
 	}
 
-	return containsAny(code, ldapAPIs)
+	return containsAny(code, ldapPatterns)
 }
 
 func shouldAnalyzePythonLdapiCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
 
-	// Python LDAP packages
-	ldapAPIs := []string{
+	// Python LDAP patterns: imports, operations, and DN components
+	ldapPatterns := []string{
+		// LDAP imports
 		"import ldap",
 		"from ldap",
 		"ldap3",
 		"python-ldap",
+		// LDAP operations
 		"ldap.search",
 		"connection.search",
+		"search_s(",
+		"search_ext_s(",
+		"simple_bind",
+		"bind_s(",
+		// LDAP filter patterns
+		"filter=",
+		"filter_str",
+		"ldap_filter",
+		"search_filter",
+		// DN patterns
+		"base_dn",
+		"user_dn",
+		"dc=",
+		"cn=",
+		"ou=",
 	}
 
-	return containsAny(code, ldapAPIs)
+	return containsAny(code, ldapPatterns)
 }
 
 // ============================================================
@@ -966,88 +1082,82 @@ func shouldAnalyzePythonXpathiCtx(ctx *model.DetectionContext) bool {
 func shouldAnalyzeJavaWeakhashCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
 
-	// Hash operations
-	hashOps := []string{
-		"messagedigest",
-		"digestutils",
-	}
-
-	// Weak algorithms
-	weakAlgos := []string{
+	// Weak hash patterns: MD5 and SHA-1 usage indicators.
+	// The prompt handles security context filtering.
+	weakHashPatterns := []string{
+		// MessageDigest with weak algorithms
+		"messagedigest.getinstance(\"md5\"",
+		"messagedigest.getinstance(\"sha-1\"",
+		"messagedigest.getinstance(\"sha1\"",
 		"\"md5\"",
 		"\"sha-1\"",
 		"\"sha1\"",
+		// Apache Commons DigestUtils
+		"digestutils.md5",
+		"digestutils.sha1",
 		"md5hex",
 		"sha1hex",
+		// Guava Hashing
+		"hashing.md5",
+		"hashing.sha1",
+		// Generic MessageDigest usage (let prompt decide)
+		"messagedigest",
 	}
 
-	// Security context indicators
-	securityContext := []string{
-		"password",
-		"credential",
-		"token",
-		"auth",
-		"secret",
-	}
-
-	hasHash := containsAny(code, hashOps)
-	hasWeak := containsAny(code, weakAlgos)
-	hasSecurityContext := containsAny(code, securityContext)
-
-	// Only flag if weak hash AND in security context
-	return hasHash && hasWeak && hasSecurityContext
+	// Analyze if ANY weak hash pattern is present
+	// Remove security context requirement - let the prompt handle it
+	return containsAny(code, weakHashPatterns)
 }
 
 func shouldAnalyzeGoWeakhashCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
 
-	// Weak hash imports
-	weakHashImports := []string{
+	// Weak hash patterns: crypto/md5 and crypto/sha1 usage indicators.
+	// The prompt handles security context filtering.
+	weakHashPatterns := []string{
+		// Weak hash imports
 		"crypto/md5",
 		"crypto/sha1",
-		"md5.new",
-		"sha1.new",
+		// Weak hash function calls
+		"md5.new(",
+		"md5.sum(",
+		"sha1.new(",
+		"sha1.sum(",
+		// Hash package usage that might use weak algos
+		"hash.hash",
+		"hasher.write",
 	}
 
-	// Security context
-	securityContext := []string{
-		"password",
-		"credential",
-		"token",
-		"auth",
-		"secret",
-	}
-
-	hasWeak := containsAny(code, weakHashImports)
-	hasSecurityContext := containsAny(code, securityContext)
-
-	return hasWeak && hasSecurityContext
+	// Analyze if ANY weak hash pattern is present
+	// Remove security context requirement - let the prompt handle it
+	return containsAny(code, weakHashPatterns)
 }
 
 func shouldAnalyzePythonWeakhashCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
 
-	// Weak hash usage
+	// Weak hash patterns: hashlib.md5 and hashlib.sha1 usage indicators.
+	// The prompt handles security context filtering.
 	weakHashPatterns := []string{
+		// hashlib weak algorithms
 		"hashlib.md5",
 		"hashlib.sha1",
+		"hashlib.new(\"md5\"",
+		"hashlib.new(\"sha1\"",
+		"hashlib.new('md5'",
+		"hashlib.new('sha1'",
+		// Direct calls
 		"md5(",
 		"sha1(",
+		// Generic hashlib usage (let prompt decide)
+		"hashlib",
+		".hexdigest(",
+		".digest(",
 	}
 
-	// Security context
-	securityContext := []string{
-		"password",
-		"credential",
-		"token",
-		"auth",
-		"secret",
-	}
-
-	hasWeak := containsAny(code, weakHashPatterns)
-	hasSecurityContext := containsAny(code, securityContext)
-
-	return hasWeak && hasSecurityContext
+	// Analyze if ANY weak hash pattern is present
+	// Remove security context requirement - let the prompt handle it
+	return containsAny(code, weakHashPatterns)
 }
 
 // ============================================================
@@ -1461,8 +1571,11 @@ func shouldAnalyzeCSharpXssCtx(ctx *model.DetectionContext) bool {
 	// Response writing sinks
 	responseSinks := []string{
 		"response.write",
+		"response.writeasync",
+		"writeasync(",
 		"htmlhelper",
 		"@html.raw",
+		"html.raw(",
 		"content(",
 		"contentresult",
 		"viewbag",
@@ -1472,13 +1585,17 @@ func shouldAnalyzeCSharpXssCtx(ctx *model.DetectionContext) bool {
 	// User input sources
 	inputSources := []string{
 		"request.querystring",
+		"request.query",
 		"request.form",
+		"request.headers",
+		"request.cookies",
 		"request[",
 		"httpcontext",
 		"frombody",
 		"fromquery",
 		"fromroute",
 		"fromform",
+		"iheaderdictionary",
 	}
 
 	hasHTML := containsAny(code, htmlHints)
@@ -1523,43 +1640,41 @@ func shouldAnalyzeCSharpDeserializationCtx(ctx *model.DetectionContext) bool {
 	return (hasSink && hasInput) || hasCriticalSink
 }
 
-// C# Broken Cryptography: require crypto operations with weak algorithms
+// C# Broken Cryptography: ONLY check for weak algorithms (DES, 3DES, RC2)
+// AES is NOT a weak algorithm, so don't trigger on AES-only files
 func shouldAnalyzeCSharpBrokencryptoCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
 
-	// Crypto operation indicators
-	cryptoOps := []string{
-		"symmetricalgorithm",
-		"aes.create",
+	// ONLY check files that use WEAK crypto algorithms
+	// AES is STRONG - do not include it here
+	weakCryptoPatterns := []string{
+		// DES (weak - 56-bit key)
 		"des.create",
-		"tripledes",
-		"rijndael",
-		"rsacryptoserviceprovider",
-		"dsacryptoserviceprovider",
-	}
-
-	// Weak algorithm indicators
-	weakPatterns := []string{
 		"descryptoserviceprovider",
+		"new des(",
+		// 3DES/TripleDES (deprecated)
+		"tripledes.create",
+		"tripledescryptoserviceprovider",
+		"new tripledes(",
+		// RC2 (weak)
+		"rc2.create",
 		"rc2cryptoserviceprovider",
-		"ciphermode.ecb",
-		"new byte[16]", // Potential zero IV
-		"new random(",  // Weak RNG for crypto
-		"keysize = 1024",
+		"new rc2(",
+		// Small RSA key sizes
+		"rsa.create(512",
+		"rsa.create(1024",
 		"keysize = 512",
+		"keysize = 1024",
 	}
 
-	hasCrypto := containsAny(code, cryptoOps)
-	hasWeak := containsAny(code, weakPatterns)
-
-	return hasCrypto && hasWeak
+	// Only analyze if file uses weak crypto patterns
+	return containsAny(code, weakCryptoPatterns)
 }
 
 // C# Path Traversal: require file operations with user input
 func shouldAnalyzeCSharpPathtraversalCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
 
-	// File operation sinks
 	keywords := []string{
 		"file.open",
 		"file.read",
@@ -1610,21 +1725,139 @@ func shouldAnalyzeCSharpCodeiCtx(ctx *model.DetectionContext) bool {
 	return hasCodeExec && hasInput
 }
 
-// C# LDAP Injection: require LDAP APIs
+// shouldAnalyzeCSharpLdapiCtx checks for C# LDAP injection patterns.
 func shouldAnalyzeCSharpLdapiCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
 
-	// LDAP APIs
-	ldapAPIs := []string{
+	// C# LDAP patterns: DirectoryServices, connection, and DN components
+	ldapPatterns := []string{
+		// DirectoryServices namespace
 		"directoryentry",
 		"directorysearcher",
-		"ldapconnection",
 		"system.directoryservices",
+		// LDAP connection
+		"ldapconnection",
+		"novell.directory.ldap",
+		// Search operations
 		".findall(",
 		".findone(",
+		"searchrequest",
+		"sendrequest(",
+		// Filter property
+		".filter",
+		"searcher.filter",
+		// DN patterns
+		"ldap://",
+		"dc=",
+		"cn=",
+		"ou=",
 	}
 
-	return containsAny(code, ldapAPIs)
+	return containsAny(code, ldapPatterns)
+}
+
+// ============================================================
+// Command Injection
+// ============================================================
+
+func shouldAnalyzeJavaCmdiCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	// Java command execution patterns
+	cmdiPatterns := []string{
+		// Runtime.exec
+		"runtime.getruntime(",
+		".exec(",
+		// ProcessBuilder
+		"processbuilder",
+		"new processbuilder(",
+		// Process
+		"process.start",
+		// Shell patterns
+		"cmd.exe",
+		"/bin/sh",
+		"/bin/bash",
+		"bash -c",
+		"sh -c",
+	}
+
+	return containsAny(code, cmdiPatterns)
+}
+
+func shouldAnalyzeGoCmdiCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	// Go command execution patterns
+	cmdiPatterns := []string{
+		// os/exec package
+		"os/exec",
+		"exec.command(",
+		"exec.commandcontext(",
+		// Command execution
+		".run(",
+		".start(",
+		".output(",
+		".combinedoutput(",
+		// Shell patterns
+		"cmd.exe",
+		"/bin/sh",
+		"/bin/bash",
+		"bash",
+	}
+
+	return containsAny(code, cmdiPatterns)
+}
+
+func shouldAnalyzePythonCmdiCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	// Python command execution patterns
+	cmdiPatterns := []string{
+		// subprocess module
+		"subprocess",
+		"subprocess.run(",
+		"subprocess.popen(",
+		"subprocess.call(",
+		"subprocess.check_output(",
+		// os module
+		"os.system(",
+		"os.popen(",
+		"os.spawn",
+		// commands module (deprecated)
+		"commands.getoutput(",
+		// Shell patterns
+		"shell=true",
+		"/bin/sh",
+		"/bin/bash",
+	}
+
+	return containsAny(code, cmdiPatterns)
+}
+
+func shouldAnalyzeCSharpCmdiCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	// C# command execution patterns: Process class and shell execution
+	cmdiPatterns := []string{
+		// Process class
+		"process.start(",
+		"new process(",
+		"processstartinfo",
+		"new processstartinfo(",
+		// StartInfo properties
+		".startinfo",
+		".filename",
+		".arguments",
+		// Shell patterns
+		"cmd.exe",
+		"cmd /c",
+		"powershell",
+		"bash",
+		// System.Diagnostics namespace
+		"system.diagnostics.process",
+	}
+
+	return containsAny(code, cmdiPatterns)
 }
 
 // C# XPath Injection: require XPath APIs
@@ -1645,33 +1878,38 @@ func shouldAnalyzeCSharpXpathiCtx(ctx *model.DetectionContext) bool {
 	return containsAny(code, xpathAPIs)
 }
 
-// C# Weak Hash: require hash operations with weak algorithms in security context
+// shouldAnalyzeCSharpWeakhashCtx checks for C# weak hash algorithm usage.
 func shouldAnalyzeCSharpWeakhashCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
 
-	// Hash operations
-	hashOps := []string{
+	// Weak hash patterns: MD5 and SHA1 usage indicators.
+	// The prompt handles security context filtering.
+	weakHashPatterns := []string{
+		// MD5 variants
 		"md5.create",
-		"sha1.create",
 		"md5cryptoserviceprovider",
-		"sha1cryptoserviceprovider",
-		"sha1managed",
+		"new md5cryptoserviceprovider",
+		"md5managed",
 		"md5cng",
+		// SHA1 variants
+		"sha1.create",
+		"sha1cryptoserviceprovider",
+		"new sha1cryptoserviceprovider",
+		"sha1managed",
+		"sha1cng",
+		// HMAC weak variants
+		"hmacmd5",
+		"hmacsha1",
+		// HashAlgorithm.Create with weak algos
+		"hashalgorithm.create(\"md5\"",
+		"hashalgorithm.create(\"sha1\"",
+		// Generic hash usage (let prompt decide)
+		"computehash(",
 	}
 
-	// Security context indicators
-	securityContext := []string{
-		"password",
-		"credential",
-		"token",
-		"auth",
-		"secret",
-	}
-
-	hasHash := containsAny(code, hashOps)
-	hasSecurityContext := containsAny(code, securityContext)
-
-	return hasHash && hasSecurityContext
+	// Analyze if ANY weak hash pattern is present
+	// Remove security context requirement - let the prompt handle it
+	return containsAny(code, weakHashPatterns)
 }
 
 // C# Insecure Cookie: require cookie operations
@@ -1723,11 +1961,9 @@ func shouldAnalyzeCSharpAccesscontrolCtx(ctx *model.DetectionContext) bool {
 	return hasEndpoint && hasIdAccess
 }
 
-// C# Trust Boundary: require session storage with user input
 func shouldAnalyzeCSharpTrustboundaryCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
 
-	// Session storage
 	keywords := []string{
 		"session",
 		"httpcontext.session",
