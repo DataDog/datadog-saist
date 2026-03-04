@@ -269,13 +269,13 @@ func shouldAnalyzePythonSqliCtx(ctx *model.DetectionContext) bool {
 
 	// String formatting patterns that suggest SQL injection risk
 	stringFormattingPatterns := []string{
-		"% (",   // % formatting with tuple
+		"% (", // % formatting with tuple
 		".format(",
 		"f\"",
 		"f'",
 		"+ bar", // String concatenation with variable
 		"+ param",
-		"' +",   // String concatenation patterns
+		"' +", // String concatenation patterns
 		"\" +",
 	}
 

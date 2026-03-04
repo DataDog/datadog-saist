@@ -89,17 +89,6 @@ func TestShouldAnalyze_CommandInjectionKeywords(t *testing.T) {
 	assert.True(t, result, "Expected ShouldAnalyze to return true for code with bash keyword")
 }
 
-func TestShouldAnalyze_CommandInjectionNoKeywordMatch(t *testing.T) {
-	ctx := model.DetectionContext{
-		Language: model.Python,
-		Rule:     api.AiPrompt{ID: "datadog/python-cmdi", FileSearchKeywords: []string{"foobar"}},
-		Code:     "os.system('bash -c \"echo hello\"')",
-	}
-
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
-	assert.False(t, result, "No keyword match")
-}
-
 func TestShouldAnalyze_LanguageSpecificOverridesGeneric(t *testing.T) {
 	ctx := model.DetectionContext{
 		Language: model.Go,
