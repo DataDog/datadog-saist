@@ -52,6 +52,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu
 
+      - name: Setup MinGW for Windows
+        if: matrix.goos == 'windows'
+        shell: pwsh
+        run: echo "C:\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+
       - name: Get version from tag
         id: version
         shell: bash
@@ -68,10 +73,8 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 1
+          CC: ${{ matrix.goos == 'linux' && matrix.goarch == 'arm64' && 'aarch64-linux-gnu-gcc' || matrix.goos == 'windows' && 'gcc' || '' }}
         run: |
-          if [[ "${{ matrix.goos }}" == "linux" && "${{ matrix.goarch }}" == "arm64" ]]; then
-            export CC=aarch64-linux-gnu-gcc
-          fi
           if [[ "${{ matrix.goos }}" == "darwin" && "${{ matrix.goarch }}" == "amd64" ]]; then
             export CGO_CFLAGS="-arch x86_64"
             export CGO_LDFLAGS="-arch x86_64"
