@@ -15,16 +15,26 @@ jobs:
       matrix:
         reponame: [saist-playground, BenchmarkJava, vulnpy-ibmappsec, gowasp]
         modelname: ["gemini-2.5-flash", "gemini-3-flash", "openai-gpt5.2", "openai-gpt5.2-codex", "claude-4.5-sonnet", "claude-4.5-haiku"]
+    permissions:
+      contents: read
+      id-token: write  # Needed for dd-octo-sts
     steps:
     - name: Checkout code
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+    - name: Get access token for evals repo
+      id: octo-sts
+      uses: DataDog/dd-octo-sts-action@08f2144903ced3254a3dafec2592563409ba2aa0 # v1.0.1
+      with:
+        scope: DataDog/datadog-saist-evals
+        policy: evals
 
     - name: Checkout private evals repo
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
         repository: DataDog/datadog-saist-evals
         ref: 'main'
-        token: ${{ secrets.EVALS_REPO_PAT }}
+        token: ${{ steps.octo-sts.outputs.token }}
         path: tmp/datadog-saist-evals
 
     - name: Set up Go
