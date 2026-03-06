@@ -265,7 +265,7 @@ func shouldAnalyzePythonSqliCtx(ctx *model.DetectionContext) bool {
 	}
 
 	// SQL keywords - use word-based matching
-	sqlWords := []string{"select", "update", "insert", "delete", "from", "where", "call"}
+	sqlWords := []string{"select", "update", "insert", "delete", "from", "where", "call", "exec"}
 
 	// String formatting patterns that suggest SQL injection risk
 	stringFormattingPatterns := []string{
@@ -336,7 +336,7 @@ func shouldAnalyzeGoSqliCtx(ctx *model.DetectionContext) bool {
 		"from customers where",
 	}
 
-	sqlWords := []string{"select", "update", "insert", "delete", "call"}
+	sqlWords := []string{"select", "update", "insert", "delete", "call", "exec"}
 
 	// Stored procedure patterns
 	storedProcPatterns := []string{
