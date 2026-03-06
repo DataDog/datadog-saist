@@ -2,6 +2,8 @@ module github.com/DataDog/datadog-saist
 
 go 1.24.3
 
+toolchain go1.26.0
+
 require (
 	github.com/bmatcuk/doublestar/v4 v4.9.1
 	github.com/google/generative-ai-go v0.20.1
