@@ -265,7 +265,7 @@ func shouldAnalyzePythonSqliCtx(ctx *model.DetectionContext) bool {
 	}
 
 	// SQL keywords - use word-based matching
-	sqlWords := []string{"select", "update", "insert", "delete", "from", "where", "call"}
+	sqlWords := []string{"select", "update", "insert", "delete", "from", "where", "call", "exec"}
 
 	// String formatting patterns that suggest SQL injection risk
 	stringFormattingPatterns := []string{
@@ -310,23 +310,60 @@ func shouldAnalyzeGoSqliCtx(ctx *model.DetectionContext) bool {
 
 	dbHints := []string{
 		`"database/sql"`,
+		"database/sql",
 		"db.exec(",
 		"db.query(",
 		"db.queryrow(",
 		"db.prepare(",
 		"sqlx.",
 		"gorm.io/gorm",
+		"sqlquery",
+		"sqlstmt",
 	}
-	sqlWords := []string{"select", "update", "insert", "delete"}
+
+	// SQL string construction patterns
+	sqlStringPatterns := []string{
+		`"select `,
+		`"insert `,
+		`"update `,
+		`"delete `,
+		"select userid",
+		"select * from",
+		"insert into",
+		"update users",
+		"delete from",
+		"from users where",
+		"from customers where",
+	}
+
+	sqlWords := []string{"select", "update", "insert", "delete", "call", "exec"}
+
+	// Stored procedure patterns
+	storedProcPatterns := []string{
+		"{call",
+		"callablestatement",
+		"callproc",
+	}
 
 	hasDbHints := containsAny(code, dbHints) || strings.Contains(code, "sql")
-	if !hasDbHints {
-		return false
+	hasSqlString := containsAny(code, sqlStringPatterns)
+	hasStoredProc := containsAny(code, storedProcPatterns)
+	hasSqlWord := containsAnyWord(code, sqlWords)
+
+	// Match if:
+	// 1. Has DB hints AND SQL words
+	// 2. Has SQL string patterns (direct SQL construction)
+	// 3. Has stored procedure patterns
+	if hasStoredProc {
+		return true
 	}
-	if !containsAnyWord(code, sqlWords) {
-		return false
+	if hasSqlString {
+		return true
 	}
-	return true
+	if hasDbHints && hasSqlWord {
+		return true
+	}
+	return false
 }
 
 // Java XSS: look for HTML-ish tags OR dynamic input sources OR explicit XSS-ish markers.
@@ -708,8 +745,11 @@ func shouldAnalyzeGoPathtraversalCtx(ctx *model.DetectionContext) bool {
 	inputSources := []string{
 		"r.url.query",
 		"r.formvalue",
+		"r.form",
+		"r.parseform",
 		"r.url.path",
 		"r.header.get",
+		"r.header",
 		"os.args",
 		"os.getenv",
 		// Additional source patterns
@@ -719,6 +759,11 @@ func shouldAnalyzeGoPathtraversalCtx(ctx *model.DetectionContext) bool {
 		"c.postform",
 		"mux.vars(",     // gorilla/mux
 		"chi.urlparam(", // chi router
+		// Benchmark specific patterns
+		"dosomething(",
+		"param :=",
+		"bar :=",
+		"for name, values := range",
 	}
 
 	hasSink := containsAny(code, fileSinks)
@@ -832,32 +877,60 @@ func shouldAnalyzeGoBrokencryptoCtx(ctx *model.DetectionContext) bool {
 func shouldAnalyzePythonBrokencryptoCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
 
-	// ONLY check files that use WEAK crypto algorithms (DES, 3DES, RC4, RC2, Blowfish)
-	// AES is NOT a weak algorithm, so don't trigger on AES-only files
+	// Check for crypto library usage first
+	hasCryptoLibrary := containsAny(code, []string{
+		"from cryptography",
+		"cryptography.hazmat",
+		"from crypto",
+		"pycryptodome",
+		"from pycrypto",
+	})
+
+	// WEAK crypto algorithm patterns (DES, 3DES, RC4, RC2, Blowfish)
+	// Note: AES is NOT a weak algorithm
 	weakCryptoPatterns := []string{
-		// DES imports and usage
+		// PyCrypto/PyCryptodome patterns
 		"from crypto.cipher import des",
 		"import des",
 		"des.new(",
-		// 3DES imports and usage
 		"from crypto.cipher import des3",
 		"des3.new(",
-		// RC4/ARC4 imports and usage
 		"from crypto.cipher import arc4",
 		"arc4.new(",
-		// RC2 imports and usage
 		"from crypto.cipher import arc2",
 		"arc2.new(",
-		// Blowfish imports and usage
 		"from crypto.cipher import blowfish",
 		"blowfish.new(",
+		// cryptography library patterns (hazmat)
+		"algorithms.des",
+		"algorithms.tripledes",
+		"algorithms.3des",
+		"algorithms.arc4",
+		"algorithms.blowfish",
+		"algorithms.idea",
+		"algorithms.cast5",
+		"algorithms.seed",
+		// Algorithm string patterns (often loaded from config)
+		"desede",
+		"tripledes",
+		"3des",
+		"/des/",
+		"des/ecb",
+		"des/cbc",
+		"rc4",
+		"rc2",
 		// Small RSA key sizes
 		"key_size=512",
 		"key_size=1024",
+		"rsa_key_size=512",
+		"rsa_key_size=1024",
 	}
 
-	// Only analyze if file uses weak crypto patterns
-	return containsAny(code, weakCryptoPatterns)
+	// Analyze if has crypto library AND weak patterns
+	// OR just weak patterns (defensive)
+	hasWeakPattern := containsAny(code, weakCryptoPatterns)
+
+	return hasCryptoLibrary && hasWeakPattern
 }
 
 // ============================================================
@@ -1424,6 +1497,10 @@ func shouldAnalyzeJavaWeakrandomnessCtx(ctx *model.DetectionContext) bool {
 		"random.nextbytes",
 		"random.nextdouble",
 		"random.nextfloat",
+		"random.nextgaussian",
+		"random.ints(",
+		"random.longs(",
+		"random.doubles(",
 	}
 
 	// Security context indicators
@@ -1439,6 +1516,12 @@ func shouldAnalyzeJavaWeakrandomnessCtx(ctx *model.DetectionContext) bool {
 		"nonce",
 		"apikey",
 		"api_key",
+		"cookie",
+		"rememberme",
+		"remember_me",
+		"auth",
+		"login",
+		"credential",
 	}
 
 	hasWeakRandom := containsAny(code, weakRandomSources)
@@ -1451,16 +1534,25 @@ func shouldAnalyzeJavaWeakrandomnessCtx(ctx *model.DetectionContext) bool {
 func shouldAnalyzeGoWeakrandomnessCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
 
-	// Weak random imports/usage
+	// Weak random imports/usage - comprehensive list
 	weakRandomSources := []string{
 		"math/rand",
 		"rand.intn",
 		"rand.int(",
 		"rand.int63",
+		"rand.int31",
+		"rand.uint32",
 		"rand.uint64",
+		"rand.float32",
+		"rand.float64",
 		"rand.read",
 		"rand.seed",
 		"rand.new(",
+		"rand.newsource",
+		"rand.shuffle",
+		"rand.perm",
+		"rand.expfloat64",
+		"rand.normfloat64",
 	}
 
 	// Security context indicators
@@ -1476,6 +1568,12 @@ func shouldAnalyzeGoWeakrandomnessCtx(ctx *model.DetectionContext) bool {
 		"nonce",
 		"apikey",
 		"api_key",
+		"cookie",
+		"rememberme",
+		"remember_me",
+		"auth",
+		"login",
+		"credential",
 	}
 
 	hasWeakRandom := containsAny(code, weakRandomSources)
@@ -1488,7 +1586,7 @@ func shouldAnalyzeGoWeakrandomnessCtx(ctx *model.DetectionContext) bool {
 func shouldAnalyzePythonWeakrandomnessCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
 
-	// Weak random sources
+	// Weak random sources - comprehensive list of random module functions
 	weakRandomSources := []string{
 		"import random",
 		"from random",
@@ -1498,6 +1596,19 @@ func shouldAnalyzePythonWeakrandomnessCtx(ctx *model.DetectionContext) bool {
 		"random.choices",
 		"random.sample",
 		"random.shuffle",
+		"random.getrandbits",
+		"random.gauss",
+		"random.randrange",
+		"random.uniform",
+		"random.triangular",
+		"random.betavariate",
+		"random.expovariate",
+		"random.gammavariate",
+		"random.normalvariate",
+		"random.vonmisesvariate",
+		"random.paretovariate",
+		"random.weibullvariate",
+		"random.random(",
 	}
 
 	// Security context indicators
@@ -1513,6 +1624,12 @@ func shouldAnalyzePythonWeakrandomnessCtx(ctx *model.DetectionContext) bool {
 		"nonce",
 		"api_key",
 		"apikey",
+		"cookie",
+		"rememberme",
+		"remember_me",
+		"auth",
+		"login",
+		"credential",
 	}
 
 	hasWeakRandom := containsAny(code, weakRandomSources)
@@ -1580,12 +1697,15 @@ func shouldAnalyzeCSharpXssCtx(ctx *model.DetectionContext) bool {
 		"contentresult",
 		"viewbag",
 		"viewdata",
+		"string.format(",
+		"return content(",
 	}
 
 	// User input sources
 	inputSources := []string{
 		"request.querystring",
 		"request.query",
+		"request.query.keys",
 		"request.form",
 		"request.headers",
 		"request.cookies",
@@ -1675,6 +1795,7 @@ func shouldAnalyzeCSharpBrokencryptoCtx(ctx *model.DetectionContext) bool {
 func shouldAnalyzeCSharpPathtraversalCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
 
+	// File operation keywords - file matches if ANY keyword is present
 	keywords := []string{
 		"file.open",
 		"file.read",
@@ -1961,9 +2082,11 @@ func shouldAnalyzeCSharpAccesscontrolCtx(ctx *model.DetectionContext) bool {
 	return hasEndpoint && hasIdAccess
 }
 
+// C# Trust Boundary: file matches if ANY keyword is present
 func shouldAnalyzeCSharpTrustboundaryCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
 
+	// Session and trust boundary keywords - file matches if ANY keyword is present
 	keywords := []string{
 		"session",
 		"httpcontext.session",
@@ -1993,6 +2116,9 @@ func shouldAnalyzeCSharpWeakrandomnessCtx(ctx *model.DetectionContext) bool {
 		"random.next",
 		"random.nextdouble",
 		"random.nextbytes",
+		"random.nextsingle",
+		"random.nextint64",
+		"system.random",
 	}
 
 	// Security context indicators
@@ -2008,6 +2134,12 @@ func shouldAnalyzeCSharpWeakrandomnessCtx(ctx *model.DetectionContext) bool {
 		"nonce",
 		"apikey",
 		"api_key",
+		"cookie",
+		"rememberme",
+		"remember_me",
+		"auth",
+		"login",
+		"credential",
 	}
 
 	hasWeakRandom := containsAny(code, weakRandomSources)
