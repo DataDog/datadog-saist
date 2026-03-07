@@ -8,7 +8,7 @@ import (
 
 	"github.com/DataDog/datadog-saist/internal/model"
 	"github.com/DataDog/datadog-saist/internal/model/api"
-	"github.com/owenrumney/go-sarif/v2/sarif"
+	"github.com/owenrumney/go-sarif/v3/sarif"
 )
 
 const toolName = "datadog-ai-static-analyzer"
