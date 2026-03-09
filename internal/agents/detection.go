@@ -15,12 +15,15 @@ import (
 	pkgerrors "github.com/pkg/errors"
 )
 
+// aIGatewayFallbackModel is the model used automatically when rate limit (429) is hit with AI Gateway.
+// Uses a different provider to avoid shared rate limits.
+const aIGatewayFallbackModel = "openai/gpt-4.1-nano"
+
 type DetectionAgent struct {
 	llmClient             clients.LLMClient
-	requestTimeoutSec     int
 	verificationLLMClient clients.LLMClient
-	// Temporary to avoid larger refactor: this should be handled with log levels, not booleans
-	debugEnabled bool
+
+	agentOption *AgentOption
 }
 
 type AgentOption struct {
@@ -142,8 +145,7 @@ func NewDetectionAgent(ctx context.Context, agentOption *AgentOption) (*Detectio
 	return &DetectionAgent{
 		llmClient:             client,
 		verificationLLMClient: verificationClient,
-		requestTimeoutSec:     agentOption.RequestTimeoutSec,
-		debugEnabled:          agentOption.DebugEnabled,
+		agentOption:           agentOption,
 	}, nil
 }
 
@@ -404,10 +406,10 @@ func (agent *DetectionAgent) basicDetection(ctx context.Context, scanData *model
 
 	// Ensure we have a reasonable timeout (minimum 180 seconds)
 	// Increased from 30s to 180s because OpenAI context can be longer for complex code analysis
-	timeout := agent.requestTimeoutSec
+	timeout := agent.agentOption.RequestTimeoutSec
 	if timeout <= 0 {
 		timeout = 180 // Default to 180 seconds if not set - longer timeout needed for complex code analysis
-		if agent.debugEnabled {
+		if agent.agentOption.DebugEnabled {
 			log.FromContext(ctx).Info("[debug] No timeout set, using default 180 seconds")
 		}
 	}
@@ -415,12 +417,12 @@ func (agent *DetectionAgent) basicDetection(ctx context.Context, scanData *model
 	contextWithDeadline, cancelFunc := context.WithDeadline(ctx, time.Now().Add(time.Second*time.Duration(timeout)))
 	defer cancelFunc()
 
-	if agent.debugEnabled {
+	if agent.agentOption.DebugEnabled {
 		log.FromContext(ctx).Info(fmt.Sprintf("querying llm for rule:%s and %s", scanData.Rule.ID, scanData.RelativeFilePath))
 	}
 	response, err := agent.llmClient.GenerateContent(contextWithDeadline, scanData.SystemPrompt, scanData.UserPrompt, options)
 	if err != nil {
-		if agent.debugEnabled {
+		if agent.agentOption.DebugEnabled {
 			// Check if it's a context deadline error
 			if errors.Is(err, context.DeadlineExceeded) {
 				log.FromContext(ctx).Warnf("[debug] timeout after %d seconds for file %s: %s", timeout, scanData.RelativeFilePath, err)
@@ -446,7 +448,7 @@ func (agent *DetectionAgent) basicDetection(ctx context.Context, scanData *model
 
 	result, err := getViolationsFromContent(content)
 	if err != nil {
-		if agent.debugEnabled {
+		if agent.agentOption.DebugEnabled {
 			log.FromContext(ctx).Info(
 				fmt.Sprintf("[debug] re-trying file %s because we got an error when getting the violations %v, content: |%s|",
 					scanData.RelativeFilePath, err, content),
@@ -456,7 +458,7 @@ func (agent *DetectionAgent) basicDetection(ctx context.Context, scanData *model
 		return nil, err
 	}
 
-	if agent.debugEnabled && result != nil {
+	if agent.agentOption.DebugEnabled && result != nil {
 		log.FromContext(ctx).
 			Info(fmt.Sprintf("[%s] Found %d violations in %s",
 				scanData.Rule.ID, len(result.Violations), scanData.RelativeFilePath))
@@ -487,7 +489,7 @@ func (agent *DetectionAgent) basicDetection(ctx context.Context, scanData *model
 			// Verify violation using higher fidelity model
 			vResult, err := agent.VerifyViolation(ctx, scanData, violation)
 			if err != nil {
-				if agent.debugEnabled {
+				if agent.agentOption.DebugEnabled {
 					log.FromContext(ctx).
 						Info(fmt.Sprintf("failed to verify result for filepath %s for rule %s with err: %s: ",
 							scanData.RelativeFilePath, scanData.Rule.ID, err.Error()))
@@ -513,7 +515,7 @@ func (agent *DetectionAgent) basicDetection(ctx context.Context, scanData *model
 					Cwe:         scanData.Rule.Cwe,
 				})
 				mu.Unlock()
-			} else if agent.debugEnabled {
+			} else if agent.agentOption.DebugEnabled {
 				log.FromContext(ctx).Debug(fmt.Sprintf("found unconfirmed false positive: %s for %s",
 					scanData.RelativeFilePath, scanData.Rule.ID))
 			}
@@ -545,24 +547,53 @@ func (agent *DetectionAgent) VerifyViolation(ctx context.Context, scanData *mode
 	}
 
 	contextWithDeadline, cancelFunc := context.WithDeadline(ctx, time.Now().
-		Add(time.Second*time.Duration(agent.requestTimeoutSec)))
+		Add(time.Second*time.Duration(agent.agentOption.RequestTimeoutSec)))
 	defer cancelFunc()
 
 	response, err := agent.verificationLLMClient.GenerateContent(contextWithDeadline,
 		VerificationSystemPrompt, userPrompt, options)
 	if err != nil {
-		if agent.debugEnabled {
-			logger.Warnf("[debug] verification failed for %s:%d: %s",
-				scanData.RelativeFilePath, violation.StartLine, err)
+		// On rate limit with AI Gateway, try hardcoded fallback validation model once
+		if clients.IsRateLimitError(err) && agent.agentOption.IsAIGateway {
+			logger.Warnf("Verification rate limit detected, switching to fallback validation model: %s",
+				aIGatewayFallbackModel)
+
+			fallbackClient, clientErr := clients.NewOpenAIClient(ctx,
+				aIGatewayFallbackModel,
+				agent.agentOption.OpenAiBaseUrl,
+				agent.agentOption.IsAIGateway,
+				agent.agentOption.AIGuardEnabled,
+				agent.agentOption.OrgID,
+				false)
+
+			if clientErr == nil {
+				agent.verificationLLMClient = fallbackClient
+				// Retry with fallback
+				response, err = agent.verificationLLMClient.GenerateContent(contextWithDeadline,
+					VerificationSystemPrompt, userPrompt, options)
+				if err != nil && agent.agentOption.DebugEnabled {
+					logger.Warnf("[debug] verification failed with fallback model for %s:%d: %s",
+						scanData.RelativeFilePath, violation.StartLine, err)
+				}
+			} else {
+				logger.Warnf("Failed to create fallback verification client: %s", clientErr)
+			}
 		}
-		return nil, err
+
+		if err != nil {
+			if agent.agentOption.DebugEnabled {
+				logger.Warnf("[debug] verification failed for %s:%d: %s",
+					scanData.RelativeFilePath, violation.StartLine, err)
+			}
+			return nil, err
+		}
 	}
 
 	content := response.Content
 
-	verificationData, err := parseVerificationResult(ctx, content, agent.debugEnabled)
+	verificationData, err := parseVerificationResult(ctx, content, agent.agentOption.DebugEnabled)
 	if err != nil {
-		if agent.debugEnabled {
+		if agent.agentOption.DebugEnabled {
 			logger.Warnf("[debug] verification parsing failed for %s:%d: %s",
 				scanData.RelativeFilePath, violation.StartLine, err)
 		}
@@ -584,12 +615,33 @@ func (agent *DetectionAgent) Detect(ctx context.Context, scanData *model.ScanDat
 	for i := 0; i < 3; i++ {
 		res, err := agent.basicDetection(ctx, scanData)
 		if err != nil {
-			// Don't retry on rate limit - fail fast
+			// On rate limit with AI Gateway, try hardcoded fallback model once
+			if clients.IsRateLimitError(err) && agent.agentOption.IsAIGateway && i == 0 {
+				log.FromContext(ctx).Warnf("Rate limit detected, switching to fallback detection model: %s",
+					aIGatewayFallbackModel)
+
+				fallbackClient, clientErr := clients.NewOpenAIClient(ctx,
+					aIGatewayFallbackModel,
+					agent.agentOption.OpenAiBaseUrl,
+					agent.agentOption.IsAIGateway,
+					agent.agentOption.AIGuardEnabled,
+					agent.agentOption.OrgID,
+					false)
+
+				if clientErr == nil {
+					agent.llmClient = fallbackClient
+					continue // Retry with fallback
+				}
+				log.FromContext(ctx).Warnf("Failed to create fallback client: %s", clientErr)
+			}
+
+			// Fail fast on rate limit if no fallback or already tried fallback
 			if clients.IsRateLimitError(err) {
 				log.FromContext(ctx).Warnf("[fail-fast] rate limit detected, stopping analysis: %s", err)
 				return nil, err
 			}
-			if agent.debugEnabled {
+
+			if agent.agentOption.DebugEnabled {
 				log.FromContext(ctx).Warnf("[re-trying] detected error: %s", err)
 			}
 			continue
@@ -598,7 +650,7 @@ func (agent *DetectionAgent) Detect(ctx context.Context, scanData *model.ScanDat
 		}
 	}
 
-	if agent.debugEnabled {
+	if agent.agentOption.DebugEnabled {
 		log.FromContext(ctx).Warnf("\"max number of attempts exceeded for file %s", scanData.RelativeFilePath)
 	}
 	return nil, pkgerrors.New("max analysis attempts exceeded")

@@ -3,6 +3,7 @@ package clients
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/DataDog/datadog-saist/internal/model"
 	"github.com/google/generative-ai-go/genai"
@@ -57,6 +58,10 @@ func (c *GeminiClient) GenerateContent(ctx context.Context, systemPrompt,
 
 	resp, err := modelValue.GenerateContent(ctx, genai.Text(prompt))
 	if err != nil {
+		// Check for rate limit error (HTTP 429) in the error message
+		if strings.Contains(err.Error(), "429") || strings.Contains(err.Error(), "rate limit") {
+			return nil, fmt.Errorf("%w: %v", ErrRateLimited, err)
+		}
 		return nil, fmt.Errorf("failed to generate content: %w", err)
 	}
 
