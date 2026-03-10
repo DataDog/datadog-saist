@@ -24,6 +24,10 @@ type DetectionAgent struct {
 	verificationLLMClient clients.LLMClient
 
 	agentOption *AgentOption
+
+	// Prevents retrying fallback when it also returns 429 (verification can be called for many violations)
+	verificationFallbackAttempted bool
+	verificationFallbackMu        sync.Mutex
 }
 
 type AgentOption struct {
@@ -553,30 +557,39 @@ func (agent *DetectionAgent) VerifyViolation(ctx context.Context, scanData *mode
 	response, err := agent.verificationLLMClient.GenerateContent(contextWithDeadline,
 		VerificationSystemPrompt, userPrompt, options)
 	if err != nil {
-		// On rate limit with AI Gateway, try hardcoded fallback validation model once
+		// On rate limit with AI Gateway, try hardcoded fallback validation model once (per agent lifetime)
 		if clients.IsRateLimitError(err) && agent.agentOption.IsAIGateway {
-			logger.Warnf("Verification rate limit detected, switching to fallback validation model: %s",
-				aIGatewayFallbackModel)
+			agent.verificationFallbackMu.Lock()
+			alreadyTried := agent.verificationFallbackAttempted
+			if !alreadyTried {
+				agent.verificationFallbackAttempted = true
+			}
+			agent.verificationFallbackMu.Unlock()
 
-			fallbackClient, clientErr := clients.NewOpenAIClient(ctx,
-				aIGatewayFallbackModel,
-				agent.agentOption.OpenAiBaseUrl,
-				agent.agentOption.IsAIGateway,
-				agent.agentOption.AIGuardEnabled,
-				agent.agentOption.OrgID,
-				false)
+			if !alreadyTried {
+				logger.Warnf("Verification rate limit detected, switching to fallback validation model: %s",
+					aIGatewayFallbackModel)
 
-			if clientErr == nil {
-				agent.verificationLLMClient = fallbackClient
-				// Retry with fallback
-				response, err = agent.verificationLLMClient.GenerateContent(contextWithDeadline,
-					VerificationSystemPrompt, userPrompt, options)
-				if err != nil && agent.agentOption.DebugEnabled {
-					logger.Warnf("[debug] verification failed with fallback model for %s:%d: %s",
-						scanData.RelativeFilePath, violation.StartLine, err)
+				fallbackClient, clientErr := clients.NewOpenAIClient(ctx,
+					aIGatewayFallbackModel,
+					agent.agentOption.OpenAiBaseUrl,
+					agent.agentOption.IsAIGateway,
+					agent.agentOption.AIGuardEnabled,
+					agent.agentOption.OrgID,
+					false)
+
+				if clientErr == nil {
+					agent.verificationLLMClient = fallbackClient
+					// Retry with fallback
+					response, err = agent.verificationLLMClient.GenerateContent(contextWithDeadline,
+						VerificationSystemPrompt, userPrompt, options)
+					if err != nil && agent.agentOption.DebugEnabled {
+						logger.Warnf("[debug] verification failed with fallback model for %s:%d: %s",
+							scanData.RelativeFilePath, violation.StartLine, err)
+					}
+				} else {
+					logger.Warnf("Failed to create fallback verification client: %s", clientErr)
 				}
-			} else {
-				logger.Warnf("Failed to create fallback verification client: %s", clientErr)
 			}
 		}
 
