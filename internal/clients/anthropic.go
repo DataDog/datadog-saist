@@ -126,6 +126,9 @@ func (c *AnthropicClient) GenerateContent(ctx context.Context, systemPrompt, use
 	}
 
 	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == http.StatusTooManyRequests {
+			return nil, fmt.Errorf("%w: anthropic API error (status %d): %s", ErrRateLimited, resp.StatusCode, string(body))
+		}
 		return nil, fmt.Errorf("anthropic API error (status %d): %s", resp.StatusCode, string(body))
 	}
 
