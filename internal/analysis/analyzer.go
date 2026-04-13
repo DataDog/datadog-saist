@@ -11,6 +11,7 @@ import (
 
 	"github.com/DataDog/datadog-saist/internal/agents"
 	"github.com/DataDog/datadog-saist/internal/clients"
+	"github.com/DataDog/datadog-saist/internal/codesecurity"
 	"github.com/DataDog/datadog-saist/internal/llmcontext"
 	"github.com/DataDog/datadog-saist/internal/log"
 	"github.com/DataDog/datadog-saist/internal/model"
@@ -259,6 +260,42 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 			opts.DetectionModel, opts.ValidationModel, opts.RequestTimeoutSec, opts.IsAIGateway, err)
 	}
 
+	// When not using Datadog driver mode (.datadog-driver.json + env), honor local Code Security YAML
+	// (same filenames as dd-source SAIST) by narrowing rules and file→rule pairs like code-workload-runner.
+	effectiveDriver := opts.DatadogDriver
+	if effectiveDriver == nil {
+		cfg, err := codesecurity.LoadLocalFile(opts.Directory)
+		if err != nil {
+			log.FromContext(ctx).Warnf("Code Security config: %v", err)
+		} else if cfg != nil && cfg.Sast != nil {
+			rulesetToRules := codesecurity.BuildRulesetToRuleIDs(opts.Rules)
+			enabled := codesecurity.EnabledSaistRulesetNames(cfg.Sast, rulesetToRules)
+			filtered := codesecurity.FilterRulesByEnabledRulesets(opts.Rules, enabled, rulesetToRules)
+			if len(filtered) == 0 {
+				log.FromContext(ctx).Warn("Code Security config enabled zero SAIST rules; analysis will not run SAIST rules")
+			}
+			opts.Rules = filtered
+
+			src := make([]codesecurity.SourceFile, len(files))
+			for i := range files {
+				src[i] = codesecurity.SourceFile{
+					RelPath: files[i].RelPath,
+					AbsPath: files[i].AbsPath,
+					Lang:    files[i].Language,
+				}
+			}
+			fileMap := codesecurity.MatchFilesToRules(src, filtered)
+			fileMap = codesecurity.ApplyGlobalPathFiltersToFileRuleMapping(fileMap, cfg.Sast.GlobalConfig)
+			if cfg.Sast.RulesetConfigs != nil {
+				codesecurity.ForEachRulesetConfigPathFilter(ctx, cfg.Sast.RulesetConfigs, enabled, rulesetToRules,
+					func(cfgs map[string]codesecurity.YamlRuleConfig) {
+						fileMap = codesecurity.ApplyRuleConfigFilters(fileMap, cfgs)
+					})
+			}
+			effectiveDriver = &model.DatadogDriverConfig{Files: fileMap}
+		}
+	}
+
 	// Create rule processor once and reuse for both phases
 	// (agent is set here so it can be used for scans after rule matching)
 	ruleProcessor, err := NewRuleProcessor(agent, opts, aiContext)
@@ -312,9 +349,9 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 	allFilesResults := make([]model.FileResult, 0)
 	for _, res := range allResults {
 		scansToPerform := res.Scans
-		// If there is a Datadog driver, we need to filter the files and applicable rules to scan
-		if opts.DatadogDriver != nil {
-			scansToPerform = filterScanDataForDatadogDriver(opts.DatadogDriver.Files, res.Scans)
+		// Datadog driver JSON or local Code Security YAML narrows (file, rule) pairs for scans
+		if effectiveDriver != nil {
+			scansToPerform = filterScanDataForDatadogDriver(effectiveDriver.Files, res.Scans)
 
 			// if there is no scan to perform (e.g. no rule), do not analyze
 			if len(scansToPerform) == 0 {
