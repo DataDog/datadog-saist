@@ -3,15 +3,25 @@
 package codesecurity
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
+// ErrUnsupportedSchemaVersion is returned when schema-version is set but not a supported v1.x value.
+var ErrUnsupportedSchemaVersion = errors.New(
+	"unsupported schema-version: SAIST YAML narrowing supports v1.x (major 1) only; " +
+		"parity with dd-source saconfig parseV1",
+)
+
 // Local config filenames (same order as code-workload-runner/saist readLocalConfigFile).
+// static-analysis.datadog.* is legacy naming only; content is still decoded as the v1 subset below.
+// Legacy-only schema (pre-Code Security v1) is not converted here; use v1-shaped YAML with sast: for narrowing.
 var localConfigFilenames = []string{
 	"code-security.datadog.yaml",
 	"code-security.datadog.yml",
@@ -53,22 +63,53 @@ type YamlRuleConfig struct {
 	IgnorePaths *[]string `yaml:"ignore-paths,omitempty"`
 }
 
-// ReadLocalConfigBytes reads the first existing local config file in directory, or nil if none.
-func ReadLocalConfigBytes(directory string) ([]byte, error) {
+// readFirstLocalConfigFile returns the contents and basename of the first existing candidate file.
+// If no file exists, returns nil, "", nil. Read errors other than not-exist are returned with basename set.
+func readFirstLocalConfigFile(directory string) (content []byte, basename string, err error) {
 	for _, name := range localConfigFilenames {
 		p := filepath.Join(directory, name)
-		b, err := os.ReadFile(p) //nolint:gosec // intentional repo config read
-		if err == nil {
-			return b, nil
+		b, rerr := os.ReadFile(p) //nolint:gosec // intentional repo config read
+		if rerr == nil {
+			return b, name, nil
 		}
-		if !os.IsNotExist(err) {
-			return nil, fmt.Errorf("read %s: %w", name, err)
+		if !os.IsNotExist(rerr) {
+			return nil, name, fmt.Errorf("read %s: %w", name, rerr)
 		}
 	}
-	return nil, nil
+	return nil, "", nil
 }
 
-// ParseConfigFile decodes YAML into File. Unknown top-level keys are ignored (KnownFields=false).
+// ReadLocalConfigBytes reads the first existing local config file in directory, or nil if none.
+func ReadLocalConfigBytes(directory string) ([]byte, error) {
+	b, _, err := readFirstLocalConfigFile(directory)
+	return b, err
+}
+
+// validateSchemaVersion checks schema-version when present, aligned with saconfig parseV1 major==1 rule.
+// Empty schema-version is allowed so minimal repo files can still declare sast without tripping validation.
+func validateSchemaVersion(s string) error {
+	if s == "" {
+		return nil
+	}
+	if s[0] != 'v' {
+		return fmt.Errorf("%w: got %q", ErrUnsupportedSchemaVersion, s)
+	}
+	majorStr, minorStr, ok := strings.Cut(s[1:], ".")
+	if !ok {
+		return fmt.Errorf("%w: got %q (expected v1.0 form)", ErrUnsupportedSchemaVersion, s)
+	}
+	major, err := strconv.ParseUint(majorStr, 10, 8)
+	if err != nil || major != 1 {
+		return fmt.Errorf("%w: got %q", ErrUnsupportedSchemaVersion, s)
+	}
+	if _, err := strconv.ParseUint(minorStr, 10, 8); err != nil {
+		return fmt.Errorf("%w: got %q", ErrUnsupportedSchemaVersion, s)
+	}
+	return nil
+}
+
+// ParseConfigFile decodes YAML into File. KnownFields(false) ignores extra top-level keys (sca, secrets, …)
+// so real v1 repo files decode; unknown keys do not change behavior of modeled fields.
 func ParseConfigFile(content string) (*File, error) {
 	var f File
 	dec := yaml.NewDecoder(strings.NewReader(content))
@@ -76,15 +117,27 @@ func ParseConfigFile(content string) (*File, error) {
 	if err := dec.Decode(&f); err != nil {
 		return nil, fmt.Errorf("parse Code Security YAML: %w", err)
 	}
+	if err := validateSchemaVersion(f.SchemaVersion); err != nil {
+		return nil, err
+	}
 	return &f, nil
 }
 
-// LoadLocalFile reads and parses the local Code Security file when present.
-// Returns (nil, nil) when no config file exists.
-func LoadLocalFile(directory string) (*File, error) {
-	b, err := ReadLocalConfigBytes(directory)
-	if err != nil || len(b) == 0 {
-		return nil, err
+// LoadLocalFile reads and parses the first existing local Code Security file in directory.
+// Returns the parsed config, the basename of the file used (e.g. code-security.datadog.yaml), and an error.
+// If no candidate file exists, or the file is empty, returns nil, "", nil.
+// If parsing fails, returns nil, basename, err.
+func LoadLocalFile(directory string) (*File, string, error) {
+	b, name, err := readFirstLocalConfigFile(directory)
+	if err != nil {
+		return nil, name, err
 	}
-	return ParseConfigFile(string(b))
+	if len(b) == 0 {
+		return nil, "", nil
+	}
+	f, perr := ParseConfigFile(string(b))
+	if perr != nil {
+		return nil, name, perr
+	}
+	return f, name, nil
 }

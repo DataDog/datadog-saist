@@ -221,6 +221,14 @@ func processFilesWithProcessor(ctx context.Context, files []fileMeta, ruleProces
 	return allResults, nil
 }
 
+func countFileRulePairs(m map[string][]string) int {
+	n := 0
+	for _, ids := range m {
+		n += len(ids)
+	}
+	return n
+}
+
 func filterScanDataForDatadogDriver(filesAndRules map[string][]string, scans []model.ScanData) []model.ScanData {
 	scansToPerform := make([]model.ScanData, 0)
 
@@ -264,9 +272,13 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 	// (same filenames as dd-source SAIST) by narrowing rules and file→rule pairs like code-workload-runner.
 	effectiveDriver := opts.DatadogDriver
 	if effectiveDriver == nil {
-		cfg, err := codesecurity.LoadLocalFile(opts.Directory)
+		cfg, configBasename, err := codesecurity.LoadLocalFile(opts.Directory)
 		if err != nil {
 			log.FromContext(ctx).Warnf("Code Security config: %v", err)
+		} else if cfg != nil && cfg.Sast == nil && configBasename != "" && opts.Debug {
+			log.FromContext(ctx).Debugf(
+				"Local Code Security config: parsed %s but no sast section; YAML scan narrowing skipped",
+				configBasename)
 		} else if cfg != nil && cfg.Sast != nil {
 			rulesetToRules := codesecurity.BuildRulesetToRuleIDs(opts.Rules)
 			enabled := codesecurity.EnabledSaistRulesetNames(cfg.Sast, rulesetToRules)
@@ -287,13 +299,29 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 			fileMap := codesecurity.MatchFilesToRules(src, filtered)
 			fileMap = codesecurity.ApplyGlobalPathFiltersToFileRuleMapping(fileMap, cfg.Sast.GlobalConfig)
 			if cfg.Sast.RulesetConfigs != nil {
-				codesecurity.ForEachRulesetConfigPathFilter(ctx, cfg.Sast.RulesetConfigs, enabled, rulesetToRules,
+				codesecurity.ForEachRulesetConfigPathFilter(ctx, *cfg.Sast.RulesetConfigs, enabled, rulesetToRules,
 					func(cfgs map[string]codesecurity.YamlRuleConfig) {
 						fileMap = codesecurity.ApplyRuleConfigFilters(fileMap, cfgs)
 					})
 			}
 			effectiveDriver = &model.DatadogDriverConfig{Files: fileMap}
+			schemaVer := cfg.SchemaVersion
+			if schemaVer == "" {
+				schemaVer = "(unset)"
+			}
+			log.FromContext(ctx).Infof(
+				"Local Code Security config: using %s (schema-version=%s), %d rules after ruleset filter, %d file-rule pairs for scans",
+				configBasename, schemaVer, len(filtered), countFileRulePairs(fileMap))
+		} else if err == nil {
+			log.FromContext(ctx).Infof(
+				"Local Code Security config: no YAML file in %s "+
+					"(code-security.datadog.yaml|.yml or static-analysis.datadog.yaml|.yml); "+
+					"scan scope not narrowed from disk",
+				opts.Directory)
 		}
+	} else if opts.Debug {
+		log.FromContext(ctx).Debugf(
+			"Datadog driver mode: DATADOG_DRIVER_ENABLED + .datadog-driver.json defines scan scope; local Code Security YAML is not applied")
 	}
 
 	// Create rule processor once and reuse for both phases

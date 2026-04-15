@@ -9,6 +9,33 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestParseConfigFile_UnsupportedSchemaVersion(t *testing.T) {
+	_, err := ParseConfigFile(`schema-version: v2.0
+sast:
+  use-default-rulesets: true
+`)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrUnsupportedSchemaVersion)
+}
+
+func TestParseConfigFile_SchemaVersionV1WithoutMinorRejected(t *testing.T) {
+	_, err := ParseConfigFile(`schema-version: v1
+sast: {}
+`)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrUnsupportedSchemaVersion)
+}
+
+func TestParseConfigFile_SchemaVersionV1Minor(t *testing.T) {
+	y := `schema-version: v1.99
+sast:
+  use-default-rulesets: true
+`
+	f, err := ParseConfigFile(y)
+	require.NoError(t, err)
+	require.NotNil(t, f.Sast)
+}
+
 func TestParseConfigFile_MinimalSast(t *testing.T) {
 	y := `
 schema-version: v1.0
@@ -37,4 +64,16 @@ func TestReadLocalConfigBytes_NoFile(t *testing.T) {
 	b, err := ReadLocalConfigBytes(t.TempDir())
 	assert.NoError(t, err)
 	assert.Nil(t, b)
+}
+
+func TestLoadLocalFile_ReturnsBasename(t *testing.T) {
+	dir := t.TempDir()
+	y := "schema-version: v1.0\nsast:\n  use-default-rulesets: true\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "code-security.datadog.yaml"), []byte(y), 0o600))
+
+	f, base, err := LoadLocalFile(dir)
+	require.NoError(t, err)
+	assert.Equal(t, "code-security.datadog.yaml", base)
+	require.NotNil(t, f)
+	require.NotNil(t, f.Sast)
 }

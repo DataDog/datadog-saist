@@ -54,7 +54,7 @@ func TestForEachRulesetConfigPathFilter_SkipsUnknownRuleset(t *testing.T) {
 		"bogus-ai_sast": {OnlyPaths: &[]string{"**"}},
 	}
 	var applied int
-	ForEachRulesetConfigPathFilter(context.Background(), &rc, enabled, rulesetToRules, func(map[string]YamlRuleConfig) {
+	ForEachRulesetConfigPathFilter(context.Background(), rc, enabled, rulesetToRules, func(map[string]YamlRuleConfig) {
 		applied++
 	})
 	assert.Equal(t, 0, applied)

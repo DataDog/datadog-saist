@@ -47,16 +47,16 @@ func FilterRuleConfigsToParentRuleset(
 // ForEachRulesetConfigPathFilter applies ruleset-level and scoped rule-level path configs for enabled rulesets.
 func ForEachRulesetConfigPathFilter(
 	ctx context.Context,
-	rulesetConfigs *map[string]YamlRulesetConfig,
+	rulesetConfigs map[string]YamlRulesetConfig,
 	enabledRulesets map[string]bool,
 	rulesetToRules map[string][]string,
 	apply func(map[string]YamlRuleConfig),
 ) {
-	if rulesetConfigs == nil || apply == nil || len(*rulesetConfigs) == 0 {
+	if len(rulesetConfigs) == 0 || apply == nil {
 		return
 	}
 	logger := log.FromContext(ctx)
-	m := *rulesetConfigs
+	m := rulesetConfigs
 	for _, rulesetName := range sortedRulesetConfigKeys(m) {
 		if !IsValidRuleset(rulesetToRules, rulesetName) {
 			logger.Debugf("ruleset-configs contains unknown SAIST ruleset name: %s", rulesetName)
