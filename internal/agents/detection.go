@@ -507,12 +507,29 @@ func (agent *DetectionAgent) basicDetection(ctx context.Context, scanData *model
 				if message == "" {
 					message = violation.Reason
 				}
+				located := violation
+				if fallbackLocation, ok := physicalLineLocation(scanData.FileText, violation.StartLine); ok {
+					located.StartLine = fallbackLocation.StartLine
+					located.StartColumn = fallbackLocation.StartColumn
+					located.EndLine = fallbackLocation.EndLine
+					located.EndColumn = fallbackLocation.EndColumn
+				}
+				if locRes, locErr := agent.DetermineViolationLocation(ctx, scanData, violation, vResult); locErr == nil {
+					located.StartLine = locRes.StartLine
+					located.StartColumn = locRes.StartColumn
+					located.EndLine = locRes.EndLine
+					located.EndColumn = locRes.EndColumn
+				} else if agent.agentOption.DebugEnabled {
+					log.FromContext(ctx).Info(fmt.Sprintf(
+						"location determination skipped for %s:%d, using detection region: %v",
+						scanData.RelativeFilePath, violation.StartLine, locErr))
+				}
 				mu.Lock()
 				violations = append(violations, model.Violation{
-					StartLine:   violation.StartLine,
-					StartColumn: violation.StartColumn,
-					EndLine:     violation.EndLine,
-					EndColumn:   violation.EndColumn,
+					StartLine:   located.StartLine,
+					StartColumn: located.StartColumn,
+					EndLine:     located.EndLine,
+					EndColumn:   located.EndColumn,
 					Path:        scanData.RelativeFilePath,
 					Rule:        scanData.Rule.ID,
 					Message:     message,
@@ -535,29 +552,16 @@ func (agent *DetectionAgent) basicDetection(ctx context.Context, scanData *model
 	}, nil
 }
 
-func (agent *DetectionAgent) VerifyViolation(ctx context.Context, scanData *model.ScanData,
-	violation model.LLMResultViolation) (*VerificationResult, error) {
+func (agent *DetectionAgent) verificationGenerateContent(ctx context.Context, scanData *model.ScanData,
+	violationLine uint, systemPrompt, userPrompt string, options *clients.GenerateOptions) (*clients.GenerateResponse, error) {
 	logger := log.FromContext(ctx)
-	userPrompt := getVerificationUserPrompt(scanData, violation)
-	options := &clients.GenerateOptions{
-		MaxTokens:    2048, // Less than initial detection since we're just verifying
-		ResponseType: "application/json",
-		Temperature:  1.0,
-		Schema: clients.GenerateOptionSchema{
-			Name:        "results",
-			Description: "verify if a violation is a false positive or not",
-			JsonSchema:  clients.GenerateSchema[VerificationResultData](),
-		},
-	}
-
 	contextWithDeadline, cancelFunc := context.WithDeadline(ctx, time.Now().
 		Add(time.Second*time.Duration(agent.agentOption.RequestTimeoutSec)))
 	defer cancelFunc()
 
 	response, err := agent.verificationLLMClient.GenerateContent(contextWithDeadline,
-		VerificationSystemPrompt, userPrompt, options)
+		systemPrompt, userPrompt, options)
 	if err != nil {
-		// On rate limit with AI Gateway, try hardcoded fallback validation model once (per agent lifetime)
 		if clients.IsRateLimitError(err) && agent.agentOption.IsAIGateway {
 			agent.verificationFallbackMu.Lock()
 			alreadyTried := agent.verificationFallbackAttempted
@@ -580,12 +584,11 @@ func (agent *DetectionAgent) VerifyViolation(ctx context.Context, scanData *mode
 
 				if clientErr == nil {
 					agent.verificationLLMClient = fallbackClient
-					// Retry with fallback
 					response, err = agent.verificationLLMClient.GenerateContent(contextWithDeadline,
-						VerificationSystemPrompt, userPrompt, options)
+						systemPrompt, userPrompt, options)
 					if err != nil && agent.agentOption.DebugEnabled {
-						logger.Warnf("[debug] verification failed with fallback model for %s:%d: %s",
-							scanData.RelativeFilePath, violation.StartLine, err)
+						logger.Warnf("[debug] verification client call failed with fallback model for %s:%d: %s",
+							scanData.RelativeFilePath, violationLine, err)
 					}
 				} else {
 					logger.Warnf("Failed to create fallback verification client: %s", clientErr)
@@ -595,11 +598,35 @@ func (agent *DetectionAgent) VerifyViolation(ctx context.Context, scanData *mode
 
 		if err != nil {
 			if agent.agentOption.DebugEnabled {
-				logger.Warnf("[debug] verification failed for %s:%d: %s",
-					scanData.RelativeFilePath, violation.StartLine, err)
+				logger.Warnf("[debug] verification client call failed for %s:%d: %s",
+					scanData.RelativeFilePath, violationLine, err)
 			}
 			return nil, err
 		}
+	}
+
+	return response, nil
+}
+
+func (agent *DetectionAgent) VerifyViolation(ctx context.Context, scanData *model.ScanData,
+	violation model.LLMResultViolation) (*VerificationResult, error) {
+	logger := log.FromContext(ctx)
+	userPrompt := getVerificationUserPrompt(scanData, violation)
+	options := &clients.GenerateOptions{
+		MaxTokens:    2048, // Less than initial detection since we're just verifying
+		ResponseType: "application/json",
+		Temperature:  1.0,
+		Schema: clients.GenerateOptionSchema{
+			Name:        "results",
+			Description: "verify if a violation is a false positive or not",
+			JsonSchema:  clients.GenerateSchema[VerificationResultData](),
+		},
+	}
+
+	response, err := agent.verificationGenerateContent(ctx, scanData, violation.StartLine,
+		VerificationSystemPrompt, userPrompt, options)
+	if err != nil {
+		return nil, err
 	}
 
 	content := response.Content

@@ -271,12 +271,34 @@ func (rp *RuleProcessor) runScan(ctx context.Context, scanData *model.ScanData) 
 			lineContent,
 		)
 	}
+	filtered = dedupeViolationsByFingerprint(filtered)
 
 	return RunScanResult{
 		Violations:       filtered,
 		FileInputTokens:  dr.InputTokens,
 		FileOutputTokens: dr.OutputTokens,
 	}, nil
+}
+
+func dedupeViolationsByFingerprint(violations []model.Violation) []model.Violation {
+	if len(violations) < 2 {
+		return violations
+	}
+
+	seen := make(map[string]struct{}, len(violations))
+	deduped := make([]model.Violation, 0, len(violations))
+	for _, violation := range violations {
+		if violation.Fingerprint == "" {
+			deduped = append(deduped, violation)
+			continue
+		}
+		if _, ok := seen[violation.Fingerprint]; ok {
+			continue
+		}
+		seen[violation.Fingerprint] = struct{}{}
+		deduped = append(deduped, violation)
+	}
+	return deduped
 }
 
 type RunScansResult struct {

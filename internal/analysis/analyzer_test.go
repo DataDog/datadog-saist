@@ -3,6 +3,7 @@ package analysis
 import (
 	"testing"
 
+	"github.com/DataDog/datadog-saist/internal/model"
 	"github.com/DataDog/datadog-saist/internal/model/api"
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/stretchr/testify/assert"
@@ -39,6 +40,29 @@ func TestCreateTestRule(t *testing.T) {
 	assert.NotNil(t, rule.Cwe)
 	assert.Equal(t, "89", *rule.Cwe)
 	assert.Contains(t, rule.Globs, "*.go")
+}
+
+func TestDedupeViolationsByFingerprint_RemovesDuplicateFingerprint(t *testing.T) {
+	violations := []model.Violation{
+		{Path: "a.go", Rule: "rule", StartLine: 10, Fingerprint: "same", Message: "first"},
+		{Path: "a.go", Rule: "rule", StartLine: 20, Fingerprint: "same", Message: "duplicate"},
+		{Path: "a.go", Rule: "rule", StartLine: 30, Fingerprint: "other", Message: "other"},
+	}
+
+	got := dedupeViolationsByFingerprint(violations)
+	assert.Len(t, got, 2)
+	assert.Equal(t, "first", got[0].Message)
+	assert.Equal(t, "other", got[1].Message)
+}
+
+func TestDedupeViolationsByFingerprint_KeepsEmptyFingerprints(t *testing.T) {
+	violations := []model.Violation{
+		{Path: "a.go", Rule: "rule", StartLine: 10, Fingerprint: ""},
+		{Path: "a.go", Rule: "rule", StartLine: 20, Fingerprint: ""},
+	}
+
+	got := dedupeViolationsByFingerprint(violations)
+	assert.Len(t, got, 2)
 }
 
 func TestRuleFileMatching(t *testing.T) {
