@@ -22,6 +22,10 @@ const VerificationSystemPrompt = `You are a security expert tasked with verifyin
   3. DATAFLOW: How does the tainted data flow from source to sink?
   4. SANITIZATION: Is the data properly validated, escaped, or sanitized?
 
+  Before confirming, verify that the finding clearly matches the vulnerability category requested by the rule prompt.
+  If the code appears vulnerable but not to the requested rule category, set confirmed=false.
+  Confirm only if you can identify a concrete sink line in the code. If no concrete sink line exists, set confirmed=false.
+
   Respond with JSON in this format:
   {
     "confirmed": true/false,
@@ -46,6 +50,8 @@ const VerificationUserPrompt = `A security analysis tool reported the following 
   - Any sanitization applied
 
   Only include these details in your reason if you can determine them from the code.
+  Confirm only if the issue clearly matches the requested rule category and you can name the concrete sink line.
+  If the finding is a different vulnerability type than the rule requested, set confirmed=false.
 
   If you require more information to be able to determine if this is a violation with absolute confidence, 
   err on the side of caution and consider this to NOT be a violation.
@@ -192,27 +198,7 @@ func parseVerificationResult(ctx context.Context, content string, debugEnabled b
 		return wrapped.Content, nil
 	}
 
-	// Try to extract JSON from code blocks
-	jsonContent = content
-	if strings.Contains(content, "```json") {
-		startIndex := strings.Index(content, "```json")
-		if startIndex != -1 {
-			startIndex += 7
-			endIndex := strings.Index(content[startIndex:], "```")
-			if endIndex != -1 {
-				jsonContent = strings.TrimSpace(content[startIndex : startIndex+endIndex])
-			}
-		}
-	} else if strings.Contains(content, "```") {
-		startIndex := strings.Index(content, "```")
-		if startIndex != -1 {
-			startIndex += 3
-			endIndex := strings.Index(content[startIndex:], "```")
-			if endIndex != -1 {
-				jsonContent = strings.TrimSpace(content[startIndex : startIndex+endIndex])
-			}
-		}
-	}
+	jsonContent = extractJSONFromCodeBlock(content)
 
 	// Sanitize JSON: LLMs sometimes output literal newlines inside string values
 	// which breaks JSON parsing. Replace unescaped newlines with escaped ones.

@@ -17,6 +17,7 @@ You additionally evaluate all vulnerabilities as potential false positives and h
 
 ## Evaluation Rules
 1. Scope: Only detect the vulnerability type explicitly mentioned in the user's prompt.  
+   - The reported issue must clearly match the requested rule category.
 2. Accuracy:  
    - Report the exact location of the vulnerability (line and column).  
    - The location MUST point to the SINK (where the dangerous operation occurs), NOT the source.
@@ -33,6 +34,13 @@ You additionally evaluate all vulnerabilities as potential false positives and h
      ```
      NO VIOLATION AMIGO
      ```
+6. Deduplication:
+   - Report one finding per distinct dangerous sink.
+   - Same sink line + same tainted value + same dangerous operation = duplicate.
+   - Never output identical duplicate findings for the same line.
+   - Different sink lines should be separate only when they are independently externally reachable or exploitable.
+   - Do not report multiple findings for the same sink, same tainted flow, or repeated explanation.
+   - For XSS/template/rendering issues, if the same tainted value reaches multiple equivalent render calls, report only the final externally visible output sink unless the sinks are independently exploitable.
 
 ---
 
@@ -97,6 +105,7 @@ The location values MUST point to the **exact position where the violation occur
 - For SQL injection: the line where the query is executed with tainted input
 - For command injection: the line where the command is executed with tainted input
 - For XSS: the line where tainted data is rendered to output
+- For repeated equivalent sinks, only the final externally visible output sink
 
 ---
 
@@ -179,6 +188,8 @@ NO VIOLATION AMIGO
    - Are reachable from user input.  
    - Lack sufficient sanitization or validation.  
    - Could lead to real exploitation.
+   - Match the vulnerability type requested by the rule.
+5. Deduplicate: one output object per distinct dangerous sink and tainted flow.
 
 ---
 
