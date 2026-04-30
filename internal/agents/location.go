@@ -164,25 +164,7 @@ func parseLocationDeterminationResult(content string) (LocationDeterminationResu
 		return wrapped.Content, nil
 	}
 
-	if strings.Contains(jsonContent, "```json") {
-		start := strings.Index(jsonContent, "```json")
-		if start != -1 {
-			start += 7
-			end := strings.Index(jsonContent[start:], "```")
-			if end != -1 {
-				jsonContent = strings.TrimSpace(jsonContent[start : start+end])
-			}
-		}
-	} else if strings.Contains(jsonContent, "```") {
-		start := strings.Index(jsonContent, "```")
-		if start != -1 {
-			start += 3
-			end := strings.Index(jsonContent[start:], "```")
-			if end != -1 {
-				jsonContent = strings.TrimSpace(jsonContent[start : start+end])
-			}
-		}
-	}
+	jsonContent = extractJSONFromCodeBlock(jsonContent)
 
 	var data LocationDeterminationResultData
 	err := json.Unmarshal([]byte(jsonContent), &data)

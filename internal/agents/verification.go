@@ -198,27 +198,7 @@ func parseVerificationResult(ctx context.Context, content string, debugEnabled b
 		return wrapped.Content, nil
 	}
 
-	// Try to extract JSON from code blocks
-	jsonContent = content
-	if strings.Contains(content, "```json") {
-		startIndex := strings.Index(content, "```json")
-		if startIndex != -1 {
-			startIndex += 7
-			endIndex := strings.Index(content[startIndex:], "```")
-			if endIndex != -1 {
-				jsonContent = strings.TrimSpace(content[startIndex : startIndex+endIndex])
-			}
-		}
-	} else if strings.Contains(content, "```") {
-		startIndex := strings.Index(content, "```")
-		if startIndex != -1 {
-			startIndex += 3
-			endIndex := strings.Index(content[startIndex:], "```")
-			if endIndex != -1 {
-				jsonContent = strings.TrimSpace(content[startIndex : startIndex+endIndex])
-			}
-		}
-	}
+	jsonContent = extractJSONFromCodeBlock(content)
 
 	// Sanitize JSON: LLMs sometimes output literal newlines inside string values
 	// which breaks JSON parsing. Replace unescaped newlines with escaped ones.
