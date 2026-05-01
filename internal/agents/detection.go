@@ -519,7 +519,7 @@ func (agent *DetectionAgent) basicDetection(ctx context.Context, scanData *model
 					located.StartColumn = locRes.StartColumn
 					located.EndLine = locRes.EndLine
 					located.EndColumn = locRes.EndColumn
-				} else if agent.agentOption.DebugEnabled {
+				} else {
 					log.FromContext(ctx).Info(fmt.Sprintf(
 						"location determination skipped for %s:%d, using detection region: %v",
 						scanData.RelativeFilePath, violation.StartLine, locErr))
