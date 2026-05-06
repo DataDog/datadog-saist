@@ -72,7 +72,7 @@ jobs:
         DD_VERSION: ${{ github.sha }}
       run: |
         # Install Datadog Agent
-        DD_AGENT_MAJOR_VERSION=7 DD_API_KEY=$DD_API_KEY DD_SITE=$DD_SITE bash -c "$(curl -L https://s3.amazonaws.com/dd-agent/scripts/install_script.sh)"
+        DD_API_KEY=$DD_API_KEY DD_SITE=$DD_SITE bash -c "$(curl -fsSL https://install.datadoghq.com/scripts/install_script_agent7.sh)"
         
         # Configure the agent
         sudo tee /etc/datadog-agent/datadog.yaml > /dev/null <<EOF
@@ -108,7 +108,7 @@ jobs:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       run: |
         cd ${GITHUB_WORKSPACE}/tmp/datadog-saist-evals
-        make build-run VALIDATION_MODEL=${{ matrix.modelName }} DETECTION_MODEL=${{ matrix.modelname }} REPO=${{ matrix.reponame }} SEND_METRICS=true
+        make build-run VALIDATION_MODEL=${{ matrix.modelname }} DETECTION_MODEL=${{ matrix.modelname }} REPO=${{ matrix.reponame }} SEND_METRICS=true
 
     - name: Flush metrics before shutdown
       run: |

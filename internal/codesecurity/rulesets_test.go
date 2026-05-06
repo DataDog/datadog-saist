@@ -41,6 +41,21 @@ func TestEnabledSaistRulesetNames_IgnoreRulesets(t *testing.T) {
 	assert.False(t, en["python-ai_sast"])
 }
 
+func TestEnabledSaistRulesetNames_IgnoresUnknownUseRulesets(t *testing.T) {
+	rulesetToRules := map[string][]string{
+		"go-ai_sast": {"datadog/go-sqli"},
+	}
+	f := false
+	s := &Sast{
+		UseDefaultRulesets: &f,
+		UseRulesets:        &[]string{"python-design", "go-ai_sast"},
+	}
+
+	en := EnabledSaistRulesetNames(s, rulesetToRules)
+
+	assert.Equal(t, map[string]bool{"go-ai_sast": true}, en)
+}
+
 func TestFilterRulesByEnabledRulesets(t *testing.T) {
 	rulesetToRules := map[string][]string{
 		"go-ai_sast": {"datadog/go-sqli", "datadog/go-xss"},
@@ -48,6 +63,59 @@ func TestFilterRulesByEnabledRulesets(t *testing.T) {
 	rules := []api.AiPrompt{{ID: "datadog/go-sqli"}, {ID: "datadog/python-sqli"}}
 	enabled := map[string]bool{"go-ai_sast": true}
 	out := FilterRulesByEnabledRulesets(rules, enabled, rulesetToRules)
+	require.Len(t, out, 1)
+	assert.Equal(t, "datadog/go-sqli", out[0].ID)
+}
+
+func TestFilterRulesBySastConfig_LegacyConvertedConfigKeepsDefaultRules(t *testing.T) {
+	rulesetToRules := map[string][]string{
+		"go-ai_sast":     {"datadog/go-sqli"},
+		"python-ai_sast": {"datadog/python-sqli"},
+	}
+	rules := []api.AiPrompt{{ID: "datadog/go-sqli"}, {ID: "datadog/python-sqli"}}
+	f := false
+	s := &Sast{
+		UseDefaultRulesets: &f,
+		UseRulesets:        &[]string{"python-design"},
+	}
+
+	enabled, out := FilterRulesBySastConfig(rules, s, true, rulesetToRules)
+
+	assert.Empty(t, enabled)
+	assert.Equal(t, rules, out)
+}
+
+func TestFilterRulesBySastConfig_NativeConfigCanDisableSaist(t *testing.T) {
+	rulesetToRules := map[string][]string{
+		"go-ai_sast": {"datadog/go-sqli"},
+	}
+	rules := []api.AiPrompt{{ID: "datadog/go-sqli"}}
+	f := false
+	s := &Sast{
+		UseDefaultRulesets: &f,
+	}
+
+	enabled, out := FilterRulesBySastConfig(rules, s, false, rulesetToRules)
+
+	assert.Empty(t, enabled)
+	assert.Empty(t, out)
+}
+
+func TestFilterRulesBySastConfig_LegacyWithValidSaistRulesetHonorsSelection(t *testing.T) {
+	rulesetToRules := map[string][]string{
+		"go-ai_sast":     {"datadog/go-sqli"},
+		"python-ai_sast": {"datadog/python-sqli"},
+	}
+	rules := []api.AiPrompt{{ID: "datadog/go-sqli"}, {ID: "datadog/python-sqli"}}
+	f := false
+	s := &Sast{
+		UseDefaultRulesets: &f,
+		UseRulesets:        &[]string{"python-design", "go-ai_sast"},
+	}
+
+	enabled, out := FilterRulesBySastConfig(rules, s, true, rulesetToRules)
+
+	assert.Equal(t, map[string]bool{"go-ai_sast": true}, enabled)
 	require.Len(t, out, 1)
 	assert.Equal(t, "datadog/go-sqli", out[0].ID)
 }

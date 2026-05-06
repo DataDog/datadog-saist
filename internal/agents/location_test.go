@@ -3,6 +3,7 @@ package agents
 import (
 	"testing"
 
+	"github.com/DataDog/datadog-saist/internal/model"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -71,4 +72,9 @@ func TestLocationFitsFile(t *testing.T) {
 	assert.False(t, locationFitsFile(LocationDeterminationResultData{
 		StartLine: 1, StartColumn: 1, EndLine: 99, EndColumn: 2,
 	}, "a\nb"))
+}
+
+func TestLocationDeterminationTemperature(t *testing.T) {
+	assert.Equal(t, 1.0, locationDeterminationTemperature(model.OpenAIGPT5Mini))
+	assert.Equal(t, 0.0, locationDeterminationTemperature(model.Gemini25Flash))
 }

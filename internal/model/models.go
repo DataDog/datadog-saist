@@ -260,4 +260,9 @@ func (m Model) RequiresMaxCompletionTokens() bool {
 	return m.ID == OpenAIGPT5Mini.ID
 }
 
+func (m Model) RequiresDefaultTemperature() bool {
+	modelName := strings.ToLower(m.ToAPIModelWithFormat(false))
+	return strings.HasPrefix(modelName, "gpt-5")
+}
+
 // No dynamic model detection - all models must be explicitly defined above

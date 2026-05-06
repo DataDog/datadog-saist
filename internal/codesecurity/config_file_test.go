@@ -77,3 +77,33 @@ func TestLoadLocalFile_ReturnsBasename(t *testing.T) {
 	require.NotNil(t, f)
 	require.NotNil(t, f.Sast)
 }
+
+func TestLocalConfigLooksLegacy_RootRulesetsWithoutSchema(t *testing.T) {
+	y := []byte("rulesets:\n  - python-design\n")
+
+	assert.True(t, LocalConfigLooksLegacy(y))
+}
+
+func TestLocalConfigLooksLegacy_RootRulesetsWithSchemaV1(t *testing.T) {
+	y := []byte("schema-version: v1\nrulesets:\n  - python-design\n")
+
+	assert.True(t, LocalConfigLooksLegacy(y))
+}
+
+func TestLocalConfigLooksLegacy_NativeCodeSecurityV1(t *testing.T) {
+	y := []byte("schema-version: v1.1\nsast:\n  use-default-rulesets: false\n")
+
+	assert.False(t, LocalConfigLooksLegacy(y))
+}
+
+func TestLoadLocalFile_MarksLegacy(t *testing.T) {
+	dir := t.TempDir()
+	y := "rulesets:\n  - python-design\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "static-analysis.datadog.yml"), []byte(y), 0o600))
+
+	f, base, err := LoadLocalFile(dir)
+	require.NoError(t, err)
+	assert.Equal(t, "static-analysis.datadog.yml", base)
+	require.NotNil(t, f)
+	assert.True(t, f.Legacy)
+}

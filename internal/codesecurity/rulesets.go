@@ -76,7 +76,9 @@ func EnabledSaistRulesetNames(s *Sast, rulesetToRules map[string][]string) map[s
 	}
 	if s.UseRulesets != nil {
 		for _, rs := range *s.UseRulesets {
-			enabled[rs] = true
+			if IsValidRuleset(rulesetToRules, rs) {
+				enabled[rs] = true
+			}
 		}
 	}
 	if s.RulesetConfigs != nil {
@@ -88,7 +90,9 @@ func EnabledSaistRulesetNames(s *Sast, rulesetToRules map[string][]string) map[s
 	}
 	if s.IgnoreRulesets != nil {
 		for _, rs := range *s.IgnoreRulesets {
-			delete(enabled, rs)
+			if IsValidRuleset(rulesetToRules, rs) {
+				delete(enabled, rs)
+			}
 		}
 	}
 	return enabled
@@ -112,4 +116,20 @@ func FilterRulesByEnabledRulesets(rules []api.AiPrompt, enabled map[string]bool,
 		}
 	}
 	return out
+}
+
+// FilterRulesBySastConfig applies SAIST ruleset filtering and preserves default SAIST coverage
+// for legacy static-analysis configs converted into Code Security shape.
+func FilterRulesBySastConfig(
+	rules []api.AiPrompt,
+	s *Sast,
+	legacy bool,
+	rulesetToRules map[string][]string,
+) (map[string]bool, []api.AiPrompt) {
+	enabled := EnabledSaistRulesetNames(s, rulesetToRules)
+	filtered := FilterRulesByEnabledRulesets(rules, enabled, rulesetToRules)
+	if len(filtered) == 0 && legacy {
+		return enabled, rules
+	}
+	return enabled, filtered
 }

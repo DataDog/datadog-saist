@@ -33,6 +33,7 @@ var localConfigFilenames = []string{
 type File struct {
 	SchemaVersion string `yaml:"schema-version"`
 	Sast          *Sast  `yaml:"sast,omitempty"`
+	Legacy        bool   `yaml:"-"`
 }
 
 // Sast mirrors saconfig.YamlSastConfigV1_0 path-related fields.
@@ -108,6 +109,22 @@ func validateSchemaVersion(s string) error {
 	return nil
 }
 
+// LocalConfigLooksLegacy reports whether content is a legacy static-analysis config before
+// settings-api conversion can turn it into a v1 Code Security document.
+func LocalConfigLooksLegacy(content []byte) bool {
+	var h struct {
+		SchemaVersion string      `yaml:"schema-version"`
+		Rulesets      interface{} `yaml:"rulesets"`
+	}
+	if err := yaml.Unmarshal(content, &h); err != nil {
+		return false
+	}
+	if h.Rulesets == nil {
+		return false
+	}
+	return h.SchemaVersion == "" || h.SchemaVersion == "v1"
+}
+
 // ParseConfigFile decodes YAML into File. KnownFields(false) ignores extra top-level keys (sca, secrets, …)
 // so real v1 repo files decode; unknown keys do not change behavior of modeled fields.
 func ParseConfigFile(content string) (*File, error) {
@@ -139,5 +156,6 @@ func LoadLocalFile(directory string) (*File, string, error) {
 	if perr != nil {
 		return nil, name, perr
 	}
+	f.Legacy = LocalConfigLooksLegacy(b)
 	return f, name, nil
 }

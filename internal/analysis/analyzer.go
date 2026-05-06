@@ -281,8 +281,7 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 				configBasename)
 		} else if cfg != nil && cfg.Sast != nil {
 			rulesetToRules := codesecurity.BuildRulesetToRuleIDs(opts.Rules)
-			enabled := codesecurity.EnabledSaistRulesetNames(cfg.Sast, rulesetToRules)
-			filtered := codesecurity.FilterRulesByEnabledRulesets(opts.Rules, enabled, rulesetToRules)
+			enabled, filtered := codesecurity.FilterRulesBySastConfig(opts.Rules, cfg.Sast, cfg.Legacy, rulesetToRules)
 			if len(filtered) == 0 {
 				log.FromContext(ctx).Warn("Code Security config enabled zero SAIST rules; analysis will not run SAIST rules")
 			}
@@ -312,7 +311,7 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 			log.FromContext(ctx).Infof(
 				"Local Code Security config: using %s (schema-version=%s), %d rules after ruleset filter, %d file-rule pairs for scans",
 				configBasename, schemaVer, len(filtered), countFileRulePairs(fileMap))
-		} else if err == nil {
+		} else {
 			log.FromContext(ctx).Infof(
 				"Local Code Security config: no YAML file in %s "+
 					"(code-security.datadog.yaml|.yml or static-analysis.datadog.yaml|.yml); "+
