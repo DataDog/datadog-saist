@@ -177,13 +177,6 @@ func parseLocationDeterminationResult(content string) (LocationDeterminationResu
 	return data, nil
 }
 
-func locationDeterminationTemperature(modelValue model.Model) float64 {
-	if modelValue.RequiresDefaultTemperature() {
-		return 1.0
-	}
-	return 0.0
-}
-
 func (agent *DetectionAgent) DetermineViolationLocation(ctx context.Context, scanData *model.ScanData,
 	violation model.LLMResultViolation, verification *VerificationResult) (*LocationDeterminationResult, error) {
 	logger := log.FromContext(ctx)
@@ -191,7 +184,7 @@ func (agent *DetectionAgent) DetermineViolationLocation(ctx context.Context, sca
 	options := &clients.GenerateOptions{
 		MaxTokens:    1024,
 		ResponseType: "application/json",
-		Temperature:  locationDeterminationTemperature(agent.agentOption.ValidationModel),
+		Temperature:  0.0,
 		Schema: clients.GenerateOptionSchema{
 			Name:        "location",
 			Description: "SARIF-style region for a verified vulnerability",
