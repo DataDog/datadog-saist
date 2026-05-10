@@ -78,25 +78,11 @@ func TestLoadLocalFile_ReturnsBasename(t *testing.T) {
 	require.NotNil(t, f.Sast)
 }
 
-func TestLocalConfigLooksLegacy_RootRulesetsWithoutSchema(t *testing.T) {
-	y := []byte("rulesets:\n  - python-design\n")
-
-	assert.True(t, LocalConfigLooksLegacy(y))
-}
-
-func TestLocalConfigLooksLegacy_RootRulesetsWithSchemaV1(t *testing.T) {
-	y := []byte("schema-version: v1\nrulesets:\n  - python-design\n")
-
-	assert.True(t, LocalConfigLooksLegacy(y))
-}
-
-func TestLocalConfigLooksLegacy_NativeCodeSecurityV1(t *testing.T) {
-	y := []byte("schema-version: v1.1\nsast:\n  use-default-rulesets: false\n")
-
-	assert.False(t, LocalConfigLooksLegacy(y))
-}
-
-func TestLoadLocalFile_MarksLegacy(t *testing.T) {
+func TestLoadLocalFile_LegacyFormatLoadsWithoutError(t *testing.T) {
+	// Legacy static-analysis files (root rulesets: block, no schema-version or schema-version: v1)
+	// are not parsed by datadog-saist for narrowing — the settings API converts them before SAIST
+	// sees the merged config. LoadLocalFile should still read and return the file without error;
+	// the resulting File has a nil Sast section so no YAML narrowing is applied.
 	dir := t.TempDir()
 	y := "rulesets:\n  - python-design\n"
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "static-analysis.datadog.yml"), []byte(y), 0o600))
@@ -105,5 +91,5 @@ func TestLoadLocalFile_MarksLegacy(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "static-analysis.datadog.yml", base)
 	require.NotNil(t, f)
-	assert.True(t, f.Legacy)
+	assert.Nil(t, f.Sast) // no sast block — YAML narrowing is skipped
 }

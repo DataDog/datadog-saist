@@ -281,8 +281,12 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 				configBasename)
 		} else if cfg != nil && cfg.Sast != nil {
 			rulesetToRules := codesecurity.BuildRulesetToRuleIDs(opts.Rules)
-			enabled, filtered := codesecurity.FilterRulesBySastConfig(opts.Rules, cfg.Sast, cfg.Legacy, rulesetToRules)
-			if len(filtered) == 0 {
+			enabled, filtered, fallbackUsed := codesecurity.FilterRulesBySastConfig(opts.Rules, cfg.Sast, rulesetToRules)
+			if fallbackUsed {
+				log.FromContext(ctx).Infof(
+					"Code Security config produced zero valid AI SAST rulesets without explicit disablement; using all %d default rules",
+					len(filtered))
+			} else if len(filtered) == 0 {
 				log.FromContext(ctx).Warn("Code Security config enabled zero SAIST rules; analysis will not run SAIST rules")
 			}
 			opts.Rules = filtered
