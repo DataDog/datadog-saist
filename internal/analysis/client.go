@@ -30,17 +30,13 @@ func configure(ctx context.Context, directory string, detectionModelStr, validat
 	apiKey string, jwtToken string, orgID int64, repositoryID string, useLocalPrompts bool) (model.AnalysisOptions, error) {
 	var rules []modelApi.AiPrompt
 	if useLocalPrompts {
-		loaded, err := agents.LoadLocalRules()
+		var err error
+		rules, err = agents.LoadLocalRules()
 		if err != nil {
 			return model.AnalysisOptions{}, fmt.Errorf("loading local rules: %w", err)
 		}
-		rules = loaded
 		if debug {
-			ids := make([]string, len(rules))
-			for i := range rules {
-				ids[i] = rules[i].ID
-			}
-			log.FromContext(ctx).Infof("Loaded %d local rules: %s", len(rules), strings.Join(ids, ", "))
+			log.FromContext(ctx).Infof("Loaded %d local rules from embedded files", len(rules))
 		}
 	} else {
 		datadogAuth, err := api.GetDatadogAuth()
