@@ -37,8 +37,8 @@ func configure(ctx context.Context, directory string, detectionModelStr, validat
 		rules = loaded
 		if debug {
 			ids := make([]string, len(rules))
-			for i, r := range rules {
-				ids[i] = r.ID
+			for i := range rules {
+				ids[i] = rules[i].ID
 			}
 			log.FromContext(ctx).Infof("Loaded %d local rules: %s", len(rules), strings.Join(ids, ", "))
 		}
