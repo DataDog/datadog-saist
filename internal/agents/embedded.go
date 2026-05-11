@@ -4,7 +4,6 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
-	"sort"
 	"strings"
 
 	"github.com/DataDog/datadog-saist/internal/model/api"
@@ -40,6 +39,5 @@ func LoadLocalRules() ([]api.AiPrompt, error) {
 			Category: api.CategorySecurity,
 		})
 	}
-	sort.Slice(rules, func(i, j int) bool { return rules[i].ID < rules[j].ID })
 	return rules, nil
 }
