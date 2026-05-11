@@ -12,10 +12,19 @@ import (
 //go:embed *.md
 var EmbeddedAgentRules embed.FS
 
+// languageGlobs maps the language token in a rule filename (the second segment
+// of `datadog-{language}-{rule}.md`) to the file globs the rule should match.
+var languageGlobs = map[string][]string{
+	"go":     {"**/*.go"},
+	"java":   {"**/*.java"},
+	"python": {"**/*.py"},
+}
+
 // LoadLocalRules returns one api.AiPrompt per embedded *.md file in this
 // package. The filename (without extension) is converted to a rule ID by
 // replacing the first dash with a slash: "datadog-go-sqli.md" -> "datadog/go-sqli".
-// Each rule runs on every file (Globs="**/*") with default Severity and Category.
+// When the language token in the filename maps to a known glob, the rule is
+// scoped to that language; otherwise it falls back to "**/*".
 func LoadLocalRules() ([]api.AiPrompt, error) {
 	entries, err := fs.ReadDir(EmbeddedAgentRules, ".")
 	if err != nil {
@@ -34,10 +43,20 @@ func LoadLocalRules() ([]api.AiPrompt, error) {
 		rules = append(rules, api.AiPrompt{
 			ID:       strings.Replace(name, "-", "/", 1),
 			Content:  string(content),
-			Globs:    []string{"**/*"},
+			Globs:    globsForFilename(name),
 			Severity: api.SeverityError,
 			Category: api.CategorySecurity,
 		})
 	}
 	return rules, nil
+}
+
+func globsForFilename(name string) []string {
+	parts := strings.SplitN(name, "-", 3)
+	if len(parts) >= 2 {
+		if g, ok := languageGlobs[parts[1]]; ok {
+			return g
+		}
+	}
+	return []string{"**/*"}
 }
