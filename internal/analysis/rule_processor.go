@@ -197,21 +197,9 @@ func (rp *RuleProcessor) BuildScanDataForResult(ctx context.Context, result *Pro
 		}
 		dctx.RelatedFiles = relatedFiles
 
-		var userPrompt string
-		var userPromptErr error
-		if rp.opts.UseLocalPrompts {
-			userPromptDetectionContext := dctx
-			// Use embedded agent rule files instead of reading from filesystem
-			ruleContent, err := agents.GetEmbeddedAgentRule(dctx.Rule.ID)
-			if err == nil {
-				userPromptDetectionContext.Rule.Content = ruleContent
-			}
-			userPrompt, userPromptErr = prompt.BuildDetectionUserPrompt(ctx, &userPromptDetectionContext, rp.debug)
-		} else {
-			userPrompt, userPromptErr = prompt.BuildDetectionUserPrompt(ctx, &dctx, rp.debug)
-		}
-		if userPromptErr != nil {
-			return userPromptErr
+		userPrompt, err := prompt.BuildDetectionUserPrompt(ctx, &dctx, rp.debug)
+		if err != nil {
+			return err
 		}
 
 		systemPrompt := string(prompt.SystemPromptBytes)

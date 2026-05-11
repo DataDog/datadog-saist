@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/DataDog/datadog-saist/internal/agents"
 	"github.com/DataDog/datadog-saist/internal/api"
 	"github.com/DataDog/datadog-saist/internal/clients"
 	"github.com/DataDog/datadog-saist/internal/log"
@@ -27,24 +28,35 @@ type Violation = model.Violation
 func configure(ctx context.Context, directory string, detectionModelStr, validationModelStr string,
 	debug bool, baseURL string, requestTimeoutSec, fileConcurrency int, writePrompts, isAIGateway, aiGuardEnabled bool,
 	apiKey string, jwtToken string, orgID int64, repositoryID string, useLocalPrompts bool) (model.AnalysisOptions, error) {
-	datadogAuth, err := api.GetDatadogAuth()
-	if err != nil {
-		return model.AnalysisOptions{}, err
-	}
-
-	// Override with JWT token parameter if provided
-	if jwtToken != "" {
-		datadogAuth.JWTToken = &jwtToken
-	}
-
-	rules, err := api.GetPromptsFromApi(ctx, datadogAuth)
-
-	if err != nil {
-		return model.AnalysisOptions{}, err
-	}
-
-	if debug {
-		log.FromContext(ctx).Infof("Got %d prompts from the Datadog API", len(rules))
+	var rules []modelApi.AiPrompt
+	if useLocalPrompts {
+		loaded, skipped, err := agents.LoadLocalRules()
+		if err != nil {
+			return model.AnalysisOptions{}, fmt.Errorf("loading local rules: %w", err)
+		}
+		rules = loaded
+		if debug {
+			logger := log.FromContext(ctx)
+			logger.Infof("Loaded %d local rules from embedded files", len(rules))
+			for _, name := range skipped {
+				logger.Infof("Skipped embedded file without frontmatter: %s", name)
+			}
+		}
+	} else {
+		datadogAuth, err := api.GetDatadogAuth()
+		if err != nil {
+			return model.AnalysisOptions{}, err
+		}
+		if jwtToken != "" {
+			datadogAuth.JWTToken = &jwtToken
+		}
+		rules, err = api.GetPromptsFromApi(ctx, datadogAuth)
+		if err != nil {
+			return model.AnalysisOptions{}, err
+		}
+		if debug {
+			log.FromContext(ctx).Infof("Got %d prompts from the Datadog API", len(rules))
+		}
 	}
 
 	if _, err := os.Stat(directory); os.IsNotExist(err) {
@@ -99,7 +111,6 @@ func configure(ctx context.Context, directory string, detectionModelStr, validat
 		OrgID:             orgID,
 		RepositoryID:      repositoryID,
 		SkipIndexing:      false, // Set to true to skip code indexing
-		UseLocalPrompts:   useLocalPrompts,
 		DatadogDriver:     driverConfig,
 	}, nil
 }
