@@ -76,7 +76,9 @@ func EnabledSaistRulesetNames(s *Sast, rulesetToRules map[string][]string) map[s
 	}
 	if s.UseRulesets != nil {
 		for _, rs := range *s.UseRulesets {
-			enabled[rs] = true
+			if IsValidRuleset(rulesetToRules, rs) {
+				enabled[rs] = true
+			}
 		}
 	}
 	if s.RulesetConfigs != nil {
@@ -88,7 +90,9 @@ func EnabledSaistRulesetNames(s *Sast, rulesetToRules map[string][]string) map[s
 	}
 	if s.IgnoreRulesets != nil {
 		for _, rs := range *s.IgnoreRulesets {
-			delete(enabled, rs)
+			if IsValidRuleset(rulesetToRules, rs) {
+				delete(enabled, rs)
+			}
 		}
 	}
 	return enabled
@@ -112,4 +116,40 @@ func FilterRulesByEnabledRulesets(rules []api.AiPrompt, enabled map[string]bool,
 		}
 	}
 	return out
+}
+
+// IsExplicitAISastDisablement reports whether the sast config deliberately opted out of AI SAST
+// scanning. This is true only when use-default-rulesets is false AND use-rulesets is absent or
+// empty — meaning the user actively disabled all SAST rule coverage.
+//
+// Every other zero-rule outcome (legacy static-analysis configs, SCA-only configs, configs that
+// list only classic SA rulesets) falls back to the default AI SAST rule set so that repositories
+// without AI SAST awareness still receive coverage.
+func IsExplicitAISastDisablement(s *Sast) bool {
+	if s == nil {
+		return false
+	}
+	if s.UseDefaultRulesets == nil || *s.UseDefaultRulesets {
+		return false
+	}
+	return s.UseRulesets == nil || len(*s.UseRulesets) == 0
+}
+
+// FilterRulesBySastConfig applies SAIST ruleset filtering. When the filtered result is empty and
+// the config does not represent an explicit AI SAST disablement, it falls back to all rules so
+// that repositories using legacy or classic-SA-only configs still receive AI SAST coverage.
+//
+// The third return value is true when the fallback was applied. Callers should log this so that
+// unexpected no-coverage situations are visible in local runs.
+func FilterRulesBySastConfig(
+	rules []api.AiPrompt,
+	s *Sast,
+	rulesetToRules map[string][]string,
+) (enabled map[string]bool, filtered []api.AiPrompt, fallbackUsed bool) {
+	enabled = EnabledSaistRulesetNames(s, rulesetToRules)
+	filtered = FilterRulesByEnabledRulesets(rules, enabled, rulesetToRules)
+	if len(filtered) == 0 && !IsExplicitAISastDisablement(s) {
+		return enabled, rules, true
+	}
+	return enabled, filtered, false
 }

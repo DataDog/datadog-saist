@@ -77,3 +77,19 @@ func TestLoadLocalFile_ReturnsBasename(t *testing.T) {
 	require.NotNil(t, f)
 	require.NotNil(t, f.Sast)
 }
+
+func TestLoadLocalFile_LegacyFormatLoadsWithoutError(t *testing.T) {
+	// Legacy static-analysis files (root rulesets: block, no schema-version or schema-version: v1)
+	// are not parsed by datadog-saist for narrowing — the settings API converts them before SAIST
+	// sees the merged config. LoadLocalFile should still read and return the file without error;
+	// the resulting File has a nil Sast section so no YAML narrowing is applied.
+	dir := t.TempDir()
+	y := "rulesets:\n  - python-design\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "static-analysis.datadog.yml"), []byte(y), 0o600))
+
+	f, base, err := LoadLocalFile(dir)
+	require.NoError(t, err)
+	assert.Equal(t, "static-analysis.datadog.yml", base)
+	require.NotNil(t, f)
+	assert.Nil(t, f.Sast) // no sast block — YAML narrowing is skipped
+}

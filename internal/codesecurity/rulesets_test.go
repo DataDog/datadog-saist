@@ -41,6 +41,21 @@ func TestEnabledSaistRulesetNames_IgnoreRulesets(t *testing.T) {
 	assert.False(t, en["python-ai_sast"])
 }
 
+func TestEnabledSaistRulesetNames_IgnoresUnknownUseRulesets(t *testing.T) {
+	rulesetToRules := map[string][]string{
+		"go-ai_sast": {"datadog/go-sqli"},
+	}
+	f := false
+	s := &Sast{
+		UseDefaultRulesets: &f,
+		UseRulesets:        &[]string{"python-design", "go-ai_sast"},
+	}
+
+	en := EnabledSaistRulesetNames(s, rulesetToRules)
+
+	assert.Equal(t, map[string]bool{"go-ai_sast": true}, en)
+}
+
 func TestFilterRulesByEnabledRulesets(t *testing.T) {
 	rulesetToRules := map[string][]string{
 		"go-ai_sast": {"datadog/go-sqli", "datadog/go-xss"},
@@ -50,4 +65,91 @@ func TestFilterRulesByEnabledRulesets(t *testing.T) {
 	out := FilterRulesByEnabledRulesets(rules, enabled, rulesetToRules)
 	require.Len(t, out, 1)
 	assert.Equal(t, "datadog/go-sqli", out[0].ID)
+}
+
+func TestFilterRulesBySastConfig_LegacyConvertedConfigKeepsDefaultRules(t *testing.T) {
+	rulesetToRules := map[string][]string{
+		"go-ai_sast":     {"datadog/go-sqli"},
+		"python-ai_sast": {"datadog/python-sqli"},
+	}
+	rules := []api.AiPrompt{{ID: "datadog/go-sqli"}, {ID: "datadog/python-sqli"}}
+	f := false
+	// Legacy converted config: use-default-rulesets: false with only classic SA rulesets.
+	// use-rulesets is non-empty so IsExplicitAISastDisablement returns false → falls back to all rules.
+	s := &Sast{
+		UseDefaultRulesets: &f,
+		UseRulesets:        &[]string{"python-design"},
+	}
+
+	enabled, out, fallback := FilterRulesBySastConfig(rules, s, rulesetToRules)
+
+	assert.True(t, fallback)
+	assert.Empty(t, enabled)
+	assert.Equal(t, rules, out)
+}
+
+func TestFilterRulesBySastConfig_NativeConfigCanDisableSaist(t *testing.T) {
+	rulesetToRules := map[string][]string{
+		"go-ai_sast": {"datadog/go-sqli"},
+	}
+	rules := []api.AiPrompt{{ID: "datadog/go-sqli"}}
+	f := false
+	// Native v1.1 explicit disablement: use-default-rulesets: false with no use-rulesets.
+	s := &Sast{
+		UseDefaultRulesets: &f,
+	}
+
+	enabled, out, fallback := FilterRulesBySastConfig(rules, s, rulesetToRules)
+
+	assert.False(t, fallback)
+	assert.Empty(t, enabled)
+	assert.Empty(t, out)
+}
+
+func TestFilterRulesBySastConfig_LegacyWithValidSaistRulesetHonorsSelection(t *testing.T) {
+	rulesetToRules := map[string][]string{
+		"go-ai_sast":     {"datadog/go-sqli"},
+		"python-ai_sast": {"datadog/python-sqli"},
+	}
+	rules := []api.AiPrompt{{ID: "datadog/go-sqli"}, {ID: "datadog/python-sqli"}}
+	f := false
+	// Mixed: one classic SA ruleset (ignored) and one valid AI SAST ruleset → non-empty filtered result.
+	s := &Sast{
+		UseDefaultRulesets: &f,
+		UseRulesets:        &[]string{"python-design", "go-ai_sast"},
+	}
+
+	enabled, out, fallback := FilterRulesBySastConfig(rules, s, rulesetToRules)
+
+	assert.False(t, fallback)
+	assert.Equal(t, map[string]bool{"go-ai_sast": true}, enabled)
+	require.Len(t, out, 1)
+	assert.Equal(t, "datadog/go-sqli", out[0].ID)
+}
+
+func TestIsExplicitAISastDisablement(t *testing.T) {
+	f := false
+	tr := true
+
+	t.Run("nil sast returns false", func(t *testing.T) {
+		assert.False(t, IsExplicitAISastDisablement(nil))
+	})
+	t.Run("use-default-rulesets true returns false", func(t *testing.T) {
+		assert.False(t, IsExplicitAISastDisablement(&Sast{UseDefaultRulesets: &tr}))
+	})
+	t.Run("use-default-rulesets nil returns false", func(t *testing.T) {
+		assert.False(t, IsExplicitAISastDisablement(&Sast{}))
+	})
+	t.Run("use-default-rulesets false with no use-rulesets is explicit disablement", func(t *testing.T) {
+		assert.True(t, IsExplicitAISastDisablement(&Sast{UseDefaultRulesets: &f}))
+	})
+	t.Run("use-default-rulesets false with empty use-rulesets is explicit disablement", func(t *testing.T) {
+		assert.True(t, IsExplicitAISastDisablement(&Sast{UseDefaultRulesets: &f, UseRulesets: &[]string{}}))
+	})
+	t.Run("use-default-rulesets false with classic SA rulesets is not explicit disablement", func(t *testing.T) {
+		assert.False(t, IsExplicitAISastDisablement(&Sast{UseDefaultRulesets: &f, UseRulesets: &[]string{"python-design"}}))
+	})
+	t.Run("use-default-rulesets false with AI SAST rulesets is not explicit disablement", func(t *testing.T) {
+		assert.False(t, IsExplicitAISastDisablement(&Sast{UseDefaultRulesets: &f, UseRulesets: &[]string{"go-ai_sast"}}))
+	})
 }
