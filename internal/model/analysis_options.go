@@ -22,7 +22,6 @@ type AnalysisOptions struct {
 	OrgID             int64
 	RepositoryID      string
 	SkipIndexing      bool
-	UseLocalPrompts   bool
 	DatadogDriver     *DatadogDriverConfig
 }
 
@@ -42,7 +41,6 @@ func (opts *AnalysisOptions) Display() {
 	fmt.Printf("Organization ID:     %d\n", opts.OrgID)
 	fmt.Printf("Repository ID:       %s\n", opts.RepositoryID)
 	fmt.Printf("Skip Indexing:       %t\n", opts.SkipIndexing)
-	fmt.Printf("Use Local Prompts:   %t\n", opts.UseLocalPrompts)
 	fmt.Printf("Number of Rules:     %d\n", len(opts.Rules))
 	fmt.Println("========================")
 }
