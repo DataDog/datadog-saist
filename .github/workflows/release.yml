@@ -134,10 +134,12 @@ jobs:
           fi
 
       - name: Create release
-        run: |
-          gh release create --draft --generate-notes \
-            ${{ steps.release-version.outputs.tag }} \
-            artifacts/*.zip \
-            artifacts/checksums.txt
         env:
           GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create ${{ steps.release-version.outputs.tag }} \
+            --draft \
+            --target ${{ github.sha }} \
+            --generate-notes \
+            artifacts/*.zip \
+            artifacts/checksums.txt
