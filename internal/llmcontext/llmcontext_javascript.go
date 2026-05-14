@@ -19,17 +19,6 @@ var JavaScriptFunctionsToNotRegister = map[string]struct{}{
 	"afterAll":   {},
 }
 
-var JavaScriptLibraryToFrameworks = map[string]string{
-	"express": "express",
-	"fastify": "fastify",
-	"koa":     "koa",
-	"hapi":    "hapi",
-	"next":    "next",
-	"nuxt":    "nuxt",
-	"restify": "restify",
-	"polka":   "polka",
-}
-
 //go:embed tree-sitter-tags/javascript.scm
 var javascriptTagsQuery []byte
 

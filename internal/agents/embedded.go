@@ -18,6 +18,7 @@ var languageGlobs = map[string][]string{
 	"go":         {"**/*.go"},
 	"java":       {"**/*.java"},
 	"python":     {"**/*.py"},
+	"csharp":     {"**/*.cs"},
 	"javascript": {"**/*.js", "**/*.jsx", "**/*.mjs"},
 }
 

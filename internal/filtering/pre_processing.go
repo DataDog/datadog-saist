@@ -55,21 +55,29 @@ func getStrippedCode(ctx *model.DetectionContext) string {
 	return codeUsedForDetection(strings.ToLower(ctx.Code), ctx.Language)
 }
 
-func stripJavaComments(code string) string {
+// stripCStyleComments removes C-style block (/* ... */) and line (//) comments,
+// then drops any post-stripping lines for which skipLine(trimmed) returns true.
+// Shared between Java, JavaScript, and C# which all use the same comment syntax.
+func stripCStyleComments(code string, skipLine func(trimmed string) bool) string {
 	code = reJavaBlock.ReplaceAllString(code, "")
 	code = reJavaLine.ReplaceAllString(code, "")
 
 	lines := strings.Split(code, "\n")
 	out := lines[:0]
 	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		// Skip empty and bare "*" lines (common in Javadoc bodies).
-		if trimmed == "" || trimmed == "*" {
+		if skipLine(strings.TrimSpace(line)) {
 			continue
 		}
 		out = append(out, line)
 	}
 	return strings.Join(out, "\n")
+}
+
+func stripJavaComments(code string) string {
+	// Skip empty and bare "*" lines (common in Javadoc bodies).
+	return stripCStyleComments(code, func(trimmed string) bool {
+		return trimmed == "" || trimmed == "*"
+	})
 }
 
 func stripGoComments(code string) string {
@@ -104,36 +112,16 @@ func stripPythonComments(code string) string {
 }
 
 func stripJavaScriptComments(code string) string {
-	// JavaScript uses same comment syntax as Java: /* ... */ and //
-	code = reJavaBlock.ReplaceAllString(code, "")
-	code = reJavaLine.ReplaceAllString(code, "")
-
-	lines := strings.Split(code, "\n")
-	out := lines[:0]
-	for _, line := range lines {
-		if strings.TrimSpace(line) != "" {
-			out = append(out, line)
-		}
-	}
-	return strings.Join(out, "\n")
+	return stripCStyleComments(code, func(trimmed string) bool {
+		return trimmed == ""
+	})
 }
 
 func stripCSharpComments(code string) string {
-	// C# uses same comment syntax as Java: /* ... */ and //
-	code = reJavaBlock.ReplaceAllString(code, "")
-	code = reJavaLine.ReplaceAllString(code, "")
-
-	lines := strings.Split(code, "\n")
-	out := lines[:0]
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		// Skip empty and XML doc comment lines (/// or bare *)
-		if trimmed == "" || trimmed == "*" || strings.HasPrefix(trimmed, "///") {
-			continue
-		}
-		out = append(out, line)
-	}
-	return strings.Join(out, "\n")
+	// Skip empty and XML doc comment lines (/// or bare *).
+	return stripCStyleComments(code, func(trimmed string) bool {
+		return trimmed == "" || trimmed == "*" || strings.HasPrefix(trimmed, "///")
+	})
 }
 
 func containsAny(code string, keywords []string) bool {
