@@ -13,6 +13,7 @@ const (
 	Go
 	Python
 	CSharp
+	JavaScript
 )
 
 func (l Language) String() string {
@@ -25,6 +26,8 @@ func (l Language) String() string {
 		return "Python"
 	case CSharp:
 		return "CSharp"
+	case JavaScript:
+		return "JavaScript"
 	default:
 		return "LanguageUnknown"
 	}
@@ -42,6 +45,8 @@ func GetLanguage(filePath string) Language {
 		return Python
 	case ".cs":
 		return CSharp
+	case ".js", ".jsx", ".mjs":
+		return JavaScript
 	default:
 		return LanguageUnknown
 	}
@@ -58,5 +63,6 @@ func GetAllLanguages() []Language {
 		Go,
 		Python,
 		CSharp,
+		JavaScript,
 	}
 }

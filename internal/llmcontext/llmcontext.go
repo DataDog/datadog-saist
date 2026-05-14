@@ -13,6 +13,8 @@ import (
 	treesitterjava "github.com/tree-sitter/tree-sitter-java/bindings/go"
 
 	treesitterpython "github.com/tree-sitter/tree-sitter-python/bindings/go"
+
+	treesitterjavascript "github.com/tree-sitter/tree-sitter-javascript/bindings/go"
 )
 
 const (
@@ -43,6 +45,10 @@ var contextRetrievers = map[model.Language]ContextRetriever{
 	model.Python: {
 		Language:        treesitter.NewLanguage(treesitterpython.Language()),
 		FunctionGetTags: PythonGetTags,
+	},
+	model.JavaScript: {
+		Language:        treesitter.NewLanguage(treesitterjavascript.Language()),
+		FunctionGetTags: JavaScriptGetTags,
 	},
 }
 

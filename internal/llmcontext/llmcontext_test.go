@@ -8,6 +8,7 @@ import (
 	"github.com/DataDog/datadog-saist/internal/model"
 	"github.com/stretchr/testify/assert"
 	treesitter "github.com/tree-sitter/go-tree-sitter"
+	treesitterjavascript "github.com/tree-sitter/tree-sitter-javascript/bindings/go"
 	treesitterpython "github.com/tree-sitter/tree-sitter-python/bindings/go"
 )
 
@@ -206,6 +207,119 @@ func TestPythonGetTags_EmptyCode(t *testing.T) {
 	tags, err := PythonGetTags(data)
 	assert.NoError(t, err)
 	assert.Len(t, tags, 0)
+}
+
+// JavaScript tests
+
+func TestGetContextFromFileJavaScript(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+
+	err := os.WriteFile(
+		filepath.Join(tmpDir, "app.js"),
+		[]byte(`class Server {
+  handleRequest(req) {
+    processInput(req.body);
+  }
+}
+
+function processInput(data) {
+  return data;
+}
+`),
+		0644,
+	)
+	assert.NoError(t, err)
+
+	llmContext, err := GetContextFromFile(tmpDir, "app.js")
+	assert.NoError(t, err)
+	assert.Equal(t, model.JavaScript, llmContext.Language)
+
+	names := make([]string, len(llmContext.Tags))
+	for i, tag := range llmContext.Tags {
+		names[i] = tag.Name
+	}
+	assert.Contains(t, names, "Server")
+	assert.Contains(t, names, "handleRequest")
+	assert.Contains(t, names, "processInput")
+}
+
+func TestJavaScriptGetTags_FunctionDefinitions(t *testing.T) {
+	t.Parallel()
+	code := `function greet(name) {
+  return "hello " + name;
+}
+
+const farewell = (name) => "bye " + name;
+
+class Greeter {
+  sayHi() {
+    greet("world");
+  }
+}
+`
+	parser := treesitter.NewParser()
+	defer parser.Close()
+	parser.SetLanguage(treesitter.NewLanguage(treesitterjavascript.Language()))
+
+	tree := parser.Parse([]byte(code), nil)
+	defer tree.Close()
+
+	data := GetFunctionData{
+		root:     tree.RootNode(),
+		path:     "app.js",
+		code:     []byte(code),
+		language: model.JavaScript,
+	}
+
+	tags, err := JavaScriptGetTags(data)
+	assert.NoError(t, err)
+
+	names := make([]string, len(tags))
+	for i, tag := range tags {
+		names[i] = tag.Name
+	}
+	assert.Contains(t, names, "greet")
+	assert.Contains(t, names, "Greeter")
+	assert.Contains(t, names, "sayHi")
+}
+
+func TestJavaScriptGetTags_FilteredFunctions(t *testing.T) {
+	t.Parallel()
+	code := `describe("suite", () => {
+  it("does something", () => {});
+  beforeEach(() => {});
+  afterEach(() => {});
+});
+
+function actualCode() {}
+`
+	parser := treesitter.NewParser()
+	defer parser.Close()
+	parser.SetLanguage(treesitter.NewLanguage(treesitterjavascript.Language()))
+
+	tree := parser.Parse([]byte(code), nil)
+	defer tree.Close()
+
+	data := GetFunctionData{
+		root:     tree.RootNode(),
+		path:     "app.js",
+		code:     []byte(code),
+		language: model.JavaScript,
+	}
+
+	tags, err := JavaScriptGetTags(data)
+	assert.NoError(t, err)
+
+	names := make([]string, len(tags))
+	for i, tag := range tags {
+		names[i] = tag.Name
+	}
+	assert.NotContains(t, names, "describe")
+	assert.NotContains(t, names, "it")
+	assert.NotContains(t, names, "beforeEach")
+	assert.NotContains(t, names, "afterEach")
+	assert.Contains(t, names, "actualCode")
 }
 
 // Common stuff
