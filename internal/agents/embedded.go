@@ -15,9 +15,10 @@ var EmbeddedAgentRules embed.FS
 // languageGlobs maps the language token in a rule filename (the second segment
 // of `datadog-{language}-{rule}.md`) to the file globs the rule should match.
 var languageGlobs = map[string][]string{
-	"go":     {"**/*.go"},
-	"java":   {"**/*.java"},
-	"python": {"**/*.py"},
+	"go":         {"**/*.go"},
+	"java":       {"**/*.java"},
+	"python":     {"**/*.py"},
+	"javascript": {"**/*.js", "**/*.jsx", "**/*.mjs"},
 }
 
 // LoadLocalRules returns one api.AiPrompt per embedded *.md file in this

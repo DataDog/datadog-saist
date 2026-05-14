@@ -27,6 +27,8 @@ func languageKeyFromModel(lang model.Language) string {
 		return "python"
 	case model.CSharp:
 		return "csharp"
+	case model.JavaScript:
+		return "javascript"
 	default:
 		return ""
 	}

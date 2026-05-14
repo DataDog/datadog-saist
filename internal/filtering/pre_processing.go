@@ -33,6 +33,8 @@ func codeUsedForDetection(inputCode string, language model.Language) string {
 		return stripPythonComments(inputCode)
 	case model.CSharp:
 		return stripCSharpComments(inputCode)
+	case model.JavaScript:
+		return stripJavaScriptComments(inputCode)
 	default:
 		return inputCode
 	}
@@ -97,6 +99,21 @@ func stripPythonComments(code string) string {
 			continue
 		}
 		out = append(out, line)
+	}
+	return strings.Join(out, "\n")
+}
+
+func stripJavaScriptComments(code string) string {
+	// JavaScript uses same comment syntax as Java: /* ... */ and //
+	code = reJavaBlock.ReplaceAllString(code, "")
+	code = reJavaLine.ReplaceAllString(code, "")
+
+	lines := strings.Split(code, "\n")
+	out := lines[:0]
+	for _, line := range lines {
+		if strings.TrimSpace(line) != "" {
+			out = append(out, line)
+		}
 	}
 	return strings.Join(out, "\n")
 }
