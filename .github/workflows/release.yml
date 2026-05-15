@@ -133,13 +133,18 @@ jobs:
             echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
           fi
 
-      - name: Create release
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Push tag (workflow_dispatch only)
+        if: github.event_name == 'workflow_dispatch'
         run: |
-          gh release create ${{ steps.release-version.outputs.tag }} \
-            --draft \
+          git tag ${{ steps.release-version.outputs.tag }} ${{ github.sha }}
+          git push origin ${{ steps.release-version.outputs.tag }}
+
+      - name: Create release
+        run: |
+          gh release create --draft --generate-notes \
             --target ${{ github.sha }} \
-            --generate-notes \
+            ${{ steps.release-version.outputs.tag }} \
             artifacts/*.zip \
             artifacts/checksums.txt
+        env:
+          GH_TOKEN: ${{ github.token }}
