@@ -344,18 +344,13 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 	}
 	log.FromContext(ctx).Infof("Rule matching phase: %d files in %v", len(files), time.Since(rulePhaseStart))
 
-	// Collect files that have applicable rules to index and (later) scan
-	filesNeedingScans := 0
-	totalScansNeeded := 0
+	// Collect files that have applicable rules; needed to scope indexing before prompt assembly.
 	var filesToIndex []fileMeta
 	for _, res := range allResults {
 		if len(res.applicableRules) > 0 {
-			filesNeedingScans++
-			totalScansNeeded += len(res.applicableRules)
 			filesToIndex = append(filesToIndex, res.fileMeta)
 		}
 	}
-	log.FromContext(ctx).Infof("Scan phase: %d files need %d scans", filesNeedingScans, totalScansNeeded)
 
 	// Phase 2: Index files BEFORE building scan data so that aiContext is populated
 	// when BuildScanDataForResult calls getRelatedFiles and assembles the prompt.
@@ -365,10 +360,23 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 		log.FromContext(ctx).Infof("Indexed %d files in %v", len(filesToIndex), time.Since(indexStart))
 	}
 
-	// Phase 3: Build ScanData (and prompts) now that aiContext is populated
+	// Phase 3: Build ScanData (and prompts) now that aiContext is populated.
+	// ShouldAnalyze inside BuildScanDataForResult may drop some file/rule pairs, so the
+	// accurate scan count is only available after this call completes.
 	if err := buildScanDataForResults(ctx, allResults, ruleProcessor); err != nil {
 		return nil, err
 	}
+
+	// Count actual scans after filtering (res.Scans is now populated by buildScanDataForResults).
+	filesNeedingScans := 0
+	totalScansNeeded := 0
+	for _, res := range allResults {
+		if len(res.Scans) > 0 {
+			filesNeedingScans++
+			totalScansNeeded += len(res.Scans)
+		}
+	}
+	log.FromContext(ctx).Infof("Scan phase: %d files need %d scans", filesNeedingScans, totalScansNeeded)
 
 	scanPhaseStart := time.Now()
 	filePool, err := ants.NewPool(opts.FileConcurrency)
