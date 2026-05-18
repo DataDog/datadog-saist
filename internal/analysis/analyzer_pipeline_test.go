@@ -83,8 +83,7 @@ func main() {}
 	ruleProcessor, err := NewRuleProcessor(nil, opts, &aiContext)
 	assert.NoError(t, err)
 
-	results, err := determineApplicableRules(ctx, files, ruleProcessor)
-	assert.NoError(t, err)
+	results := determineApplicableRules(ctx, files, ruleProcessor)
 
 	// Confirm both files matched the rule before indexing.
 	filesWithRules := 0

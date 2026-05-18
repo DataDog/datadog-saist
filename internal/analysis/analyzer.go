@@ -90,9 +90,9 @@ const BatchConcurrency = 4
 // determineApplicableRules processes files in parallel batches to find which rules apply to each file.
 // It returns ProcessFileResult with applicableRules populated and Scans still nil.
 // Call buildScanDataForResults after indexing to assemble prompts with full context.
-func determineApplicableRules(ctx context.Context, files []fileMeta, ruleProcessor *RuleProcessor) ([]ProcessFileResult, error) {
+func determineApplicableRules(ctx context.Context, files []fileMeta, ruleProcessor *RuleProcessor) []ProcessFileResult {
 	if len(files) == 0 {
-		return []ProcessFileResult{}, nil
+		return []ProcessFileResult{}
 	}
 
 	totalBatches := (len(files) + BatchSize - 1) / BatchSize
@@ -171,7 +171,7 @@ func determineApplicableRules(ctx context.Context, files []fileMeta, ruleProcess
 		log.FromContext(ctx).Infof("Determined applicable rules for %d files", len(allResults))
 	}
 
-	return allResults, nil
+	return allResults
 }
 
 // buildScanDataForResults assembles the LLM prompt for every file/rule pair that has applicable rules.
@@ -338,10 +338,7 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 
 	// Phase 1: Determine applicable rules for all files
 	rulePhaseStart := time.Now()
-	allResults, err := determineApplicableRules(ctx, files, ruleProcessor)
-	if err != nil {
-		return nil, err
-	}
+	allResults := determineApplicableRules(ctx, files, ruleProcessor)
 	log.FromContext(ctx).Infof("Rule matching phase: %d files in %v", len(files), time.Since(rulePhaseStart))
 
 	// Collect files that have applicable rules; needed to scope indexing before prompt assembly.
