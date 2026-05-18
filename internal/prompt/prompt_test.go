@@ -107,3 +107,46 @@ func TestBuildDetectionUserPromptOtherFilesTooLarge(t *testing.T) {
 	assert.Contains(t, result, "public class Test {}")
 	assert.NotContains(t, result, "X")
 }
+
+func TestBuildDetectionUserPrompt_RelatedFilesHeaderAppearsOnce(t *testing.T) {
+	detectionContext := model.DetectionContext{
+		Language: model.Go,
+		Rule:     api.AiPrompt{ID: "test-rule", Content: "Code: <code>\n<relatedFilesInformation>"},
+		Code:     "func main() {}",
+		Path:     "main.go",
+		RelatedFiles: []model.DetectionContextRelatedFile{
+			{Path: "helper.go", Content: "func Helper() {}"},
+			{Path: "utils.go", Content: "func Util() {}"},
+		},
+	}
+
+	result, err := BuildDetectionUserPrompt(context.Background(), &detectionContext)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, strings.Count(result, "## Related Files"),
+		"Related Files header must appear exactly once with multiple related files")
+	assert.Contains(t, result, "### helper.go")
+	assert.Contains(t, result, "### utils.go")
+}
+
+func TestBuildDetectionUserPrompt_RelatedFilesAllRendered(t *testing.T) {
+	detectionContext := model.DetectionContext{
+		Language: model.Go,
+		Rule:     api.AiPrompt{ID: "test-rule", Content: "Code: <code>\n<relatedFilesInformation>"},
+		Code:     "func main() {}",
+		Path:     "main.go",
+		RelatedFiles: []model.DetectionContextRelatedFile{
+			{Path: "alpha.go", Content: "alpha content"},
+			{Path: "beta.go", Content: "beta content"},
+		},
+	}
+
+	result, err := BuildDetectionUserPrompt(context.Background(), &detectionContext)
+	assert.NoError(t, err)
+	assert.Contains(t, result, "### alpha.go")
+	assert.Contains(t, result, "alpha content")
+	assert.Contains(t, result, "### beta.go")
+	assert.Contains(t, result, "beta content")
+	// Verify ordering: alpha appears before beta
+	assert.Less(t, strings.Index(result, "alpha.go"), strings.Index(result, "beta.go"),
+		"related files must appear in the order they were provided")
+}

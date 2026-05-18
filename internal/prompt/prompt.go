@@ -69,13 +69,13 @@ func BuildDetectionUserPrompt(ctx context.Context, detectionContext *model.Detec
 
 	relatedFilesSection := ""
 	if len(detectionContext.RelatedFiles) > 0 {
-		relatedFilesSection = "\n## Related Files\n"
+		const header = "\n## Related Files\n"
+		accumulated := header
 
 		for _, relatedFile := range detectionContext.RelatedFiles {
-			relatedFilesSectionAdditional := relatedFilesSection + "\n" + "### " + relatedFile.Path + "\n" +
-				"```\n" + relatedFile.Content + "\n```" + "\n" + "\n"
-			tempPrompt := strings.ReplaceAll(userTemplate, "<relatedFilesInformation>",
-				relatedFilesSection+relatedFilesSectionAdditional)
+			entry := "\n### " + relatedFile.Path + "\n" + "```\n" + relatedFile.Content + "\n```\n\n"
+			candidate := accumulated + entry
+			tempPrompt := strings.ReplaceAll(userTemplate, "<relatedFilesInformation>", candidate)
 			nbTokens := systemPromptTokens + getNumberOfTokens(tempPrompt)
 			if nbTokens > MAX_TOKENS_IN_PROMPT {
 				// (Implemented as spread params to avoid needing to refactor all tests)
@@ -88,7 +88,12 @@ func BuildDetectionUserPrompt(ctx context.Context, detectionContext *model.Detec
 				break
 			}
 
-			relatedFilesSection += relatedFilesSectionAdditional
+			accumulated = candidate
+			includedFiles = append(includedFiles, relatedFile.Path)
+		}
+
+		if len(includedFiles) > 0 {
+			relatedFilesSection = accumulated
 		}
 	}
 
