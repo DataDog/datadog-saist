@@ -14,7 +14,7 @@ jobs:
     strategy:
       matrix:
         reponame: [saist-playground, BenchmarkJava, vulnpy-ibmappsec, gowasp]
-        modelname: ["gemini-2.5-flash", "gemini-3-flash", "openai-gpt5.2", "openai-gpt5.2-codex"]
+        modelname: ["gemini-2.5-flash", "gemini-3-flash", "openai-gpt5.2", "openai-gpt5.2-codex", "claude-4.5-sonnet", "claude-4.5-haiku"]
     permissions:
       contents: read
       id-token: write  # Needed for dd-octo-sts
