@@ -87,12 +87,12 @@ func (w *ResultAggregator) GetSummary() (violationCount, filesAnalyzed int, inpu
 // BatchConcurrency is the number of parallel file processing batches
 const BatchConcurrency = 4
 
-// processFilesWithProcessor processes files using batched operations.
-// This improves performance by processing multiple files concurrently in batches.
-// nolint: gocyclo
-func processFilesWithProcessor(ctx context.Context, files []fileMeta, ruleProcessor *RuleProcessor) ([]ProcessFileResult, error) {
+// determineApplicableRules processes files in parallel batches to find which rules apply to each file.
+// It returns ProcessFileResult with applicableRules populated and Scans still nil.
+// Call buildScanDataForResults after indexing to assemble prompts with full context.
+func determineApplicableRules(ctx context.Context, files []fileMeta, ruleProcessor *RuleProcessor) []ProcessFileResult {
 	if len(files) == 0 {
-		return []ProcessFileResult{}, nil
+		return []ProcessFileResult{}
 	}
 
 	totalBatches := (len(files) + BatchSize - 1) / BatchSize
@@ -109,7 +109,6 @@ func processFilesWithProcessor(ctx context.Context, files []fileMeta, ruleProces
 		batches = append(batches, files[start:end])
 	}
 
-	// Phase 1: Parallel batch processing to determine applicable rules
 	type batchResult struct {
 		index   int
 		results []ProcessFileResult
@@ -158,22 +157,30 @@ func processFilesWithProcessor(ctx context.Context, files []fileMeta, ruleProces
 		}(i, batch)
 	}
 
-	// Close result channel when all goroutines complete
 	go func() {
 		batchWg.Wait()
 		close(resultCh)
 	}()
 
-	// Collect results (order doesn't matter)
 	var allResults []ProcessFileResult
 	for br := range resultCh {
 		allResults = append(allResults, br.results...)
 	}
 
-	// Phase 2: Build ScanData for files with applicable rules (parallelized)
+	if ruleProcessor.opts.Debug {
+		log.FromContext(ctx).Infof("Determined applicable rules for %d files", len(allResults))
+	}
+
+	return allResults
+}
+
+// buildScanDataForResults assembles the LLM prompt for every file/rule pair that has applicable rules.
+// This must be called after indexFilesForContext so that aiContext is populated and
+// getRelatedFiles can return cross-file references for the prompt.
+func buildScanDataForResults(ctx context.Context, results []ProcessFileResult, ruleProcessor *RuleProcessor) error {
 	filePool, err := ants.NewPool(ruleProcessor.opts.FileConcurrency)
 	if err != nil {
-		return nil, fmt.Errorf("error creating file worker pool: %v", err)
+		return fmt.Errorf("error creating file worker pool: %v", err)
 	}
 	defer filePool.Release()
 
@@ -181,8 +188,8 @@ func processFilesWithProcessor(ctx context.Context, files []fileMeta, ruleProces
 	var mu sync.Mutex
 	var buildErrors []error
 
-	for i := range allResults {
-		if len(allResults[i].applicableRules) == 0 {
+	for i := range results {
+		if len(results[i].applicableRules) == 0 {
 			continue
 		}
 
@@ -194,11 +201,11 @@ func processFilesWithProcessor(ctx context.Context, files []fileMeta, ruleProces
 				return
 			}
 
-			if err := ruleProcessor.BuildScanDataForResult(ctx, &allResults[idx]); err != nil {
+			if err := ruleProcessor.BuildScanDataForResult(ctx, &results[idx]); err != nil {
 				mu.Lock()
 				buildErrors = append(buildErrors, err)
 				mu.Unlock()
-				log.FromContext(ctx).Warnf("Error building scan data for %s: %v", allResults[idx].RelPath, err)
+				log.FromContext(ctx).Warnf("Error building scan data for %s: %v", results[idx].RelPath, err)
 			}
 		})
 		if err != nil {
@@ -209,16 +216,11 @@ func processFilesWithProcessor(ctx context.Context, files []fileMeta, ruleProces
 
 	wg.Wait()
 
-	// Report accumulated errors but don't fail (best-effort processing)
 	if len(buildErrors) > 0 {
 		log.FromContext(ctx).Warnf("Encountered %d errors during scan data building", len(buildErrors))
 	}
 
-	if ruleProcessor.opts.Debug {
-		log.FromContext(ctx).Infof("Processed %d files, collected scan data", len(allResults))
-	}
-
-	return allResults, nil
+	return nil
 }
 
 func countFileRulePairs(m map[string][]string) int {
@@ -336,31 +338,42 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 
 	// Phase 1: Determine applicable rules for all files
 	rulePhaseStart := time.Now()
-	allResults, err := processFilesWithProcessor(ctx, files, ruleProcessor)
-	if err != nil {
-		return nil, err
-	}
+	allResults := determineApplicableRules(ctx, files, ruleProcessor)
 	log.FromContext(ctx).Infof("Rule matching phase: %d files in %v", len(files), time.Since(rulePhaseStart))
 
-	// Count files needing scans
-	filesNeedingScans := 0
-	totalScansNeeded := 0
+	// Collect files that have applicable rules; needed to scope indexing before prompt assembly.
 	var filesToIndex []fileMeta
 	for _, res := range allResults {
-		if len(res.Scans) > 0 {
-			filesNeedingScans++
-			totalScansNeeded += len(res.Scans)
+		if len(res.applicableRules) > 0 {
 			filesToIndex = append(filesToIndex, res.fileMeta)
 		}
 	}
-	log.FromContext(ctx).Infof("Scan phase: %d files need %d scans", filesNeedingScans, totalScansNeeded)
 
-	// Phase 2: Index files that have applicable rules
+	// Phase 2: Index files BEFORE building scan data so that aiContext is populated
+	// when BuildScanDataForResult calls getRelatedFiles and assembles the prompt.
 	if len(filesToIndex) > 0 && !opts.SkipIndexing {
 		indexStart := time.Now()
 		indexFilesForContext(ctx, opts.Directory, filesToIndex, aiContext, opts.Debug)
 		log.FromContext(ctx).Infof("Indexed %d files in %v", len(filesToIndex), time.Since(indexStart))
 	}
+
+	// Phase 3: Build ScanData (and prompts) now that aiContext is populated.
+	// ShouldAnalyze inside BuildScanDataForResult may drop some file/rule pairs, so the
+	// accurate scan count is only available after this call completes.
+	if err := buildScanDataForResults(ctx, allResults, ruleProcessor); err != nil {
+		return nil, err
+	}
+
+	// Count actual scans after filtering (res.Scans is now populated by buildScanDataForResults).
+	filesNeedingScans := 0
+	totalScansNeeded := 0
+	for _, res := range allResults {
+		if len(res.Scans) > 0 {
+			filesNeedingScans++
+			totalScansNeeded += len(res.Scans)
+		}
+	}
+	log.FromContext(ctx).Infof("Scan phase: %d files need %d scans", filesNeedingScans, totalScansNeeded)
 
 	scanPhaseStart := time.Now()
 	filePool, err := ants.NewPool(opts.FileConcurrency)
