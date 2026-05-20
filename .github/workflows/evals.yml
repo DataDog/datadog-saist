@@ -125,6 +125,7 @@ jobs:
     name: Run ddeval LLMObs experiment
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         detection_model: ["gemini-2.5-flash", "gemini-3-flash", "openai-gpt5.2", "openai-gpt5.2-codex", "claude-4.5-sonnet", "claude-4.5-haiku"]
     permissions:
@@ -184,11 +185,16 @@ jobs:
         echo "$HOME/.local/bin" >> $GITHUB_PATH
 
     - name: Install ddeval dependencies
+      id: ddeval-install
+      continue-on-error: true
       run: |
         cd tmp/datadog-saist-evals/eval
         uv sync
 
     - name: Run ddeval experiment
+      id: ddeval-run
+      if: steps.ddeval-install.outcome == 'success'
+      continue-on-error: true
       env:
         DD_API_KEY: ${{ secrets.DD_API_KEY }}
         DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
@@ -221,3 +227,22 @@ jobs:
           --dataset k9-saist-benchmark \
           --experiment-config-file /tmp/experiment_config.json \
           --yes
+
+    - name: Install LLMObs eval dependencies (fallback)
+      if: steps.ddeval-install.outcome == 'failure' || steps.ddeval-run.outcome == 'failure'
+      run: pip install "ddtrace>=4.8.4"
+
+    - name: Run LLMObs experiment (fallback)
+      if: steps.ddeval-install.outcome == 'failure' || steps.ddeval-run.outcome == 'failure'
+      env:
+        DD_API_KEY: ${{ secrets.DD_API_KEY }}
+        DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
+        DD_SITE: ${{ vars.METRIC_UPLOAD_DD_SITE }}
+        GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        DETECTION_MODEL: ${{ matrix.detection_model }}
+        EVALS_ROOT: ${{ github.workspace }}/tmp/datadog-saist-evals
+        EVALS_BIN: ${{ github.workspace }}/tmp/datadog-saist-evals/datadog-saist-evals
+        SAIST_BIN: ${{ github.workspace }}/datadog-saist
+      run: python .github/scripts/run_llmobs_eval.py
