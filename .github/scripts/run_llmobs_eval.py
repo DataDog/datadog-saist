@@ -51,6 +51,10 @@ EXECUTOR_TIMEOUT_SECS = 3600
 # Set to None or empty string to run all records.
 FILTER_REPO = os.environ.get("FILTER_REPO", "")
 
+# Path to a pre-computed metrics JSON produced by the evaluations job.
+# When set and the file exists, the executor is skipped entirely.
+PRECOMPUTED_METRICS = os.environ.get("PRECOMPUTED_METRICS", "")
+
 
 def init_llmobs():
     # Silence the APM tracer's "failed to send" warnings — there is no local
@@ -69,6 +73,18 @@ def init_llmobs():
 
 def load_dataset() -> list:
     with open(DATASET_PATH) as f:
+        return json.load(f)
+
+
+def load_precomputed_metrics() -> dict | None:
+    """Return pre-computed metrics from the evaluations job artifact, or None."""
+    if not PRECOMPUTED_METRICS:
+        return None
+    p = Path(PRECOMPUTED_METRICS)
+    if not p.exists():
+        return None
+    print(f"[executor] Using pre-computed metrics from {p}")
+    with open(p) as f:
         return json.load(f)
 
 
@@ -200,7 +216,7 @@ def process_record(record: dict) -> bool:
         span_context = LLMObs.export_span(span=task_span)
         print(f"[llmobs] Created span: span_id={span_context['span_id']} trace_id={span_context['trace_id']}")
         try:
-            output = run_executor(record)
+            output = load_precomputed_metrics() or run_executor(record)
             scores = compute_scores(output, record.get("expected_output", {}))
         except Exception as e:
             print(f"  ERROR: {e}", file=sys.stderr)

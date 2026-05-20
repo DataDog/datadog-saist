@@ -108,7 +108,16 @@ jobs:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       run: |
         cd ${GITHUB_WORKSPACE}/tmp/datadog-saist-evals
-        make build-run VALIDATION_MODEL=${{ matrix.modelName }} DETECTION_MODEL=${{ matrix.modelname }} REPO=${{ matrix.reponame }} SEND_METRICS=true
+        make build-run VALIDATION_MODEL=${{ matrix.modelname }} DETECTION_MODEL=${{ matrix.modelname }} REPO=${{ matrix.reponame }} SEND_METRICS=true JSON_OUTPUT=/tmp/eval-metrics.json
+
+    - name: Upload eval metrics artifact
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: eval-metrics-${{ matrix.reponame }}-${{ matrix.modelname }}
+        path: /tmp/eval-metrics.json
+        if-no-files-found: warn
+        retention-days: 1
 
     - name: Flush metrics before shutdown
       run: |
@@ -123,10 +132,13 @@ jobs:
 
   ddeval:
     name: Run ddeval LLMObs experiment
+    needs: [evaluations]
+    if: always()
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
+        reponame: [saist-playground, BenchmarkJava, vulnpy-ibmappsec, gowasp]
         detection_model: ["gemini-2.5-flash", "gemini-3-flash", "openai-gpt5.2", "openai-gpt5.2-codex", "claude-4.5-sonnet", "claude-4.5-haiku"]
     permissions:
       contents: read
@@ -216,7 +228,8 @@ jobs:
             "evals_bin": "${EVALS_ROOT}/datadog-saist-evals",
             "saist_bin": "${GITHUB_WORKSPACE}/datadog-saist",
             "file_concurrency": 50,
-            "send_metrics": true
+            "send_metrics": true,
+            "repo": "${{ matrix.reponame }}"
           }
         }
         EOF
@@ -227,6 +240,14 @@ jobs:
           --dataset k9-saist-benchmark \
           --experiment-config-file /tmp/experiment_config.json \
           --yes
+
+    - name: Download pre-computed eval metrics
+      if: steps.ddeval-install.outcome == 'failure' || steps.ddeval-run.outcome == 'failure'
+      continue-on-error: true
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      with:
+        name: eval-metrics-${{ matrix.reponame }}-${{ matrix.detection_model }}
+        path: /tmp/eval-metrics/
 
     - name: Install LLMObs eval dependencies (fallback)
       if: steps.ddeval-install.outcome == 'failure' || steps.ddeval-run.outcome == 'failure'
@@ -242,6 +263,8 @@ jobs:
         ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         DETECTION_MODEL: ${{ matrix.detection_model }}
+        FILTER_REPO: ${{ matrix.reponame }}
+        PRECOMPUTED_METRICS: /tmp/eval-metrics/eval-metrics.json
         EVALS_ROOT: ${{ github.workspace }}/tmp/datadog-saist-evals
         EVALS_BIN: ${{ github.workspace }}/tmp/datadog-saist-evals/datadog-saist-evals
         SAIST_BIN: ${{ github.workspace }}/datadog-saist
