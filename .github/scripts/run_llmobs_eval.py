@@ -36,7 +36,7 @@ from pathlib import Path
 from ddtrace.llmobs import LLMObs
 
 DD_API_KEY = os.environ["DD_API_KEY"]
-DD_SITE = os.environ.get("DD_SITE", "datadoghq.com")
+DD_SITE = os.environ.get("DD_SITE") or "datadoghq.com"
 DETECTION_MODEL = os.environ["DETECTION_MODEL"]
 EVALS_BIN = os.environ["EVALS_BIN"]
 SAIST_BIN = os.environ["SAIST_BIN"]

@@ -237,7 +237,7 @@ jobs:
       env:
         DD_API_KEY: ${{ secrets.DD_API_KEY }}
         DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
-        DD_SITE: ${{ vars.METRIC_UPLOAD_DD_SITE }}
+        DD_SITE: ${{ secrets.DD_SITE }}
         GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
