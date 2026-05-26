@@ -239,6 +239,7 @@ func IsGeneratedFileByPath(path string) bool {
 
 // IsGeneratedFileByContent checks if a file is generated based on content headers.
 // Use this after file content is loaded.
+// nolint: gocyclo
 func IsGeneratedFileByContent(content []byte, path string, language model.Language) bool {
 	// Limit to first MaxHeaderSize bytes
 	headerContent := content
