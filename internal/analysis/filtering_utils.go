@@ -73,6 +73,13 @@ var javascriptTestPathPatterns = []string{
 	"**/__mocks__/**/*.mjs",
 }
 
+var typescriptTestPathPatterns = []string{
+	"**/__mocks__/**/*.ts",
+	"**/__mocks__/**/*.tsx",
+	"**/__mocks__/**/*.mts",
+	"**/__mocks__/**/*.cts",
+}
+
 var DefaultIgnoredGlobs = []string{
 	"**/node_modules/**/*",
 	"**/jspm_packages/**/*",
@@ -92,6 +99,9 @@ var DefaultIgnoredGlobs = []string{
 	"**/*.min.js",
 	"**/dist/**/*.js",
 	"**/build/**/*.js",
+	"**/*.d.ts",
+	"**/dist/**/*.ts",
+	"**/build/**/*.ts",
 }
 
 func isGeneratedFileSuffix(path string) bool {
@@ -161,6 +171,10 @@ func IsGeneratedFileFromContent(fullContent []byte, path string, language model.
 	case model.JavaScript:
 		return strings.Contains(content, GeneratedByMarker) ||
 			strings.HasSuffix(path, ".min.js")
+
+	case model.TypeScript:
+		return strings.Contains(content, GeneratedByMarker) ||
+			strings.HasSuffix(path, ".d.ts")
 
 	default:
 		return isGeneratedFileSuffix(path)
@@ -255,6 +269,10 @@ func IsGeneratedFileByContent(content []byte, path string, language model.Langua
 	case model.JavaScript:
 		return strings.Contains(header, GeneratedByMarker)
 
+	case model.TypeScript:
+		return strings.Contains(header, GeneratedByMarker) ||
+			strings.HasSuffix(path, ".d.ts")
+
 	default:
 		return false
 	}
@@ -297,6 +315,14 @@ func hasTestLikePath(path string, language model.Language) bool {
 		patterns = append(patterns, defaultTestPaths...)
 		patterns = append(patterns, defaultTestFilenames...)
 		patterns = append(patterns, javascriptTestPathPatterns...)
+		return matchesAnyGlob(path, patterns)
+
+	case model.TypeScript:
+		// TypeScript: same shape as JS — default folders + filenames + Jest mocks for ts/tsx/mts/cts
+		var patterns []string
+		patterns = append(patterns, defaultTestPaths...)
+		patterns = append(patterns, defaultTestFilenames...)
+		patterns = append(patterns, typescriptTestPathPatterns...)
 		return matchesAnyGlob(path, patterns)
 
 	default:

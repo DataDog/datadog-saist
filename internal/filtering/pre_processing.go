@@ -35,6 +35,8 @@ func codeUsedForDetection(inputCode string, language model.Language) string {
 		return stripCSharpComments(inputCode)
 	case model.JavaScript:
 		return stripJavaScriptComments(inputCode)
+	case model.TypeScript:
+		return stripTypeScriptComments(inputCode)
 	default:
 		return inputCode
 	}
@@ -112,6 +114,12 @@ func stripPythonComments(code string) string {
 }
 
 func stripJavaScriptComments(code string) string {
+	return stripCStyleComments(code, func(trimmed string) bool {
+		return trimmed == ""
+	})
+}
+
+func stripTypeScriptComments(code string) string {
 	return stripCStyleComments(code, func(trimmed string) bool {
 		return trimmed == ""
 	})
