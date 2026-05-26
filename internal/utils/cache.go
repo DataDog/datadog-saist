@@ -1,8 +1,6 @@
 package utils
 
 import (
-	"path/filepath"
-
 	"github.com/DataDog/datadog-saist/internal/model"
 )
 
@@ -13,7 +11,7 @@ import (
 func InferLanguagesFromGlobs(globs []string) []model.Language {
 	seen := map[model.Language]struct{}{}
 	for _, g := range globs {
-		lang := model.GetLanguage("file" + filepath.Ext(g))
+		lang := model.GetLanguage(g)
 		if lang != model.LanguageUnknown {
 			seen[lang] = struct{}{}
 		}
