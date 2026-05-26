@@ -613,7 +613,7 @@ func (agent *DetectionAgent) VerifyViolation(ctx context.Context, scanData *mode
 	logger := log.FromContext(ctx)
 	userPrompt := getVerificationUserPrompt(scanData, violation)
 	options := &clients.GenerateOptions{
-		MaxTokens:    2048, // Less than initial detection since we're just verifying
+		MaxTokens:    4096,
 		ResponseType: "application/json",
 		Temperature:  1.0,
 		Schema: clients.GenerateOptionSchema{
