@@ -1,31 +1,19 @@
 package utils
 
 import (
-	"strings"
-
 	"github.com/DataDog/datadog-saist/internal/model"
 )
 
+// InferLanguagesFromGlobs returns the set of languages whose extensions are
+// referenced by any of the provided glob patterns. Globs that don't pin a
+// specific language extension (e.g. "**/*") return an empty slice — callers
+// treat those rules as universal/all-language.
 func InferLanguagesFromGlobs(globs []string) []model.Language {
-	// Extremely lightweight inference; extend as you add rules.
-	// We return a set-like slice without duplicates.
 	seen := map[model.Language]struct{}{}
-	add := func(l model.Language) {
-		if l != model.LanguageUnknown {
-			seen[l] = struct{}{}
-		}
-	}
-
 	for _, g := range globs {
-		s := strings.ToLower(g)
-		switch {
-		case strings.Contains(s, ".go"):
-			add(model.Go)
-		case strings.Contains(s, ".java"):
-			add(model.Java)
-		case strings.Contains(s, ".py"):
-			add(model.Python)
-			// add more as needed
+		lang := model.GetLanguage(g)
+		if lang != model.LanguageUnknown {
+			seen[lang] = struct{}{}
 		}
 	}
 
