@@ -30,6 +30,7 @@ func PythonGetTags(data GetFunctionData) ([]model.Tag, error) {
 	defer query.Close()
 
 	queryCursor := treesitter.NewQueryCursor()
+	defer queryCursor.Close()
 	matches := queryCursor.Matches(query, data.root, nil)
 	captureNames := query.CaptureNames()
 	for {
