@@ -15,6 +15,8 @@ import (
 	treesitterpython "github.com/tree-sitter/tree-sitter-python/bindings/go"
 
 	treesitterjavascript "github.com/tree-sitter/tree-sitter-javascript/bindings/go"
+
+	treesittertypescript "github.com/tree-sitter/tree-sitter-typescript/bindings/go"
 )
 
 const (
@@ -49,6 +51,12 @@ var contextRetrievers = map[model.Language]ContextRetriever{
 	model.JavaScript: {
 		Language:        treesitter.NewLanguage(treesitterjavascript.Language()),
 		FunctionGetTags: JavaScriptGetTags,
+	},
+	model.TypeScript: {
+		// TSX parser is a superset of TS; using it for all .ts/.tsx/.mts/.cts keeps
+		// the retriever map keyed by language rather than per-extension.
+		Language:        treesitter.NewLanguage(treesittertypescript.LanguageTSX()),
+		FunctionGetTags: TypeScriptGetTags,
 	},
 }
 

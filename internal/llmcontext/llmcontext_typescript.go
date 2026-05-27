@@ -6,10 +6,10 @@ import (
 
 	"github.com/DataDog/datadog-saist/internal/model"
 	treesitter "github.com/tree-sitter/go-tree-sitter"
-	treesitterjavascript "github.com/tree-sitter/tree-sitter-javascript/bindings/go"
+	treesittertypescript "github.com/tree-sitter/tree-sitter-typescript/bindings/go"
 )
 
-var JavaScriptFunctionsToNotRegister = map[string]struct{}{
+var TypeScriptFunctionsToNotRegister = map[string]struct{}{
 	"describe":   {},
 	"it":         {},
 	"test":       {},
@@ -19,13 +19,13 @@ var JavaScriptFunctionsToNotRegister = map[string]struct{}{
 	"afterAll":   {},
 }
 
-//go:embed tree-sitter-tags/javascript.scm
-var javascriptTagsQuery []byte
+//go:embed tree-sitter-tags/typescript.scm
+var typescriptTagsQuery []byte
 
-func JavaScriptGetTags(data GetFunctionData) ([]model.Tag, error) {
+func TypeScriptGetTags(data GetFunctionData) ([]model.Tag, error) {
 	res := make([]model.Tag, 0)
 
-	query, err := treesitter.NewQuery(treesitter.NewLanguage(treesitterjavascript.Language()), string(javascriptTagsQuery))
+	query, err := treesitter.NewQuery(treesitter.NewLanguage(treesittertypescript.LanguageTSX()), string(typescriptTagsQuery))
 	if err != nil {
 		return res, err
 	}
@@ -62,7 +62,7 @@ func JavaScriptGetTags(data GetFunctionData) ([]model.Tag, error) {
 		}
 
 		if tagName != "" {
-			if _, skip := JavaScriptFunctionsToNotRegister[tagName]; skip {
+			if _, skip := TypeScriptFunctionsToNotRegister[tagName]; skip {
 				continue
 			}
 			res = append(res, model.Tag{

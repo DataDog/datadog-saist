@@ -10,6 +10,7 @@ import (
 	treesitter "github.com/tree-sitter/go-tree-sitter"
 	treesitterjavascript "github.com/tree-sitter/tree-sitter-javascript/bindings/go"
 	treesitterpython "github.com/tree-sitter/tree-sitter-python/bindings/go"
+	treesittertypescript "github.com/tree-sitter/tree-sitter-typescript/bindings/go"
 )
 
 // Go tests
@@ -309,6 +310,180 @@ function actualCode() {}
 	}
 
 	tags, err := JavaScriptGetTags(data)
+	assert.NoError(t, err)
+
+	names := make([]string, len(tags))
+	for i, tag := range tags {
+		names[i] = tag.Name
+	}
+	assert.NotContains(t, names, "describe")
+	assert.NotContains(t, names, "it")
+	assert.NotContains(t, names, "beforeEach")
+	assert.NotContains(t, names, "afterEach")
+	assert.Contains(t, names, "actualCode")
+}
+
+// TypeScript tests
+
+func TestGetContextFromFileTypeScript(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+
+	err := os.WriteFile(
+		filepath.Join(tmpDir, "app.ts"),
+		[]byte(`interface Request {
+  body: string;
+}
+
+class Server {
+  handleRequest(req: Request): void {
+    processInput(req.body);
+  }
+}
+
+function processInput(data: string): string {
+  return data;
+}
+`),
+		0644,
+	)
+	assert.NoError(t, err)
+
+	llmContext, err := GetContextFromFile(tmpDir, "app.ts")
+	assert.NoError(t, err)
+	assert.Equal(t, model.TypeScript, llmContext.Language)
+
+	names := make([]string, len(llmContext.Tags))
+	for i, tag := range llmContext.Tags {
+		names[i] = tag.Name
+	}
+	assert.Contains(t, names, "Request")
+	assert.Contains(t, names, "Server")
+	assert.Contains(t, names, "handleRequest")
+	assert.Contains(t, names, "processInput")
+}
+
+func TestTypeScriptGetTags_TypeScriptSpecificDefinitions(t *testing.T) {
+	t.Parallel()
+	code := `interface User {
+  id: number;
+  name: string;
+}
+
+type UserId = string | number;
+
+enum Role {
+  Admin,
+  Viewer,
+}
+
+abstract class Base {
+  abstract render(): void;
+}
+
+class Concrete extends Base {
+  render(): void {}
+}
+`
+	parser := treesitter.NewParser()
+	defer parser.Close()
+	parser.SetLanguage(treesitter.NewLanguage(treesittertypescript.LanguageTSX()))
+
+	tree := parser.Parse([]byte(code), nil)
+	defer tree.Close()
+
+	data := GetFunctionData{
+		root:     tree.RootNode(),
+		path:     "app.ts",
+		code:     []byte(code),
+		language: model.TypeScript,
+	}
+
+	tags, err := TypeScriptGetTags(data)
+	assert.NoError(t, err)
+
+	names := make([]string, len(tags))
+	for i, tag := range tags {
+		names[i] = tag.Name
+	}
+	assert.Contains(t, names, "User")
+	assert.Contains(t, names, "UserId")
+	assert.Contains(t, names, "Role")
+	assert.Contains(t, names, "Base")
+	assert.Contains(t, names, "Concrete")
+	assert.Contains(t, names, "render")
+}
+
+func TestTypeScriptGetTags_TSXComponents(t *testing.T) {
+	t.Parallel()
+	code := `import * as React from "react";
+
+interface Props {
+  label: string;
+}
+
+function Button(props: Props) {
+  return <button>{props.label}</button>;
+}
+
+class Panel extends React.Component<Props> {
+  render() {
+    return <div>{this.props.label}</div>;
+  }
+}
+`
+	parser := treesitter.NewParser()
+	defer parser.Close()
+	parser.SetLanguage(treesitter.NewLanguage(treesittertypescript.LanguageTSX()))
+
+	tree := parser.Parse([]byte(code), nil)
+	defer tree.Close()
+
+	data := GetFunctionData{
+		root:     tree.RootNode(),
+		path:     "Button.tsx",
+		code:     []byte(code),
+		language: model.TypeScript,
+	}
+
+	tags, err := TypeScriptGetTags(data)
+	assert.NoError(t, err)
+
+	names := make([]string, len(tags))
+	for i, tag := range tags {
+		names[i] = tag.Name
+	}
+	assert.Contains(t, names, "Props")
+	assert.Contains(t, names, "Button")
+	assert.Contains(t, names, "Panel")
+	assert.Contains(t, names, "render")
+}
+
+func TestTypeScriptGetTags_FilteredFunctions(t *testing.T) {
+	t.Parallel()
+	code := `describe("suite", () => {
+  it("does something", () => {});
+  beforeEach(() => {});
+  afterEach(() => {});
+});
+
+function actualCode() {}
+`
+	parser := treesitter.NewParser()
+	defer parser.Close()
+	parser.SetLanguage(treesitter.NewLanguage(treesittertypescript.LanguageTSX()))
+
+	tree := parser.Parse([]byte(code), nil)
+	defer tree.Close()
+
+	data := GetFunctionData{
+		root:     tree.RootNode(),
+		path:     "app.ts",
+		code:     []byte(code),
+		language: model.TypeScript,
+	}
+
+	tags, err := TypeScriptGetTags(data)
 	assert.NoError(t, err)
 
 	names := make([]string, len(tags))

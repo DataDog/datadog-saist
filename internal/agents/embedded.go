@@ -20,6 +20,7 @@ var languageGlobs = map[string][]string{
 	"python":     {"**/*.py"},
 	"csharp":     {"**/*.cs"},
 	"javascript": {"**/*.js", "**/*.jsx", "**/*.mjs"},
+	"typescript": {"**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"},
 }
 
 // LoadLocalRules returns one api.AiPrompt per embedded *.md file in this
