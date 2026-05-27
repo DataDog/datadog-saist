@@ -16,6 +16,7 @@ import (
 // how many characters per token on average
 const CHARS_PER_TOKEN = 5
 const MAX_TOKENS_IN_PROMPT = 8000
+const maxRelatedFiles = 10
 
 // PromptTemplate is a simple wrapper around Go's text/template
 type PromptTemplate struct {
@@ -73,6 +74,9 @@ func BuildDetectionUserPrompt(ctx context.Context, detectionContext *model.Detec
 		accumulated := header
 
 		for _, relatedFile := range detectionContext.RelatedFiles {
+			if len(includedFiles) >= maxRelatedFiles {
+				break
+			}
 			entry := "\n### " + relatedFile.Path + "\n" + "```\n" + relatedFile.Content + "\n```\n\n"
 			candidate := accumulated + entry
 			tempPrompt := strings.ReplaceAll(userTemplate, "<relatedFilesInformation>", candidate)
