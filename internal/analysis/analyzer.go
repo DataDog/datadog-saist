@@ -89,7 +89,6 @@ const BatchConcurrency = 4
 
 // determineApplicableRules processes files in parallel batches to find which rules apply to each file.
 // It returns ProcessFileResult with applicableRules populated and Scans still nil.
-// Call buildScanDataForResults after indexing to assemble prompts with full context.
 func determineApplicableRules(ctx context.Context, files []fileMeta, ruleProcessor *RuleProcessor) []ProcessFileResult {
 	if len(files) == 0 {
 		return []ProcessFileResult{}
@@ -174,54 +173,6 @@ func determineApplicableRules(ctx context.Context, files []fileMeta, ruleProcess
 	return allResults
 }
 
-// buildScanDataForResults assembles the LLM prompt for every file/rule pair that has applicable rules.
-// This must be called after indexFilesForContext so that aiContext is populated and
-// getRelatedFiles can return cross-file references for the prompt.
-func buildScanDataForResults(ctx context.Context, results []ProcessFileResult, ruleProcessor *RuleProcessor) error {
-	filePool, err := ants.NewPool(ruleProcessor.opts.FileConcurrency)
-	if err != nil {
-		return fmt.Errorf("error creating file worker pool: %v", err)
-	}
-	defer filePool.Release()
-
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-	var buildErrors []error
-
-	for i := range results {
-		if len(results[i].applicableRules) == 0 {
-			continue
-		}
-
-		wg.Add(1)
-		idx := i
-		err := filePool.Submit(func() {
-			defer wg.Done()
-			if ctx.Err() != nil {
-				return
-			}
-
-			if err := ruleProcessor.BuildScanDataForResult(ctx, &results[idx]); err != nil {
-				mu.Lock()
-				buildErrors = append(buildErrors, err)
-				mu.Unlock()
-				log.FromContext(ctx).Warnf("Error building scan data for %s: %v", results[idx].RelPath, err)
-			}
-		})
-		if err != nil {
-			log.FromContext(ctx).Warnf("Error submitting build task: %v", err)
-			wg.Done()
-		}
-	}
-
-	wg.Wait()
-
-	if len(buildErrors) > 0 {
-		log.FromContext(ctx).Warnf("Encountered %d errors during scan data building", len(buildErrors))
-	}
-
-	return nil
-}
 
 func countFileRulePairs(m map[string][]string) int {
 	n := 0
@@ -357,23 +308,21 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 		log.FromContext(ctx).Infof("Indexed %d files in %v", len(filesToIndex), time.Since(indexStart))
 	}
 
-	// Phase 3: Build ScanData (and prompts) now that aiContext is populated.
-	// ShouldAnalyze inside BuildScanDataForResult may drop some file/rule pairs, so the
-	// accurate scan count is only available after this call completes.
-	if err := buildScanDataForResults(ctx, allResults, ruleProcessor); err != nil {
-		return nil, err
-	}
-
-	// Count actual scans after filtering (res.Scans is now populated by buildScanDataForResults).
-	filesNeedingScans := 0
-	totalScansNeeded := 0
+	// Phase 3: Build ScanData and run scans in a single concurrent phase.
+	// Merging build+scan into one goroutine per file means each file's content
+	// (FileText, NumberedFileText, UserPrompt — up to 3× file size) is allocated,
+	// used, and released within a single goroutine lifetime. Peak memory is
+	// O(FileConcurrency × file_size) instead of O(all_files × file_size) that
+	// results from building all prompts upfront before scanning starts.
+	filesWithRules := 0
+	totalRules := 0
 	for _, res := range allResults {
-		if len(res.Scans) > 0 {
-			filesNeedingScans++
-			totalScansNeeded += len(res.Scans)
+		if n := len(res.applicableRules); n > 0 {
+			filesWithRules++
+			totalRules += n
 		}
 	}
-	log.FromContext(ctx).Infof("Scan phase: %d files need %d scans", filesNeedingScans, totalScansNeeded)
+	log.FromContext(ctx).Infof("Scan phase: %d files, ~%d rule applications (pre-ShouldAnalyze)", filesWithRules, totalRules)
 
 	scanPhaseStart := time.Now()
 	filePool, err := ants.NewPool(opts.FileConcurrency)
@@ -392,37 +341,40 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 	var resultSync sync.Mutex
 	allFilesResults := make([]model.FileResult, 0)
 	for i := range allResults {
-		res := allResults[i]
-		scansToPerform := res.Scans
-		// Release the ScanData backing array from both allResults and the local res copy.
-		// The goroutine captures res (for res.RelPath) and scansToPerform; without nil-ing
-		// res.Scans here, the closure would pin the full pre-filter scan list (including
-		// FileText/NumberedFileText) for the goroutine's lifetime even when
-		// filterScanDataForDatadogDriver reduces scansToPerform to a smaller subset.
-		res.Scans = nil
-		allResults[i].Scans = nil
-
-		// Datadog driver JSON or local Code Security YAML narrows (file, rule) pairs for scans
-		if effectiveDriver != nil {
-			scansToPerform = filterScanDataForDatadogDriver(effectiveDriver.Files, scansToPerform)
-
-			// if there is no scan to perform (e.g. no rule), do not analyze
-			if len(scansToPerform) == 0 {
-				continue
-			}
+		if len(allResults[i].applicableRules) == 0 {
+			continue
 		}
 
 		filesWg.Add(1)
+		idx := i
 		err := filePool.Submit(func() {
 			defer filesWg.Done()
 
-			// Check if context is already canceled
 			if ctx.Err() != nil {
 				return
 			}
 
-			runScanResult, err :=
-				ruleProcessor.RunScans(ctx, scansToPerform)
+			// Build ScanData inline. File content (FileText, NumberedFileText, UserPrompt)
+			// is allocated here and released when scansToPerform goes out of scope at the
+			// end of this goroutine — never accumulates across all files simultaneously.
+			if err := ruleProcessor.BuildScanDataForResult(ctx, &allResults[idx]); err != nil {
+				log.FromContext(ctx).Warnf("Error building scan data for %s: %v", allResults[idx].RelPath, err)
+				return
+			}
+
+			relPath := allResults[idx].RelPath
+			scansToPerform := allResults[idx].Scans
+			allResults[idx].Scans = nil // release from allResults immediately
+
+			// Datadog driver JSON or local Code Security YAML narrows (file, rule) pairs for scans
+			if effectiveDriver != nil {
+				scansToPerform = filterScanDataForDatadogDriver(effectiveDriver.Files, scansToPerform)
+				if len(scansToPerform) == 0 {
+					return
+				}
+			}
+
+			runScanResult, err := ruleProcessor.RunScans(ctx, scansToPerform)
 			if err != nil {
 				// On rate limit, cancel all workers and capture the error
 				if clients.IsRateLimitError(err) {
@@ -433,12 +385,12 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 					})
 					return
 				}
-				log.FromContext(ctx).Warnf("Failed to run scans for file %s: %v", res.RelPath, err)
+				log.FromContext(ctx).Warnf("Failed to run scans for file %s: %v", relPath, err)
 				return
 			}
 
 			fileResult := model.FileResult{
-				Path:           res.RelPath,
+				Path:           relPath,
 				Violations:     runScanResult.Violations,
 				InputTokens:    runScanResult.FileInputTokens,
 				OutputTokens:   runScanResult.FileOutputTokens,
@@ -451,8 +403,8 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 			resultSync.Unlock()
 		})
 		if err != nil {
-			log.FromContext(ctx).Warnf("Error submitting file '%s': %s", res.RelPath, err)
-			filesWg.Done() // Don't forget to decrement if submit failed
+			log.FromContext(ctx).Warnf("Error submitting file '%s': %s", allResults[i].RelPath, err)
+			filesWg.Done()
 		}
 	}
 

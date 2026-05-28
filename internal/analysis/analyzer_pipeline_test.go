@@ -97,9 +97,14 @@ func main() {}
 	// Phase 2: index BEFORE building scan data (the fix).
 	indexFilesForContext(ctx, tmpDir, files, &aiContext, false)
 
-	// Phase 3: build scan data with populated aiContext.
-	err = buildScanDataForResults(ctx, results, ruleProcessor)
-	assert.NoError(t, err)
+	// Phase 3: build scan data with populated aiContext (matches the merged build+scan phase).
+	for i := range results {
+		if len(results[i].applicableRules) == 0 {
+			continue
+		}
+		err = ruleProcessor.BuildScanDataForResult(ctx, &results[i])
+		assert.NoError(t, err)
+	}
 
 	// Find the ScanData for helper.go and assert the prompt contains main.go's content.
 	var helperPrompt string
