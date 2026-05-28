@@ -126,7 +126,11 @@ func GetModelOrPassthrough(modelStr string, allowPassthrough bool) (Model, error
 }
 
 func GetAllModels() []Model {
-	return []Model{OpenAIGPT5Mini, Gemini25Pro, Gemini25Flash, Gemini2FlashLite, Gemini3Flash}
+	return []Model{
+		OpenAIGPT5Mini, OpenAIGPT52, OpenAIGPT52Codex,
+		Claude45Sonnet, Claude45Haiku,
+		Gemini25Pro, Gemini25Flash, Gemini2FlashLite, Gemini3Flash,
+	}
 }
 
 func GetAllModelStrings() []string {
