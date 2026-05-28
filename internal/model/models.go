@@ -134,12 +134,17 @@ func GetAllModels() []Model {
 }
 
 func GetAllModelStrings() []string {
-	models := GetAllModels()
-	result := make([]string, len(models))
-	for i, model := range models {
-		result[i] = model.String()
+	return []string{
+		OpenAIGPT5MiniName,
+		OpenAIGPT52Name,
+		OpenAIGPT52CodexName,
+		Claude45SonnetInputName,
+		Claude45HaikuInputName,
+		Gemini25ProName,
+		Gemini25FlashName,
+		Gemini2FlashLiteName,
+		Gemini3FlashInputName,
 	}
-	return result
 }
 
 // GetModelByID gets a model by its numeric ID and returns true if found, otherwise false.
