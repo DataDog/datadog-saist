@@ -136,6 +136,7 @@ func readFilesParallel(repoDir string, filePaths []string, logger log.DDSourceLo
 				return
 			}
 			if info.Size() > maxRelatedFileSize {
+				logger.Warnf("Skipping large related file '%s' (%d bytes)", fp, info.Size())
 				return
 			}
 			content, err := os.ReadFile(fullPath) // nolint: gosec
