@@ -136,6 +136,7 @@ jobs:
       - name: Create release
         run: |
           gh release create --draft --generate-notes \
+            --target ${{ github.sha }} \
             ${{ steps.release-version.outputs.tag }} \
             artifacts/*.zip \
             artifacts/checksums.txt
