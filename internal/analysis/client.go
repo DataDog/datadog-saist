@@ -27,7 +27,7 @@ type Violation = model.Violation
 
 func configure(ctx context.Context, directory string, detectionModelStr, validationModelStr string,
 	debug bool, baseURL string, requestTimeoutSec, fileConcurrency int, writePrompts, isAIGateway, aiGuardEnabled bool,
-	apiKey string, jwtToken string, orgID int64, repositoryID string, useLocalPrompts bool) (model.AnalysisOptions, error) {
+	apiKey string, jwtToken string, orgID int64, repositoryID string, useLocalPrompts bool, skipIndexing bool) (model.AnalysisOptions, error) {
 	var rules []modelApi.AiPrompt
 	if useLocalPrompts {
 		var err error
@@ -106,7 +106,7 @@ func configure(ctx context.Context, directory string, detectionModelStr, validat
 		AIGuardEnabled:    aiGuardEnabled,
 		OrgID:             orgID,
 		RepositoryID:      repositoryID,
-		SkipIndexing:      false, // Set to true to skip code indexing
+		SkipIndexing:      skipIndexing,
 		DatadogDriver:     driverConfig,
 	}, nil
 }
@@ -139,12 +139,12 @@ func setAPIKey(modelValue model.Model, baseURL, apiKey string) {
 func RunAnalysis(ctx context.Context, directory string, detectionModelStr, validationModelStr, output string,
 	debug bool, baseURL string, requestTimeoutSec, fileConcurrency int, writePrompts, isAIGateway,
 	aiGuardEnabled bool, apiKey string, jwtToken string, orgID int64, repositoryID string,
-	useLocalPrompts bool) (AnalysisSummary, error) {
+	useLocalPrompts bool, skipIndexing bool) (AnalysisSummary, error) {
 	logger := log.NewDefaultLogger()
 	ctx = ContextWithShimmedLogger(ctx, logger)
 
 	opts, err := configure(ctx, directory, detectionModelStr, validationModelStr, debug, baseURL, requestTimeoutSec,
-		fileConcurrency, writePrompts, isAIGateway, aiGuardEnabled, apiKey, jwtToken, orgID, repositoryID, useLocalPrompts)
+		fileConcurrency, writePrompts, isAIGateway, aiGuardEnabled, apiKey, jwtToken, orgID, repositoryID, useLocalPrompts, skipIndexing)
 	if err != nil {
 		return AnalysisSummary{}, err
 	}
