@@ -20,6 +20,18 @@ type AiContextFile struct {
 	Tags     []Tag    `json:"tags"`
 }
 
+// maxTagsPerName caps how many tag entries are stored per symbol name.
+// RankTagsPerLocality only needs the single closest file (orderedX[0]), so
+// keeping 100 candidates per name is more than sufficient for locality ranking
+// while bounding memory for heavily cross-referenced symbols.
+const maxTagsPerName = 100
+
+// maxTagsPerFile caps the per-file tag list stored in FileContext.
+// GetTagsForFile feeds into collectRelatedFilePaths which only picks one file per tag,
+// so storing more than this provides no benefit while using unbounded memory for
+// files with many symbol definitions/references.
+const maxTagsPerFile = 500
+
 type AiContextProject struct {
 	// for each language, list the files for this language
 	Languages map[Language]map[string]struct{} `json:"languages"`
@@ -102,13 +114,14 @@ func (e *AiContextProject) MergeFileContext(path string, aiContext AiContextFile
 
 	// handle the tags
 	for _, tag := range aiContext.Tags {
-		_, ok := e.Tags[tag.Name]
-		if !ok {
-			e.Tags[tag.Name] = make([]Tag, 0)
+		if len(e.Tags[tag.Name]) < maxTagsPerName {
+			e.Tags[tag.Name] = append(e.Tags[tag.Name], tag)
 		}
-		e.Tags[tag.Name] = append(e.Tags[tag.Name], tag)
 	}
 
-	// Finally, adding the file context
+	// Cap per-file tag list before storing to bound FileContext memory.
+	if len(aiContext.Tags) > maxTagsPerFile {
+		aiContext.Tags = aiContext.Tags[:maxTagsPerFile]
+	}
 	e.FileContext[path] = aiContext
 }

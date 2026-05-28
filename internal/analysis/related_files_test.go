@@ -1,6 +1,7 @@
 package analysis
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -204,6 +205,93 @@ func TestGetRelatedFiles_MultipleDefinitionsRankedByLocality(t *testing.T) {
 	assert.Len(t, relatedFiles, 1)
 	assert.Equal(t, closerFile, relatedFiles[0].Path)
 	assert.Equal(t, closerContent, relatedFiles[0].Content)
+}
+
+func TestGetRelatedFiles_CapsAtMaxRelatedFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Build a project context with more than maxRelatedFiles references
+	tags := make(map[string][]model.Tag)
+	fileContext := make(map[string]model.AiContextFile)
+
+	fileContext["main.go"] = model.AiContextFile{
+		Language: model.Go,
+		Tags:     []model.Tag{},
+	}
+	mainFileTags := make([]model.Tag, 0)
+
+	numFiles := maxRelatedFiles + 5 // More than the cap
+	for i := 0; i < numFiles; i++ {
+		funcName := fmt.Sprintf("Function%d", i)
+		refFile := fmt.Sprintf("src/file%d.go", i)
+
+		// Create the actual file on disk
+		refPath := filepath.Join(tmpDir, refFile)
+		err := os.MkdirAll(filepath.Dir(refPath), 0755)
+		assert.Nil(t, err)
+		err = os.WriteFile(refPath, []byte("func "+funcName+"() {}"), 0644)
+		assert.Nil(t, err)
+
+		mainFileTags = append(mainFileTags, model.Tag{Name: funcName, Path: "main.go", Type: model.TagDefinition})
+		tags[funcName] = []model.Tag{
+			{Name: funcName, Path: "main.go", Type: model.TagDefinition},
+			{Name: funcName, Path: refFile, Type: model.TagReference},
+		}
+		fileContext[refFile] = model.AiContextFile{
+			Language: model.Go,
+			Tags:     []model.Tag{{Name: funcName, Path: refFile, Type: model.TagReference}},
+		}
+	}
+	fileContext["main.go"] = model.AiContextFile{Language: model.Go, Tags: mainFileTags}
+
+	detectionContext := model.DetectionContext{
+		RepositoryDirectory: tmpDir,
+		Path:                "main.go",
+		ProjectContext:      model.AiContextProject{Tags: tags, FileContext: fileContext},
+	}
+
+	relatedFiles, err := getRelatedFiles(&detectionContext, log.NoopLogger())
+	assert.Nil(t, err)
+	assert.LessOrEqual(t, len(relatedFiles), maxRelatedFiles, "should not read more than maxRelatedFiles files")
+}
+
+func TestGetRelatedFiles_SkipsOversizedFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	oversizedFile := "src/huge.go"
+	oversizedPath := filepath.Join(tmpDir, oversizedFile)
+	err := os.MkdirAll(filepath.Dir(oversizedPath), 0755)
+	assert.Nil(t, err)
+	// Write a file larger than maxRelatedFileSize
+	err = os.WriteFile(oversizedPath, make([]byte, maxRelatedFileSize+1), 0644)
+	assert.Nil(t, err)
+
+	detectionContext := model.DetectionContext{
+		RepositoryDirectory: tmpDir,
+		Path:                "main.go",
+		ProjectContext: model.AiContextProject{
+			Tags: map[string][]model.Tag{
+				"BigFunction": {
+					{Name: "BigFunction", Path: "main.go", Type: model.TagDefinition},
+					{Name: "BigFunction", Path: oversizedFile, Type: model.TagReference},
+				},
+			},
+			FileContext: map[string]model.AiContextFile{
+				"main.go": {
+					Language: model.Go,
+					Tags:     []model.Tag{{Name: "BigFunction", Path: "main.go", Type: model.TagDefinition}},
+				},
+				oversizedFile: {
+					Language: model.Go,
+					Tags:     []model.Tag{{Name: "BigFunction", Path: oversizedFile, Type: model.TagReference}},
+				},
+			},
+		},
+	}
+
+	relatedFiles, err := getRelatedFiles(&detectionContext, log.NoopLogger())
+	assert.Nil(t, err)
+	assert.Len(t, relatedFiles, 0, "oversized file should be skipped")
 }
 
 func TestGetRelatedFiles_FileReadError(t *testing.T) {

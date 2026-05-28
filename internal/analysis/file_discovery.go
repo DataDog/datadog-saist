@@ -46,6 +46,10 @@ type candidate struct {
 // Conservative value (16) to limit memory usage and I/O contention.
 const fileDiscoveryWorkers = 16
 
+// maxAnalysisFileSize is the maximum file size eligible for LLM analysis (1 MB).
+// Files larger than this cannot fit within the prompt token budget and are skipped.
+const maxAnalysisFileSize = 1024 * 1024
+
 // DiscoverFiles finds all analyzable files in the directory and returns metadata.
 // Uses two phases: fast directory walk (no I/O), then parallel file read/hash.
 func (fd *FileDiscoverer) DiscoverFiles(ctx context.Context) ([]fileMeta, error) {
@@ -224,6 +228,20 @@ func (fd *FileDiscoverer) processFilesParallel(ctx context.Context, candidates [
 
 // processOneFile reads a single file, checks filters, and returns metadata.
 func (fd *FileDiscoverer) processOneFile(ctx context.Context, c candidate) (fileMeta, bool) {
+	info, err := os.Stat(c.absPath)
+	if err != nil {
+		if fd.debug {
+			log.FromContext(ctx).Debugf("stat error for %s: %v", c.absPath, err)
+		}
+		return fileMeta{}, false
+	}
+	if info.Size() > maxAnalysisFileSize {
+		if fd.debug {
+			log.FromContext(ctx).Debugf("skipping large file %s (%d bytes)", c.absPath, info.Size())
+		}
+		return fileMeta{}, false
+	}
+
 	content, err := os.ReadFile(c.absPath)
 	if err != nil {
 		if fd.debug {

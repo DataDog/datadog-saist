@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"runtime"
 	"slices"
 	"sync"
 	"time"
@@ -391,11 +390,17 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 	var errOnce sync.Once
 	var resultSync sync.Mutex
 	allFilesResults := make([]model.FileResult, 0)
-	for _, res := range allResults {
+	for i := range allResults {
+		res := allResults[i]
 		scansToPerform := res.Scans
+		// Release the ScanData backing array from allResults now; the goroutine below
+		// captures its own scansToPerform copy so file content strings become GC-eligible
+		// as each goroutine completes rather than after the entire scan phase finishes.
+		allResults[i].Scans = nil
+
 		// Datadog driver JSON or local Code Security YAML narrows (file, rule) pairs for scans
 		if effectiveDriver != nil {
-			scansToPerform = filterScanDataForDatadogDriver(effectiveDriver.Files, res.Scans)
+			scansToPerform = filterScanDataForDatadogDriver(effectiveDriver.Files, scansToPerform)
 
 			// if there is no scan to perform (e.g. no rule), do not analyze
 			if len(scansToPerform) == 0 {
@@ -404,7 +409,6 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 		}
 
 		filesWg.Add(1)
-		res := res // nolint:copyloopvar
 		err := filePool.Submit(func() {
 			defer filesWg.Done()
 
@@ -502,13 +506,16 @@ func indexFilesForContext(ctx context.Context, directory string, files []fileMet
 		return
 	}
 
-	nbCpus := runtime.NumCPU()
+	// Cap indexing concurrency independently of CPU count. Each concurrent indexer holds a
+	// tree-sitter parse tree on the C heap (~5–15 MB per file) that the Go GC cannot reclaim.
+	// On a 32-core pod, runtime.NumCPU() would allow 32 concurrent parse trees (~320 MB C-heap).
+	const maxIndexingConcurrency = 8
 	if debug {
-		log.FromContext(ctx).Debugf("Indexing %d files using %d cpus", len(files), nbCpus)
+		log.FromContext(ctx).Debugf("Indexing %d files using %d workers", len(files), maxIndexingConcurrency)
 	}
 
 	// Create indexing worker pool
-	indexPool, err := ants.NewPool(nbCpus)
+	indexPool, err := ants.NewPool(maxIndexingConcurrency)
 	if err != nil {
 		log.FromContext(ctx).Warnf("Failed to create indexing worker pool: %v", err)
 		return
