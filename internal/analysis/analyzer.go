@@ -511,9 +511,10 @@ func indexFilesForContext(ctx context.Context, directory string, files []fileMet
 	}
 
 	// Cap indexing concurrency to bound C-heap pressure from concurrent tree-sitter parse trees
-	// (~5–15 MB each, invisible to the Go GC). Use at most 8 workers, but never more than the
-	// available CPU count so we don't over-provision on small machines.
-	indexingConcurrency := min(8, runtime.NumCPU())
+	// (~5–15 MB each, invisible to the Go GC). Use at most maxIndexingWorkers, but never more
+	// than the available CPU count so we don't over-provision on small machines.
+	const maxIndexingWorkers = 8
+	indexingConcurrency := min(maxIndexingWorkers, runtime.NumCPU())
 	if debug {
 		log.FromContext(ctx).Debugf("Indexing %d files using %d workers", len(files), indexingConcurrency)
 	}
