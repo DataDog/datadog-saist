@@ -393,9 +393,12 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 	for i := range allResults {
 		res := allResults[i]
 		scansToPerform := res.Scans
-		// Release the ScanData backing array from allResults now; the goroutine below
-		// captures its own scansToPerform copy so file content strings become GC-eligible
-		// as each goroutine completes rather than after the entire scan phase finishes.
+		// Release the ScanData backing array from both allResults and the local res copy.
+		// The goroutine captures res (for res.RelPath) and scansToPerform; without nil-ing
+		// res.Scans here, the closure would pin the full pre-filter scan list (including
+		// FileText/NumberedFileText) for the goroutine's lifetime even when
+		// filterScanDataForDatadogDriver reduces scansToPerform to a smaller subset.
+		res.Scans = nil
 		allResults[i].Scans = nil
 
 		// Datadog driver JSON or local Code Security YAML narrows (file, rule) pairs for scans
