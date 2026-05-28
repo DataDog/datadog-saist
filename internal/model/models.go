@@ -39,6 +39,7 @@ const (
 type Model struct {
 	ID          int
 	Name        string
+	CLIName     string // user-facing CLI name; falls back to Name if empty
 	Provider    string
 	RawAPIModel string // When set, this is used directly for API calls (for custom AI Gateway models)
 }
@@ -51,13 +52,13 @@ var (
 	OpenAIGPT52Codex = Model{ID: 13, Name: OpenAIGPT52CodexName, Provider: ProviderOpenAI}
 
 	// Anthropic models
-	Claude45Sonnet = Model{ID: 34, Name: Claude45SonnetName, Provider: ProviderAnthropic}
-	Claude45Haiku  = Model{ID: 35, Name: Claude45HaikuName, Provider: ProviderAnthropic}
+	Claude45Sonnet = Model{ID: 34, Name: Claude45SonnetName, CLIName: Claude45SonnetInputName, Provider: ProviderAnthropic}
+	Claude45Haiku  = Model{ID: 35, Name: Claude45HaikuName, CLIName: Claude45HaikuInputName, Provider: ProviderAnthropic}
 	// Google models
 	Gemini25Pro      = Model{ID: 51, Name: Gemini25ProName, Provider: ProviderGoogle}
 	Gemini25Flash    = Model{ID: 52, Name: Gemini25FlashName, Provider: ProviderGoogle}
 	Gemini2FlashLite = Model{ID: 53, Name: Gemini2FlashLiteName, Provider: ProviderGoogle}
-	Gemini3Flash     = Model{ID: 54, Name: Gemini3FlashName, Provider: ProviderGoogle}
+	Gemini3Flash     = Model{ID: 54, Name: Gemini3FlashName, CLIName: Gemini3FlashInputName, Provider: ProviderGoogle}
 	// Mistral
 	Devstral2 = Model{ID: 71, Name: Devstral2Name, Provider: "mistral"}
 	// Qwen
@@ -65,6 +66,13 @@ var (
 )
 
 func (m Model) String() string {
+	return m.Name
+}
+
+func (m Model) GetCLIName() string {
+	if m.CLIName != "" {
+		return m.CLIName
+	}
 	return m.Name
 }
 
@@ -126,14 +134,18 @@ func GetModelOrPassthrough(modelStr string, allowPassthrough bool) (Model, error
 }
 
 func GetAllModels() []Model {
-	return []Model{OpenAIGPT5Mini, Gemini25Pro, Gemini25Flash, Gemini2FlashLite, Gemini3Flash}
+	return []Model{
+		OpenAIGPT5Mini, OpenAIGPT52, OpenAIGPT52Codex,
+		Claude45Sonnet, Claude45Haiku,
+		Gemini25Pro, Gemini25Flash, Gemini2FlashLite, Gemini3Flash,
+	}
 }
 
 func GetAllModelStrings() []string {
 	models := GetAllModels()
 	result := make([]string, len(models))
-	for i, model := range models {
-		result[i] = model.String()
+	for i, m := range models {
+		result[i] = m.GetCLIName()
 	}
 	return result
 }
