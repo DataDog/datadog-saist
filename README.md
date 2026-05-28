@@ -74,5 +74,6 @@ GOOGLE_API_KEY=<...> ./bin/datadog-saist --directory <path> --output <output-fil
 - `--request-timeout-sec`: Request timeout in seconds (default: 30)
 - `--file-concurrency`: Number of concurrent files to analyze (default: 20)
 - `--write-prompts`: Write prompts to files during analysis
+- `--skip-indexing`: Disable cross-file context indexing. When set, related files are not collected and included in prompts. Reduces memory usage on large repositories at the cost of cross-file vulnerability detection.
 
 

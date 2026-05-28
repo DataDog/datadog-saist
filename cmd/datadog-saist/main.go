@@ -32,6 +32,7 @@ func main() {
 	var aiGuardEnabled bool
 	var jwtToken string
 	var useLocalPrompts bool
+	var skipIndexing bool
 
 	startTimestamp := time.Now()
 
@@ -57,6 +58,8 @@ func main() {
 	flag.StringVar(&jwtToken, "jwt-token", "", "JWT Token to use when fetching prompts")
 	flag.BoolVar(&useLocalPrompts, "local-prompts", false,
 		"Use local markdown files for rule content instead of API content")
+	flag.BoolVar(&skipIndexing, "skip-indexing", false,
+		"Disable cross-file context indexing (reduces memory usage; related files will not be included in prompts)")
 	flag.Parse()
 
 	if directory == "" {
@@ -108,7 +111,7 @@ func main() {
 
 	result, err := analysis.RunAnalysis(context.Background(), directory, detectionModelStr, validationModelStr,
 		output, debug, openaiBaseURL, requestTimeoutSec, fileConcurrency, writePrompts, isAIGateway,
-		aiGuardEnabled, apiKey, jwtToken, 2, "test-repo", useLocalPrompts)
+		aiGuardEnabled, apiKey, jwtToken, 2, "test-repo", useLocalPrompts, skipIndexing)
 
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "error calling RunAnalysis: %s", err)
