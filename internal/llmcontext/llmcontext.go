@@ -1,6 +1,7 @@
 package llmcontext
 
 import (
+	"fmt"
 	"os"
 	"path"
 
@@ -97,6 +98,11 @@ func GetContextFromData(language model.Language, content []byte, filePath string
 	}, nil
 }
 
+// maxIndexFileSize is the maximum file size accepted for tree-sitter indexing.
+// Files larger than this cannot meaningfully contribute to the LLM prompt context
+// and would allocate an oversized C-heap parse tree during indexing.
+const maxIndexFileSize = 1024 * 1024 // 1 MB
+
 func GetContextFromFile(rootDirectory, relativePath string) (*model.AiContextFile, error) {
 	language := model.GetLanguage(relativePath)
 
@@ -104,7 +110,16 @@ func GetContextFromFile(rootDirectory, relativePath string) (*model.AiContextFil
 		return nil, model.ErrInvalidLanguage
 	}
 
-	content, errReadFile := os.ReadFile(path.Join(rootDirectory, relativePath)) // nolint: gosec
+	fullPath := path.Join(rootDirectory, relativePath)
+	info, err := os.Stat(fullPath) // nolint: gosec
+	if err != nil {
+		return nil, err
+	}
+	if info.Size() > maxIndexFileSize {
+		return nil, fmt.Errorf("file too large for indexing (%d bytes): %s", info.Size(), relativePath)
+	}
+
+	content, errReadFile := os.ReadFile(fullPath) // nolint: gosec
 	if errReadFile != nil {
 		return nil, errReadFile
 	}

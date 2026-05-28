@@ -12,6 +12,14 @@ import (
 // maxConcurrentFileReads limits parallel file I/O to prevent resource exhaustion
 const maxConcurrentFileReads = 10
 
+// maxRelatedFiles caps how many related files are collected before any disk I/O occurs.
+// This prevents reading thousands of files into memory for heavily cross-referenced repos.
+const maxRelatedFiles = 10
+
+// maxRelatedFileSize skips individual files larger than this threshold (100 KB).
+// Oversized files are unlikely to fit in the prompt token budget anyway.
+const maxRelatedFileSize = 100 * 1024
+
 // Retrieves related files based on tag analysis.
 // It reads file contents from the filesystem and returns them as DetectionContextRelatedFile structs.
 // Files are read in parallel for better performance.
@@ -35,6 +43,9 @@ func collectRelatedFilePaths(detectionContext *model.DetectionContext) []string 
 
 	// Collect files from definition tags (looking for references)
 	for _, tag := range tags {
+		if len(orderedFiles) >= maxRelatedFiles {
+			break
+		}
 		if tag.Type != model.TagDefinition {
 			continue
 		}
@@ -61,6 +72,9 @@ func collectRelatedFilePaths(detectionContext *model.DetectionContext) []string 
 
 	// Collect files from reference tags (looking for definitions)
 	for _, tag := range tags {
+		if len(orderedFiles) >= maxRelatedFiles {
+			break
+		}
 		if tag.Type != model.TagReference {
 			continue
 		}
@@ -116,6 +130,15 @@ func readFilesParallel(repoDir string, filePaths []string, logger log.DDSourceLo
 			defer func() { <-sem }()
 
 			fullPath := path.Join(repoDir, fp)
+			info, err := os.Stat(fullPath) // nolint: gosec
+			if err != nil {
+				resultCh <- fileResult{path: fp, err: err}
+				return
+			}
+			if info.Size() > maxRelatedFileSize {
+				logger.Warnf("Skipping large related file '%s' (%d bytes)", fp, info.Size())
+				return
+			}
 			content, err := os.ReadFile(fullPath) // nolint: gosec
 			resultCh <- fileResult{path: fp, content: content, err: err}
 		}(filePath)
