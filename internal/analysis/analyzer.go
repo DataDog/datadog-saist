@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime"
 	"slices"
 	"sync"
 	"time"
@@ -509,16 +510,17 @@ func indexFilesForContext(ctx context.Context, directory string, files []fileMet
 		return
 	}
 
-	// Cap indexing concurrency independently of CPU count. Each concurrent indexer holds a
-	// tree-sitter parse tree on the C heap (~5–15 MB per file) that the Go GC cannot reclaim.
-	// On a 32-core pod, runtime.NumCPU() would allow 32 concurrent parse trees (~320 MB C-heap).
-	const maxIndexingConcurrency = 8
+	// Cap indexing concurrency to bound C-heap pressure from concurrent tree-sitter parse trees
+	// (~5–15 MB each, invisible to the Go GC). Use at most maxIndexingWorkers, but never more
+	// than the available CPU count so we don't over-provision on small machines.
+	const maxIndexingWorkers = 8
+	indexingConcurrency := min(maxIndexingWorkers, runtime.NumCPU())
 	if debug {
-		log.FromContext(ctx).Debugf("Indexing %d files using %d workers", len(files), maxIndexingConcurrency)
+		log.FromContext(ctx).Debugf("Indexing %d files using %d workers", len(files), indexingConcurrency)
 	}
 
 	// Create indexing worker pool
-	indexPool, err := ants.NewPool(maxIndexingConcurrency)
+	indexPool, err := ants.NewPool(indexingConcurrency)
 	if err != nil {
 		log.FromContext(ctx).Warnf("Failed to create indexing worker pool: %v", err)
 		return

@@ -120,8 +120,12 @@ func (e *AiContextProject) MergeFileContext(path string, aiContext AiContextFile
 	}
 
 	// Cap per-file tag list before storing to bound FileContext memory.
+	// Use copy into a new slice rather than reslicing: reslicing keeps the full
+	// backing array alive (cap = original length), defeating the memory bound.
 	if len(aiContext.Tags) > maxTagsPerFile {
-		aiContext.Tags = aiContext.Tags[:maxTagsPerFile]
+		capped := make([]Tag, maxTagsPerFile)
+		copy(capped, aiContext.Tags)
+		aiContext.Tags = capped
 	}
 	e.FileContext[path] = aiContext
 }

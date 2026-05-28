@@ -480,13 +480,24 @@ func (agent *DetectionAgent) basicDetection(ctx context.Context, scanData *model
 		// Acquire semaphore before spawning so queued goroutines don't pin scanData in memory.
 		// Without this, all goroutines are spawned immediately and block on sem while holding
 		// a reference to scanData (keeping FileText + NumberedFileText alive until scheduled).
-		sem <- struct{}{}
+		// Select on ctx.Done() so we stop spawning on cancellation (e.g. rate limit) rather
+		// than continuing to cycle through remaining violations one semaphore slot at a time.
+		select {
+		case sem <- struct{}{}:
+		case <-ctx.Done():
+			wg.Wait()
+			return &DetectionResult{
+				Violations:   violations,
+				InputTokens:  inputTokens,
+				OutputTokens: outputTokens,
+				Path:         scanData.RelativeFilePath,
+			}, nil
+		}
 		wg.Add(1)
 		go func(violation model.LLMResultViolation) {
 			defer wg.Done()
 			defer func() { <-sem }()
 
-			// Check context cancellation
 			if ctx.Err() != nil {
 				return
 			}
