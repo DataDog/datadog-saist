@@ -177,6 +177,9 @@ func determineApplicableRules(ctx context.Context, files []fileMeta, ruleProcess
 // buildScanDataForResults assembles the LLM prompt for every file/rule pair that has applicable rules.
 // This must be called after indexFilesForContext so that aiContext is populated and
 // getRelatedFiles can return cross-file references for the prompt.
+//
+// Per-file build failures are treated as best-effort: they are logged as warnings but do not
+// abort the run. Only fatal setup failures (e.g. worker pool creation) are returned as errors.
 func buildScanDataForResults(ctx context.Context, results []ProcessFileResult, ruleProcessor *RuleProcessor) error {
 	filePool, err := ants.NewPool(ruleProcessor.opts.FileConcurrency)
 	if err != nil {
