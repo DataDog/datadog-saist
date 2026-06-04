@@ -25,20 +25,7 @@ Rules:
 - Columns will be normalized to the whole physical line after this response; prefer startColumn=1 and endLine=startLine.
 - Output JSON only with the four location fields: startLine, startColumn, endLine, endColumn.`
 
-const LocationDeterminationUserPrompt = `File: %s
-
-Original detection (from the scanner):
-- startLine: %d, startColumn: %d, endLine: %d, endColumn: %d
-- Finding summary: %s
-
-Verification (already passed — true positive):
-- confidence: %s
-- analysis: %s
-
-Determine the best sink line for reporting this issue. Use the detection region as a hint only; adjust if verification identifies a different sink line.
-
-Numbered source:
-%s
+const LocationDeterminationUserPrompt = `Determine the best sink line for reporting this issue. Use the detection region as a hint only; adjust if verification identifies a different sink line.
 
 Rule / detector prompt that produced the detection:
 %s
@@ -49,7 +36,22 @@ Respond with JSON only:
   "startColumn": <uint>,
   "endLine": <uint>,
   "endColumn": <uint>
-}`
+}
+
+Request-Specific Finding:
+File: %s
+
+Original detection (from the scanner):
+- startLine: %d, startColumn: %d, endLine: %d, endColumn: %d
+- Finding summary: %s
+
+Verification (already passed — true positive):
+- confidence: %s
+- analysis: %s
+
+Numbered source:
+%s
+`
 
 type LocationDeterminationResultData struct {
 	StartLine   uint `json:"startLine"`
@@ -75,6 +77,7 @@ func getLocationDeterminationUserPrompt(
 	}
 	return fmt.Sprintf(
 		LocationDeterminationUserPrompt,
+		scanData.Rule.Content,
 		scanData.RelativeFilePath,
 		violation.StartLine,
 		violation.StartColumn,
@@ -84,7 +87,6 @@ func getLocationDeterminationUserPrompt(
 		verification.Confidence,
 		verification.Reason,
 		numberedCode,
-		scanData.Rule.Content,
 	)
 }
 

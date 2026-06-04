@@ -55,7 +55,8 @@ func TestBuildDetectionUserPrompt(t *testing.T) {
 	result, err := BuildDetectionUserPrompt(context.Background(), &detectionContext)
 	assert.NoError(t, err)
 	assert.NotContains(t, result, "Related Files")
-	assert.Contains(t, result, "Evaluate the following code located in /test/file.java")
+	assert.Contains(t, result, "Evaluate the following code located in "+analyzedFilePathReference)
+	assert.Contains(t, result, "Path: /test/file.java")
 	assert.Contains(t, result, "public class Test {}")
 }
 
@@ -77,7 +78,8 @@ func TestBuildDetectionUserPromptOtherFiles(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Contains(t, result, "Related Files")
 	assert.Contains(t, result, "path/to/foo.go")
-	assert.Contains(t, result, "Evaluate the following code located in /test/file.java")
+	assert.Contains(t, result, "Evaluate the following code located in "+analyzedFilePathReference)
+	assert.Contains(t, result, "Path: /test/file.java")
 	assert.Contains(t, result, "public class Test {}")
 }
 
@@ -103,7 +105,8 @@ func TestBuildDetectionUserPromptOtherFilesTooLarge(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Contains(t, result, "Related Files")
 	assert.Contains(t, result, "path/to/foo.go")
-	assert.Contains(t, result, "Evaluate the following code located in /test/file.java")
+	assert.Contains(t, result, "Evaluate the following code located in "+analyzedFilePathReference)
+	assert.Contains(t, result, "Path: /test/file.java")
 	assert.Contains(t, result, "public class Test {}")
 	assert.NotContains(t, result, "X")
 }
@@ -149,4 +152,29 @@ func TestBuildDetectionUserPrompt_RelatedFilesAllRendered(t *testing.T) {
 	// Verify ordering: alpha appears before beta
 	assert.Less(t, strings.Index(result, "alpha.go"), strings.Index(result, "beta.go"),
 		"related files must appear in the order they were provided")
+}
+
+func TestBuildDetectionUserPrompt_ReusableRulePrefixPrecedesDynamicFileContent(t *testing.T) {
+	ruleContent := "Evaluate <path> for SQL injection:\n<code>\n<relatedFilesInformation>\nReusable example."
+	detectionContext := model.DetectionContext{
+		Language: model.Go,
+		Rule:     api.AiPrompt{ID: "sql-injection", Content: ruleContent},
+		Code:     "func first() {}",
+		Path:     "first.go",
+	}
+
+	firstPrompt, err := BuildDetectionUserPrompt(context.Background(), &detectionContext)
+	assert.NoError(t, err)
+
+	detectionContext.Code = "func second() {}"
+	detectionContext.Path = "second.go"
+	secondPrompt, err := BuildDetectionUserPrompt(context.Background(), &detectionContext)
+	assert.NoError(t, err)
+
+	firstBoundary := strings.Index(firstPrompt, analyzedFileSectionHeader)
+	secondBoundary := strings.Index(secondPrompt, analyzedFileSectionHeader)
+	assert.Positive(t, firstBoundary)
+	assert.Equal(t, firstPrompt[:firstBoundary], secondPrompt[:secondBoundary])
+	assert.Less(t, strings.Index(firstPrompt, "Reusable example."), strings.Index(firstPrompt, "first.go"))
+	assert.Less(t, strings.Index(firstPrompt, "Reusable example."), strings.Index(firstPrompt, "func first() {}"))
 }

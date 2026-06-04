@@ -37,13 +37,7 @@ const VerificationSystemPrompt = `You are a security expert tasked with verifyin
   to determine if this is a violation with absolute confidence, err on the side of caution and consider this to NOT be a violation and set confirmed to 
   false and explain why.`
 
-const VerificationUserPrompt = `A security analysis tool reported the following potential vulnerability:
-
-  File: %s
-  Line: %d
-  Original Finding: %s
-
-  Please verify if this is a real security vulnerability. Where applicable, perform taint analysis to identify:
+const VerificationUserPrompt = `Please verify if the reported finding is a real security vulnerability. Where applicable, perform taint analysis to identify:
   - Source of untrusted data
   - Sink where the dangerous operation occurs  
   - Dataflow from source to sink
@@ -56,18 +50,24 @@ const VerificationUserPrompt = `A security analysis tool reported the following 
   If you require more information to be able to determine if this is a violation with absolute confidence, 
   err on the side of caution and consider this to NOT be a violation.
 
-  Code Context:
-  %s
-
-  The prompt that resulted in this analysis result was:
-  %s
-
   Provide your verification result in JSON format:
   {
     "confirmed": true/false,
     "confidence": "high/low",
     "reason": "A short explanation with applicable taint analysis details (Source/Sink/Dataflow/Sanitization) followed by your conclusion. Keep it short (less than 100 words)."
-  }`
+  }
+
+  Rule / detector prompt that produced the finding:
+  %s
+
+  Request-Specific Finding:
+  File: %s
+  Line: %d
+  Original Finding: %s
+
+  Code Context:
+  %s
+`
 
 func getVerificationUserPrompt(scanData *model.ScanData, violation model.LLMResultViolation) string {
 	// Use pre-computed numbered code if available, otherwise compute it
@@ -77,11 +77,11 @@ func getVerificationUserPrompt(scanData *model.ScanData, violation model.LLMResu
 	}
 	return fmt.Sprintf(
 		VerificationUserPrompt,
+		scanData.Rule.Content,
 		scanData.RelativeFilePath,
 		violation.StartLine,
 		violation.Reason,
 		numberedCode, // Code with line numbers (pre-computed)
-		scanData.Rule.Content,
 	)
 }
 

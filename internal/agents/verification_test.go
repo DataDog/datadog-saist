@@ -2,8 +2,11 @@ package agents
 
 import (
 	"context"
+	"strings"
 	"testing"
 
+	"github.com/DataDog/datadog-saist/internal/model"
+	"github.com/DataDog/datadog-saist/internal/model/api"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -179,6 +182,38 @@ func TestParseVerificationResult_WrappedInContentField(t *testing.T) {
 	if result.Reason != "This is a valid SQL injection vulnerability." {
 		t.Errorf("expected Reason to be 'This is a valid SQL injection vulnerability.', got '%s'", result.Reason)
 	}
+}
+
+func TestGetVerificationUserPrompt_ReusableRulePrefixPrecedesDynamicFinding(t *testing.T) {
+	rule := api.AiPrompt{Content: "Reusable SQL injection rule instructions"}
+	firstScanData := &model.ScanData{
+		RelativeFilePath: "first.go",
+		FileText:         "func first() {}",
+		Rule:             &rule,
+	}
+	secondScanData := &model.ScanData{
+		RelativeFilePath: "second.go",
+		FileText:         "func second() {}",
+		Rule:             &rule,
+	}
+
+	firstPrompt := getVerificationUserPrompt(firstScanData, model.LLMResultViolation{
+		StartLine: 1,
+		Reason:    "first finding",
+	})
+	secondPrompt := getVerificationUserPrompt(secondScanData, model.LLMResultViolation{
+		StartLine: 2,
+		Reason:    "second finding",
+	})
+
+	firstBoundary := strings.Index(firstPrompt, "Request-Specific Finding:")
+	secondBoundary := strings.Index(secondPrompt, "Request-Specific Finding:")
+	assert.Positive(t, firstBoundary)
+	assert.Positive(t, secondBoundary)
+	assert.Equal(t, firstPrompt[:firstBoundary], secondPrompt[:secondBoundary])
+	assert.Less(t, strings.Index(firstPrompt, rule.Content), firstBoundary)
+	assert.Greater(t, strings.Index(firstPrompt, firstScanData.RelativeFilePath), firstBoundary)
+	assert.Greater(t, strings.Index(firstPrompt, firstScanData.FileText), firstBoundary)
 }
 
 func TestSanitizeJSONString(t *testing.T) {
