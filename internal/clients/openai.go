@@ -195,15 +195,17 @@ func openAIPromptCacheKey(modelName string, orgID int64, systemPrompt, userPromp
 	if cacheablePrefix == "" {
 		return ""
 	}
-	hash := sha256.Sum256([]byte(fmt.Sprintf("%s\x00%d\x00%s\x00%s",
-		modelName, orgID, systemPrompt, cacheablePrefix)))
+	hash := sha256.Sum256(fmt.Appendf(nil, "%s\x00%d\x00%s\x00%s",
+		modelName, orgID, systemPrompt, cacheablePrefix))
 	return fmt.Sprintf("%s:%x", source, hash[:promptCacheKeyHashBytes])
 }
 
 func isOpenAIModelName(modelName string) bool {
 	return strings.HasPrefix(modelName, "openai/") ||
 		strings.HasPrefix(modelName, "gpt-") ||
-		strings.HasPrefix(modelName, "o1") ||
-		strings.HasPrefix(modelName, "o3") ||
-		strings.HasPrefix(modelName, "o4")
+		strings.HasPrefix(modelName, "chatgpt-") ||
+		strings.HasPrefix(modelName, "codex-") ||
+		modelName == "o1" || strings.HasPrefix(modelName, "o1-") ||
+		modelName == "o3" || strings.HasPrefix(modelName, "o3-") ||
+		modelName == "o4" || strings.HasPrefix(modelName, "o4-")
 }

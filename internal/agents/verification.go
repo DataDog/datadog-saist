@@ -10,6 +10,7 @@ import (
 
 	"github.com/DataDog/datadog-saist/internal/log"
 	"github.com/DataDog/datadog-saist/internal/model"
+	"github.com/DataDog/datadog-saist/internal/prompt"
 	"github.com/DataDog/datadog-saist/internal/utils"
 )
 
@@ -39,7 +40,7 @@ const VerificationSystemPrompt = `You are a security expert tasked with verifyin
 
 const VerificationUserPrompt = `Please verify if the reported finding is a real security vulnerability. Where applicable, perform taint analysis to identify:
   - Source of untrusted data
-  - Sink where the dangerous operation occurs  
+  - Sink where the dangerous operation occurs
   - Dataflow from source to sink
   - Any sanitization applied
 
@@ -47,7 +48,7 @@ const VerificationUserPrompt = `Please verify if the reported finding is a real 
   Confirm only if the issue clearly matches the requested rule category and you can name the concrete sink line.
   If the finding is a different vulnerability type than the rule requested, set confirmed=false.
 
-  If you require more information to be able to determine if this is a violation with absolute confidence, 
+  If you require more information to be able to determine if this is a violation with absolute confidence,
   err on the side of caution and consider this to NOT be a violation.
 
   Provide your verification result in JSON format:
@@ -58,31 +59,35 @@ const VerificationUserPrompt = `Please verify if the reported finding is a real 
   }
 
   Rule / detector prompt that produced the finding:
-  %s
+  {{.RuleContent}}
 
   Request-Specific Finding:
-  File: %s
-  Line: %d
-  Original Finding: %s
+  File: {{.FilePath}}
+  Line: {{.StartLine}}
+  Original Finding: {{.OriginalFinding}}
 
   Code Context:
-  %s
+  {{.Code}}
 `
 
+var verificationUserPromptTemplate = prompt.NewPromptTemplate(VerificationUserPrompt)
+
 func getVerificationUserPrompt(scanData *model.ScanData, violation model.LLMResultViolation) string {
-	// Use pre-computed numbered code if available, otherwise compute it
 	numberedCode := scanData.NumberedFileText
 	if numberedCode == "" {
 		numberedCode = utils.AddLineNumbers(scanData.FileText)
 	}
-	return fmt.Sprintf(
-		VerificationUserPrompt,
-		scanData.Rule.Content,
-		scanData.RelativeFilePath,
-		violation.StartLine,
-		violation.Reason,
-		numberedCode, // Code with line numbers (pre-computed)
-	)
+	result, err := verificationUserPromptTemplate.Format(map[string]any{
+		"RuleContent":     scanData.Rule.Content,
+		"FilePath":        scanData.RelativeFilePath,
+		"StartLine":       violation.StartLine,
+		"OriginalFinding": violation.Reason,
+		"Code":            numberedCode,
+	})
+	if err != nil {
+		panic("failed to render VerificationUserPrompt: " + err.Error())
+	}
+	return result
 }
 
 // sanitizeJSONString fixes common LLM JSON output issues like literal newlines in string values

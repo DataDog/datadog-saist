@@ -171,10 +171,11 @@ func TestBuildDetectionUserPrompt_ReusableRulePrefixPrecedesDynamicFileContent(t
 	secondPrompt, err := BuildDetectionUserPrompt(context.Background(), &detectionContext)
 	assert.NoError(t, err)
 
-	firstBoundary := strings.Index(firstPrompt, analyzedFileSectionHeader)
-	secondBoundary := strings.Index(secondPrompt, analyzedFileSectionHeader)
+	firstBoundary := strings.Index(firstPrompt, AnalyzedFileSectionHeader)
+	secondBoundary := strings.Index(secondPrompt, AnalyzedFileSectionHeader)
 	assert.Positive(t, firstBoundary)
 	assert.Equal(t, firstPrompt[:firstBoundary], secondPrompt[:secondBoundary])
-	assert.Less(t, strings.Index(firstPrompt, "Reusable example."), strings.Index(firstPrompt, "first.go"))
-	assert.Less(t, strings.Index(firstPrompt, "Reusable example."), strings.Index(firstPrompt, "func first() {}"))
+	assert.Contains(t, firstPrompt[:firstBoundary], "Reusable example.")
+	assert.NotContains(t, firstPrompt[:firstBoundary], "first.go")
+	assert.NotContains(t, firstPrompt[:firstBoundary], "func first() {}")
 }

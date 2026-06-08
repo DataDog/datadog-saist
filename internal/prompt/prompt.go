@@ -24,8 +24,8 @@ type PromptTemplate struct {
 }
 
 // NewPromptTemplate creates a new prompt template using Go's text/template
-func NewPromptTemplate(templateStr string, _ []string) *PromptTemplate {
-	tmpl, err := template.New("prompt").Parse(templateStr)
+func NewPromptTemplate(templateStr string) *PromptTemplate {
+	tmpl, err := template.New("prompt").Option("missingkey=error").Parse(templateStr)
 	if err != nil {
 		panic(fmt.Sprintf("failed to parse template: %v", err))
 	}
@@ -56,7 +56,7 @@ func buildStableRulePrompt(ruleContent string) string {
 }
 
 func buildAnalyzedFileSection(path, numberedCode string) string {
-	return "\n\n" + analyzedFileSectionHeader + "\n\nPath: " + path + "\n\n```\n" + numberedCode + "\n```\n"
+	return "\n\n" + AnalyzedFileSectionHeader + "\n\nPath: " + path + "\n\n```\n" + numberedCode + "\n```\n"
 }
 
 func BuildDetectionUserPrompt(ctx context.Context, detectionContext *model.DetectionContext, debugEnabled ...bool) (string, error) {

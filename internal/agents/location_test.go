@@ -105,7 +105,7 @@ func TestGetLocationDeterminationUserPrompt_ReusableRulePrefixPrecedesDynamicFin
 	assert.Positive(t, firstBoundary)
 	assert.Positive(t, secondBoundary)
 	assert.Equal(t, firstPrompt[:firstBoundary], secondPrompt[:secondBoundary])
-	assert.Less(t, strings.Index(firstPrompt, rule.Content), firstBoundary)
-	assert.Greater(t, strings.Index(firstPrompt, firstScanData.RelativeFilePath), firstBoundary)
-	assert.Greater(t, strings.Index(firstPrompt, firstScanData.FileText), firstBoundary)
+	assert.Contains(t, firstPrompt[:firstBoundary], rule.Content)
+	assert.NotContains(t, firstPrompt[:firstBoundary], firstScanData.RelativeFilePath)
+	assert.NotContains(t, firstPrompt[:firstBoundary], firstScanData.FileText)
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/DataDog/datadog-saist/internal/clients"
 	"github.com/DataDog/datadog-saist/internal/log"
 	"github.com/DataDog/datadog-saist/internal/model"
+	"github.com/DataDog/datadog-saist/internal/prompt"
 	"github.com/DataDog/datadog-saist/internal/utils"
 )
 
@@ -28,7 +29,7 @@ Rules:
 const LocationDeterminationUserPrompt = `Determine the best sink line for reporting this issue. Use the detection region as a hint only; adjust if verification identifies a different sink line.
 
 Rule / detector prompt that produced the detection:
-%s
+{{.RuleContent}}
 
 Respond with JSON only:
 {
@@ -39,18 +40,18 @@ Respond with JSON only:
 }
 
 Request-Specific Finding:
-File: %s
+File: {{.FilePath}}
 
 Original detection (from the scanner):
-- startLine: %d, startColumn: %d, endLine: %d, endColumn: %d
-- Finding summary: %s
+- startLine: {{.StartLine}}, startColumn: {{.StartColumn}}, endLine: {{.EndLine}}, endColumn: {{.EndColumn}}
+- Finding summary: {{.FindingSummary}}
 
 Verification (already passed — true positive):
-- confidence: %s
-- analysis: %s
+- confidence: {{.VerificationConfidence}}
+- analysis: {{.VerificationReason}}
 
 Numbered source:
-%s
+{{.Code}}
 `
 
 type LocationDeterminationResultData struct {
@@ -66,6 +67,8 @@ type LocationDeterminationResult struct {
 	OutputTokens int32
 }
 
+var locationDeterminationUserPromptTemplate = prompt.NewPromptTemplate(LocationDeterminationUserPrompt)
+
 func getLocationDeterminationUserPrompt(
 	scanData *model.ScanData,
 	violation model.LLMResultViolation,
@@ -75,19 +78,22 @@ func getLocationDeterminationUserPrompt(
 	if numberedCode == "" {
 		numberedCode = utils.AddLineNumbers(scanData.FileText)
 	}
-	return fmt.Sprintf(
-		LocationDeterminationUserPrompt,
-		scanData.Rule.Content,
-		scanData.RelativeFilePath,
-		violation.StartLine,
-		violation.StartColumn,
-		violation.EndLine,
-		violation.EndColumn,
-		violation.Reason,
-		verification.Confidence,
-		verification.Reason,
-		numberedCode,
-	)
+	result, err := locationDeterminationUserPromptTemplate.Format(map[string]any{
+		"RuleContent":            scanData.Rule.Content,
+		"FilePath":               scanData.RelativeFilePath,
+		"StartLine":              violation.StartLine,
+		"StartColumn":            violation.StartColumn,
+		"EndLine":                violation.EndLine,
+		"EndColumn":              violation.EndColumn,
+		"FindingSummary":         violation.Reason,
+		"VerificationConfidence": verification.Confidence,
+		"VerificationReason":     verification.Reason,
+		"Code":                   numberedCode,
+	})
+	if err != nil {
+		panic("failed to render LocationDeterminationUserPrompt: " + err.Error())
+	}
+	return result
 }
 
 func validateLocationDetermination(d LocationDeterminationResultData) error {
