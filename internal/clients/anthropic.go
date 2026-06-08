@@ -21,7 +21,7 @@ type anthropicRequest struct {
 	Model        string                 `json:"model"`
 	MaxTokens    int                    `json:"max_tokens"`
 	Messages     []anthropicMessage     `json:"messages"`
-	System       string                 `json:"system,omitempty"`
+	System       []anthropicTextBlock   `json:"system,omitempty"`
 	OutputConfig *anthropicOutputConfig `json:"output_config,omitempty"`
 }
 
@@ -36,7 +36,17 @@ type anthropicResponseFormat struct {
 
 type anthropicMessage struct {
 	Role    string `json:"role"`
-	Content string `json:"content"`
+	Content any    `json:"content"`
+}
+
+type anthropicTextBlock struct {
+	Type         string                 `json:"type"`
+	Text         string                 `json:"text"`
+	CacheControl *anthropicCacheControl `json:"cache_control,omitempty"`
+}
+
+type anthropicCacheControl struct {
+	Type string `json:"type"`
 }
 
 type anthropicResponse struct {
@@ -50,8 +60,10 @@ type anthropicContent struct {
 }
 
 type anthropicUsage struct {
-	InputTokens  int `json:"input_tokens"`
-	OutputTokens int `json:"output_tokens"`
+	InputTokens              int `json:"input_tokens"`
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+	OutputTokens             int `json:"output_tokens"`
 }
 
 func NewAnthropicClient(ctx context.Context, model string) (*AnthropicClient, error) {
@@ -75,27 +87,7 @@ func NewAnthropicClient(ctx context.Context, model string) (*AnthropicClient, er
 
 func (c *AnthropicClient) GenerateContent(ctx context.Context, systemPrompt, userPrompt string,
 	options *GenerateOptions) (*GenerateResponse, error) {
-	reqBody := anthropicRequest{
-		Model:     c.model,
-		MaxTokens: options.MaxTokens,
-		System:    systemPrompt,
-		Messages: []anthropicMessage{
-			{
-				Role:    "user",
-				Content: userPrompt,
-			},
-		},
-	}
-
-	// Add response format with schema if provided
-	if options.Schema.JsonSchema != nil {
-		reqBody.OutputConfig = &anthropicOutputConfig{
-			ResponseFormat: &anthropicResponseFormat{
-				Type:       "json_schema",
-				JSONSchema: options.Schema.JsonSchema,
-			},
-		}
-	}
+	reqBody := buildAnthropicRequest(c.model, systemPrompt, userPrompt, options)
 
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
@@ -143,7 +135,61 @@ func (c *AnthropicClient) GenerateContent(ctx context.Context, systemPrompt, use
 
 	return &GenerateResponse{
 		Content:      anthropicResp.Content[0].Text,
-		InputTokens:  int32(anthropicResp.Usage.InputTokens),
+		InputTokens:  int32(anthropicResp.Usage.totalInputTokens()),
 		OutputTokens: int32(anthropicResp.Usage.OutputTokens),
 	}, nil
+}
+
+func (usage anthropicUsage) totalInputTokens() int {
+	return usage.InputTokens + usage.CacheCreationInputTokens + usage.CacheReadInputTokens
+}
+
+func buildAnthropicRequest(model, systemPrompt, userPrompt string, options *GenerateOptions) anthropicRequest {
+	messageContent := any(userPrompt)
+	if cacheablePrefix, dynamicSuffix := splitPromptCacheablePrefix(userPrompt); cacheablePrefix != "" {
+		messageContent = []anthropicTextBlock{
+			{
+				Type: anthropicContentTypeText,
+				Text: cacheablePrefix,
+				CacheControl: &anthropicCacheControl{
+					Type: anthropicCacheControlTypeEphemeral,
+				},
+			},
+			{
+				Type: anthropicContentTypeText,
+				Text: dynamicSuffix,
+			},
+		}
+	}
+
+	reqBody := anthropicRequest{
+		Model:     model,
+		MaxTokens: options.MaxTokens,
+		System: []anthropicTextBlock{
+			{
+				Type: anthropicContentTypeText,
+				Text: systemPrompt,
+				CacheControl: &anthropicCacheControl{
+					Type: anthropicCacheControlTypeEphemeral,
+				},
+			},
+		},
+		Messages: []anthropicMessage{
+			{
+				Role:    "user",
+				Content: messageContent,
+			},
+		},
+	}
+
+	// Add response format with schema if provided
+	if options.Schema.JsonSchema != nil {
+		reqBody.OutputConfig = &anthropicOutputConfig{
+			ResponseFormat: &anthropicResponseFormat{
+				Type:       "json_schema",
+				JSONSchema: options.Schema.JsonSchema,
+			},
+		}
+	}
+	return reqBody
 }

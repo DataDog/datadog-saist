@@ -52,11 +52,9 @@ func (c *GeminiClient) GenerateContent(ctx context.Context, systemPrompt,
 			modelValue.ResponseSchema = schema
 		}
 	}
+	setGeminiSystemInstruction(modelValue, systemPrompt)
 
-	// Gemini handles system and user prompts differently
-	prompt := fmt.Sprintf("System: %s\n\nUser: %s", systemPrompt, userPrompt)
-
-	resp, err := modelValue.GenerateContent(ctx, genai.Text(prompt))
+	resp, err := modelValue.GenerateContent(ctx, genai.Text(userPrompt))
 	if err != nil {
 		// Check for rate limit error (HTTP 429) in the error message
 		if strings.Contains(err.Error(), "429") || strings.Contains(err.Error(), "rate limit") {
@@ -93,4 +91,8 @@ func (c *GeminiClient) GenerateContent(ctx context.Context, systemPrompt,
 		InputTokens:  inputTokens,
 		OutputTokens: outputTokens,
 	}, nil
+}
+
+func setGeminiSystemInstruction(modelValue *genai.GenerativeModel, systemPrompt string) {
+	modelValue.SystemInstruction = genai.NewUserContent(genai.Text(systemPrompt))
 }

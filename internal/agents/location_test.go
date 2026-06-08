@@ -1,8 +1,11 @@
 package agents
 
 import (
+	"strings"
 	"testing"
 
+	"github.com/DataDog/datadog-saist/internal/model"
+	"github.com/DataDog/datadog-saist/internal/model/api"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -71,4 +74,38 @@ func TestLocationFitsFile(t *testing.T) {
 	assert.False(t, locationFitsFile(LocationDeterminationResultData{
 		StartLine: 1, StartColumn: 1, EndLine: 99, EndColumn: 2,
 	}, "a\nb"))
+}
+
+func TestGetLocationDeterminationUserPrompt_ReusableRulePrefixPrecedesDynamicFinding(t *testing.T) {
+	rule := api.AiPrompt{Content: "Reusable path traversal rule instructions"}
+	firstScanData := &model.ScanData{
+		RelativeFilePath: "first.go",
+		FileText:         "func first() {}",
+		Rule:             &rule,
+	}
+	secondScanData := &model.ScanData{
+		RelativeFilePath: "second.go",
+		FileText:         "func second() {}",
+		Rule:             &rule,
+	}
+
+	firstPrompt := getLocationDeterminationUserPrompt(
+		firstScanData,
+		model.LLMResultViolation{Reason: "first finding"},
+		&VerificationResult{VerificationResultData: VerificationResultData{Reason: "first verification"}},
+	)
+	secondPrompt := getLocationDeterminationUserPrompt(
+		secondScanData,
+		model.LLMResultViolation{Reason: "second finding"},
+		&VerificationResult{VerificationResultData: VerificationResultData{Reason: "second verification"}},
+	)
+
+	firstBoundary := strings.Index(firstPrompt, "Request-Specific Finding:")
+	secondBoundary := strings.Index(secondPrompt, "Request-Specific Finding:")
+	assert.Positive(t, firstBoundary)
+	assert.Positive(t, secondBoundary)
+	assert.Equal(t, firstPrompt[:firstBoundary], secondPrompt[:secondBoundary])
+	assert.Contains(t, firstPrompt[:firstBoundary], rule.Content)
+	assert.NotContains(t, firstPrompt[:firstBoundary], firstScanData.RelativeFilePath)
+	assert.NotContains(t, firstPrompt[:firstBoundary], firstScanData.FileText)
 }

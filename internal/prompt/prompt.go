@@ -24,8 +24,8 @@ type PromptTemplate struct {
 }
 
 // NewPromptTemplate creates a new prompt template using Go's text/template
-func NewPromptTemplate(templateStr string, _ []string) *PromptTemplate {
-	tmpl, err := template.New("prompt").Parse(templateStr)
+func NewPromptTemplate(templateStr string) *PromptTemplate {
+	tmpl, err := template.New("prompt").Option("missingkey=error").Parse(templateStr)
 	if err != nil {
 		panic(fmt.Sprintf("failed to parse template: %v", err))
 	}
@@ -49,6 +49,16 @@ func getNumberOfTokens(s string) int {
 	return len(s) / CHARS_PER_TOKEN
 }
 
+func buildStableRulePrompt(ruleContent string) string {
+	rulePrompt := strings.ReplaceAll(ruleContent, "<path>", analyzedFilePathReference)
+	rulePrompt = strings.ReplaceAll(rulePrompt, "<code>", analyzedCodeReference)
+	return strings.ReplaceAll(rulePrompt, "<relatedFilesInformation>", relatedFilesReference)
+}
+
+func buildAnalyzedFileSection(path, numberedCode string) string {
+	return "\n\n" + AnalyzedFileSectionHeader + "\n\nPath: " + path + "\n\n```\n" + numberedCode + "\n```\n"
+}
+
 func BuildDetectionUserPrompt(ctx context.Context, detectionContext *model.DetectionContext, debugEnabled ...bool) (string, error) {
 	systemPrompt := string(SystemPromptBytes)
 
@@ -61,12 +71,11 @@ func BuildDetectionUserPrompt(ctx context.Context, detectionContext *model.Detec
 		allFiles = append(allFiles, relatedFile.Path)
 	}
 
-	userTemplate := detectionContext.Rule.Content
-
-	// Add line numbers to code for accurate LLM line identification
+	// Keep reusable rule instructions before request-specific file content so provider
+	// prefix caches can reuse the longest possible prefix.
+	stableRulePrompt := buildStableRulePrompt(detectionContext.Rule.Content)
 	numberedCode := utils.AddLineNumbers(detectionContext.Code)
-	userTemplate = strings.ReplaceAll(userTemplate, "<code>", numberedCode)
-	userTemplate = strings.ReplaceAll(userTemplate, "<path>", detectionContext.Path)
+	analyzedFileSection := buildAnalyzedFileSection(detectionContext.Path, numberedCode)
 
 	relatedFilesSection := ""
 	if len(detectionContext.RelatedFiles) > 0 {
@@ -79,7 +88,7 @@ func BuildDetectionUserPrompt(ctx context.Context, detectionContext *model.Detec
 			}
 			entry := "\n### " + relatedFile.Path + "\n" + "```\n" + relatedFile.Content + "\n```\n\n"
 			candidate := accumulated + entry
-			tempPrompt := strings.ReplaceAll(userTemplate, "<relatedFilesInformation>", candidate)
+			tempPrompt := stableRulePrompt + analyzedFileSection + candidate
 			nbTokens := systemPromptTokens + getNumberOfTokens(tempPrompt)
 			if nbTokens > MAX_TOKENS_IN_PROMPT {
 				// (Implemented as spread params to avoid needing to refactor all tests)
@@ -101,7 +110,5 @@ func BuildDetectionUserPrompt(ctx context.Context, detectionContext *model.Detec
 		}
 	}
 
-	userTemplate = strings.ReplaceAll(userTemplate, "<relatedFilesInformation>", relatedFilesSection)
-
-	return userTemplate, nil
+	return stableRulePrompt + analyzedFileSection + relatedFilesSection, nil
 }

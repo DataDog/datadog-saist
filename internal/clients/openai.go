@@ -2,11 +2,13 @@ package clients
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/DataDog/datadog-saist/internal/log"
@@ -15,8 +17,10 @@ import (
 )
 
 type OpenAIClient struct {
-	client openai.Client
-	model  string
+	client      openai.Client
+	model       string
+	orgID       int64
+	isAIGateway bool
 }
 
 const (
@@ -121,8 +125,10 @@ func NewOpenAIClient(ctx context.Context, model string, baseURL string, isAIGate
 
 	client := openai.NewClient(clientOptions...)
 	return &OpenAIClient{
-		client: client,
-		model:  model,
+		client:      client,
+		model:       model,
+		orgID:       orgID,
+		isAIGateway: isAIGateway,
 	}, nil
 }
 
@@ -143,6 +149,11 @@ func (c *OpenAIClient) GenerateContent(ctx context.Context, systemPrompt, userPr
 				Strict:      openai.Bool(true),
 			}},
 		},
+	}
+	if c.isAIGateway {
+		if cacheKey := openAIPromptCacheKey(c.model, c.orgID, systemPrompt, userPrompt); cacheKey != "" {
+			params.PromptCacheKey = openai.String(cacheKey)
+		}
 	}
 
 	// Some newer OpenAI models require MaxCompletionTokens instead of MaxTokens
@@ -174,4 +185,27 @@ func (c *OpenAIClient) GenerateContent(ctx context.Context, systemPrompt, userPr
 		InputTokens:  inputTokens,
 		OutputTokens: outputTokens,
 	}, nil
+}
+
+func openAIPromptCacheKey(modelName string, orgID int64, systemPrompt, userPrompt string) string {
+	if !isOpenAIModelName(modelName) {
+		return ""
+	}
+	cacheablePrefix, _ := splitPromptCacheablePrefix(userPrompt)
+	if cacheablePrefix == "" {
+		return ""
+	}
+	hash := sha256.Sum256(fmt.Appendf(nil, "%s\x00%d\x00%s\x00%s",
+		modelName, orgID, systemPrompt, cacheablePrefix))
+	return fmt.Sprintf("%s:%x", source, hash[:promptCacheKeyHashBytes])
+}
+
+func isOpenAIModelName(modelName string) bool {
+	return strings.HasPrefix(modelName, "openai/") ||
+		strings.HasPrefix(modelName, "gpt-") ||
+		strings.HasPrefix(modelName, "chatgpt-") ||
+		strings.HasPrefix(modelName, "codex-") ||
+		modelName == "o1" || strings.HasPrefix(modelName, "o1-") ||
+		modelName == "o3" || strings.HasPrefix(modelName, "o3-") ||
+		modelName == "o4" || strings.HasPrefix(modelName, "o4-")
 }
