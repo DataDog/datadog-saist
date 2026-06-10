@@ -174,7 +174,6 @@ func determineApplicableRules(ctx context.Context, files []fileMeta, ruleProcess
 	return allResults
 }
 
-
 func countFileRulePairs(m map[string][]string) int {
 	n := 0
 	for _, ids := range m {
