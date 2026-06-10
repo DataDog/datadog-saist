@@ -190,7 +190,7 @@ func (agent *DetectionAgent) DetermineViolationLocation(ctx context.Context, sca
 	logger := log.FromContext(ctx)
 	userPrompt := getLocationDeterminationUserPrompt(scanData, violation, verification)
 	options := &clients.GenerateOptions{
-		MaxTokens:    1024,
+		MaxTokens:    4096,
 		ResponseType: "application/json",
 		Temperature:  1.0,
 		Schema: clients.GenerateOptionSchema{

@@ -398,7 +398,7 @@ func (agent *DetectionAgent) basicDetection(ctx context.Context, scanData *model
 	violations := make([]model.Violation, 0)
 
 	options := &clients.GenerateOptions{
-		MaxTokens:    2192,
+		MaxTokens:    8192,
 		ResponseType: "application/json",
 		Temperature:  1.0, // default temperature
 		Schema: clients.GenerateOptionSchema{
@@ -625,7 +625,7 @@ func (agent *DetectionAgent) VerifyViolation(ctx context.Context, scanData *mode
 	logger := log.FromContext(ctx)
 	userPrompt := getVerificationUserPrompt(scanData, violation)
 	options := &clients.GenerateOptions{
-		MaxTokens:    4096,
+		MaxTokens:    8192,
 		ResponseType: "application/json",
 		Temperature:  1.0,
 		Schema: clients.GenerateOptionSchema{
