@@ -353,7 +353,7 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 			}
 
 			scansToPerform := res.Scans
-			res.Scans = nil // release backing array before LLM calls begin
+			res.Scans = nil // release backing array before LLM calls begin (besides FileContent)
 
 			// Datadog driver JSON or local Code Security YAML narrows (file, rule) pairs for scans
 			if effectiveDriver != nil {
