@@ -363,9 +363,6 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 				}
 			}
 
-			totalFilesScanned.Add(1)
-			totalScansRun.Add(int32(len(scansToPerform)))
-
 			runScanResult, err := ruleProcessor.RunScans(ctx, scansToPerform)
 			if err != nil {
 				if clients.IsRateLimitError(err) {
@@ -379,6 +376,11 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 				log.FromContext(ctx).Warnf("Failed to run scans for file %s: %v", res.RelPath, err)
 				return
 			}
+
+			// Count only after RunScans succeeds, so the completion log reflects scans that
+			// actually ran rather than ones that were dispatched and then failed.
+			totalFilesScanned.Add(1)
+			totalScansRun.Add(int32(len(scansToPerform)))
 
 			fileResult := model.FileResult{
 				Path:           res.RelPath,
