@@ -15,7 +15,7 @@ import (
 
 // TestRelatedFilesAppearsInPromptAfterIndexing verifies that the pipeline ordering
 // fix works end-to-end: tree-sitter indexing must populate aiContext before
-// buildScanDataForResults assembles the prompt, so that cross-file references
+// BuildScanDataForResult assembles the prompt, so that cross-file references
 // appear inside the rendered <relatedFilesInformation> section.
 //
 // Prior to the fix, BuildScanDataForResult was called before indexFilesForContext,
@@ -98,8 +98,15 @@ func main() {}
 	indexFilesForContext(ctx, tmpDir, files, &aiContext, false)
 
 	// Phase 3: build scan data with populated aiContext.
-	err = buildScanDataForResults(ctx, results, ruleProcessor)
-	assert.NoError(t, err)
+	// (analyzeFiles now builds scan data inline per file in the scan loop; this
+	// mirrors that by calling BuildScanDataForResult for each result.)
+	for i := range results {
+		if len(results[i].applicableRules) == 0 {
+			continue
+		}
+		err = ruleProcessor.BuildScanDataForResult(ctx, &results[i])
+		assert.NoError(t, err)
+	}
 
 	// Find the ScanData for helper.go and assert the prompt contains main.go's content.
 	var helperPrompt string
