@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/DataDog/datadog-saist/internal/agents"
@@ -326,6 +327,8 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 	var rateLimitErr error
 	var errOnce sync.Once
 	var resultSync sync.Mutex
+	var totalFilesScanned atomic.Int32
+	var totalScansRun atomic.Int32
 	allFilesResults := make([]model.FileResult, 0)
 
 	for i := range allResults {
@@ -361,6 +364,9 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 				}
 			}
 
+			totalFilesScanned.Add(1)
+			totalScansRun.Add(int32(len(scansToPerform)))
+
 			runScanResult, err := ruleProcessor.RunScans(ctx, scansToPerform)
 			if err != nil {
 				if clients.IsRateLimitError(err) {
@@ -395,7 +401,8 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 	}
 
 	filesWg.Wait()
-	log.FromContext(ctx).Infof("Build+scan phase completed in %v", time.Since(scanPhaseStart))
+	log.FromContext(ctx).Infof("Build+scan phase: %d scans across %d files completed in %v",
+		totalScansRun.Load(), totalFilesScanned.Load(), time.Since(scanPhaseStart))
 
 	// Return rate limit error if encountered
 	if rateLimitErr != nil {
