@@ -479,7 +479,7 @@ func (agent *DetectionAgent) basicDetection(ctx context.Context, scanData *model
 	for _, r := range result.Violations {
 		// Acquire semaphore before spawning so queued goroutines don't pin scanData in memory.
 		// Without this, all goroutines are spawned immediately and block on sem while holding
-		// a reference to scanData (keeping FileText + NumberedFileText alive until scheduled).
+		// a reference to scanData (keeping FileContent alive until scheduled).
 		// Select on ctx.Done() so we stop spawning on cancellation (e.g. rate limit) rather
 		// than continuing to cycle through remaining violations one semaphore slot at a time.
 		select {
@@ -520,7 +520,7 @@ func (agent *DetectionAgent) basicDetection(ctx context.Context, scanData *model
 					message = violation.Reason
 				}
 				located := violation
-				if fallbackLocation, ok := physicalLineLocation(scanData.FileText, violation.StartLine); ok {
+				if fallbackLocation, ok := physicalLineLocation(scanData.FileContent.Text, violation.StartLine); ok {
 					located.StartLine = fallbackLocation.StartLine
 					located.StartColumn = fallbackLocation.StartColumn
 					located.EndLine = fallbackLocation.EndLine

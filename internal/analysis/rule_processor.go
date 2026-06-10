@@ -171,7 +171,12 @@ func (rp *RuleProcessor) BuildScanDataForResult(ctx context.Context, result *Pro
 	fm := result.fileMeta
 	fileText := string(data)
 	strippedCode := filtering.StripCodeForDetection(fileText, fm.Language)
-	numberedFileText := utils.AddLineNumbers(fileText)
+
+	// Allocate once and share across all ScanData for this file.
+	fc := &model.FileContent{
+		Text:     fileText,
+		Numbered: utils.AddLineNumbers(fileText),
+	}
 
 	allScanData := make([]model.ScanData, 0, len(result.applicableRules))
 
@@ -219,8 +224,7 @@ func (rp *RuleProcessor) BuildScanDataForResult(ctx context.Context, result *Pro
 			EngineVersion:    model.EngineVersion,
 			RelativeFilePath: fm.RelPath,
 			FileHash:         fm.Hash,
-			FileText:         fileText,
-			NumberedFileText: numberedFileText,
+			FileContent:      fc,
 			Rule:             rule,
 		}
 		allScanData = append(allScanData, scanData)
@@ -251,7 +255,7 @@ func (rp *RuleProcessor) runScan(ctx context.Context, scanData *model.ScanData) 
 		filtered[i].FileHash = scanData.FileHash
 
 		// Generate fingerprint for each violation
-		lineContent := model.GetLineContent(scanData.FileText, filtered[i].StartLine)
+		lineContent := model.GetLineContent(scanData.FileContent.Text, filtered[i].StartLine)
 		filtered[i].Fingerprint = model.GenerateFingerprint(
 			rp.repositoryID,
 			filtered[i].Rule,

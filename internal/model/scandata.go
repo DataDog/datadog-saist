@@ -4,6 +4,13 @@ import (
 	"github.com/DataDog/datadog-saist/internal/model/api"
 )
 
+// FileContent holds file text shared across all ScanData for the same file,
+// avoiding duplicate string allocations when multiple rules apply to one file.
+type FileContent struct {
+	Text     string
+	Numbered string
+}
+
 // ScanData contains all the information needed to execute a scan.
 type ScanData struct {
 	Model Model
@@ -15,10 +22,8 @@ type ScanData struct {
 	RelativeFilePath string
 	FileHash         string
 
-	// Content for verification
-	FileText string
-	// NumberedFileText caches the line-numbered version of FileText (computed once, reused for verification)
-	NumberedFileText string
+	// FileContent is shared across all ScanData built for the same file.
+	FileContent *FileContent
 
 	// Rule
 	Rule *api.AiPrompt

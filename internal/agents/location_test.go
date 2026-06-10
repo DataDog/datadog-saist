@@ -80,12 +80,12 @@ func TestGetLocationDeterminationUserPrompt_ReusableRulePrefixPrecedesDynamicFin
 	rule := api.AiPrompt{Content: "Reusable path traversal rule instructions"}
 	firstScanData := &model.ScanData{
 		RelativeFilePath: "first.go",
-		FileText:         "func first() {}",
+		FileContent:      &model.FileContent{Text: "func first() {}"},
 		Rule:             &rule,
 	}
 	secondScanData := &model.ScanData{
 		RelativeFilePath: "second.go",
-		FileText:         "func second() {}",
+		FileContent:      &model.FileContent{Text: "func second() {}"},
 		Rule:             &rule,
 	}
 
@@ -107,5 +107,5 @@ func TestGetLocationDeterminationUserPrompt_ReusableRulePrefixPrecedesDynamicFin
 	assert.Equal(t, firstPrompt[:firstBoundary], secondPrompt[:secondBoundary])
 	assert.Contains(t, firstPrompt[:firstBoundary], rule.Content)
 	assert.NotContains(t, firstPrompt[:firstBoundary], firstScanData.RelativeFilePath)
-	assert.NotContains(t, firstPrompt[:firstBoundary], firstScanData.FileText)
+	assert.NotContains(t, firstPrompt[:firstBoundary], firstScanData.FileContent.Text)
 }
