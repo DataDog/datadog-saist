@@ -74,36 +74,58 @@ func TestFilterRulesBySastConfig_LegacyConvertedConfigKeepsDefaultRules(t *testi
 	}
 	rules := []api.AiPrompt{{ID: "datadog/go-sqli"}, {ID: "datadog/python-sqli"}}
 	f := false
-	// Legacy converted config: use-default-rulesets: false with only classic SA rulesets.
+	// Legacy (static-analysis.datadog.yaml) with only classic SA rulesets.
 	// use-rulesets is non-empty so IsExplicitAISastDisablement returns false → falls back to all rules.
+	// enabled is empty because "python-design" is not in rulesetToRules (not an AI SAST ruleset).
 	s := &Sast{
 		UseDefaultRulesets: &f,
 		UseRulesets:        &[]string{"python-design"},
 	}
 
-	enabled, out, fallback := FilterRulesBySastConfig(rules, s, rulesetToRules)
+	enabled, out, fallback := FilterRulesBySastConfig(rules, s, rulesetToRules, true)
 
 	assert.True(t, fallback)
 	assert.Empty(t, enabled)
 	assert.Equal(t, rules, out)
 }
 
-func TestFilterRulesBySastConfig_NativeConfigCanDisableSaist(t *testing.T) {
+func TestFilterRulesBySastConfig_NonLegacyClassicOnlyConfigNoFallback(t *testing.T) {
+	rulesetToRules := map[string][]string{
+		"go-ai_sast":     {"datadog/go-sqli"},
+		"python-ai_sast": {"datadog/python-sqli"},
+	}
+	rules := []api.AiPrompt{{ID: "datadog/go-sqli"}, {ID: "datadog/python-sqli"}}
+	f := false
+	// code-security.datadog.yaml (isLegacy=false) with only classic SA rulesets.
+	// Zero filtered rules but non-legacy config → intentional, no fallback.
+	s := &Sast{
+		UseDefaultRulesets: &f,
+		UseRulesets:        &[]string{"python-design"},
+	}
+
+	enabled, out, fallback := FilterRulesBySastConfig(rules, s, rulesetToRules, false)
+
+	assert.False(t, fallback)
+	assert.Empty(t, enabled)
+	assert.Empty(t, out)
+}
+
+func TestFilterRulesBySastConfig_ExplicitOptOutRespectedRegardlessOfLegacy(t *testing.T) {
 	rulesetToRules := map[string][]string{
 		"go-ai_sast": {"datadog/go-sqli"},
 	}
 	rules := []api.AiPrompt{{ID: "datadog/go-sqli"}}
 	f := false
-	// Native v1.1 explicit disablement: use-default-rulesets: false with no use-rulesets.
-	s := &Sast{
-		UseDefaultRulesets: &f,
+	// Explicit disablement: use-default-rulesets: false with no use-rulesets.
+	// Must produce zero rules and no fallback for both legacy and non-legacy files.
+	s := &Sast{UseDefaultRulesets: &f}
+
+	for _, isLegacy := range []bool{true, false} {
+		enabled, out, fallback := FilterRulesBySastConfig(rules, s, rulesetToRules, isLegacy)
+		assert.False(t, fallback, "isLegacy=%v", isLegacy)
+		assert.Empty(t, enabled, "isLegacy=%v", isLegacy)
+		assert.Empty(t, out, "isLegacy=%v", isLegacy)
 	}
-
-	enabled, out, fallback := FilterRulesBySastConfig(rules, s, rulesetToRules)
-
-	assert.False(t, fallback)
-	assert.Empty(t, enabled)
-	assert.Empty(t, out)
 }
 
 func TestFilterRulesBySastConfig_LegacyWithValidSaistRulesetHonorsSelection(t *testing.T) {
@@ -119,7 +141,7 @@ func TestFilterRulesBySastConfig_LegacyWithValidSaistRulesetHonorsSelection(t *t
 		UseRulesets:        &[]string{"python-design", "go-ai_sast"},
 	}
 
-	enabled, out, fallback := FilterRulesBySastConfig(rules, s, rulesetToRules)
+	enabled, out, fallback := FilterRulesBySastConfig(rules, s, rulesetToRules, true)
 
 	assert.False(t, fallback)
 	assert.Equal(t, map[string]bool{"go-ai_sast": true}, enabled)

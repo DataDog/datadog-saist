@@ -78,6 +78,18 @@ func TestLoadLocalFile_ReturnsBasename(t *testing.T) {
 	require.NotNil(t, f.Sast)
 }
 
+func TestIsLegacyConfigBasename(t *testing.T) {
+	// Legacy filenames → true
+	assert.True(t, IsLegacyConfigBasename("static-analysis.datadog.yaml"))
+	assert.True(t, IsLegacyConfigBasename("static-analysis.datadog.yml"))
+	// Empty basename (no file found) → treated as legacy so repositories without any
+	// config file still receive AI SAST coverage via the fallback path.
+	assert.True(t, IsLegacyConfigBasename(""))
+	// SAIST-aware filenames → false
+	assert.False(t, IsLegacyConfigBasename("code-security.datadog.yaml"))
+	assert.False(t, IsLegacyConfigBasename("code-security.datadog.yml"))
+}
+
 func TestLoadLocalFile_LegacyFormatLoadsWithoutError(t *testing.T) {
 	// Legacy static-analysis files (root rulesets: block, no schema-version or schema-version: v1)
 	// are not parsed by datadog-saist for narrowing — the settings API converts them before SAIST
