@@ -188,12 +188,12 @@ func TestGetVerificationUserPrompt_ReusableRulePrefixPrecedesDynamicFinding(t *t
 	rule := api.AiPrompt{Content: "Reusable SQL injection rule instructions"}
 	firstScanData := &model.ScanData{
 		RelativeFilePath: "first.go",
-		FileText:         "func first() {}",
+		FileContent:      &model.FileContent{Text: "func first() {}"},
 		Rule:             &rule,
 	}
 	secondScanData := &model.ScanData{
 		RelativeFilePath: "second.go",
-		FileText:         "func second() {}",
+		FileContent:      &model.FileContent{Text: "func second() {}"},
 		Rule:             &rule,
 	}
 
@@ -213,7 +213,7 @@ func TestGetVerificationUserPrompt_ReusableRulePrefixPrecedesDynamicFinding(t *t
 	assert.Equal(t, firstPrompt[:firstBoundary], secondPrompt[:secondBoundary])
 	assert.Contains(t, firstPrompt[:firstBoundary], rule.Content)
 	assert.NotContains(t, firstPrompt[:firstBoundary], firstScanData.RelativeFilePath)
-	assert.NotContains(t, firstPrompt[:firstBoundary], firstScanData.FileText)
+	assert.NotContains(t, firstPrompt[:firstBoundary], firstScanData.FileContent.Text)
 }
 
 func TestSanitizeJSONString(t *testing.T) {

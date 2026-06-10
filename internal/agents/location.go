@@ -74,9 +74,9 @@ func getLocationDeterminationUserPrompt(
 	violation model.LLMResultViolation,
 	verification *VerificationResult,
 ) string {
-	numberedCode := scanData.NumberedFileText
+	numberedCode := scanData.FileContent.Numbered
 	if numberedCode == "" {
-		numberedCode = utils.AddLineNumbers(scanData.FileText)
+		numberedCode = utils.AddLineNumbers(scanData.FileContent.Text)
 	}
 	result, err := locationDeterminationUserPromptTemplate.Format(map[string]any{
 		"RuleContent":            scanData.Rule.Content,
@@ -221,14 +221,14 @@ func (agent *DetectionAgent) DetermineViolationLocation(ctx context.Context, sca
 		}
 		return nil, err
 	}
-	if !locationFitsFile(locData, scanData.FileText) {
+	if !locationFitsFile(locData, scanData.FileContent.Text) {
 		if agent.agentOption.DebugEnabled {
 			logger.Warnf("[debug] location determination out of range for %s (lines %d-%d)",
 				scanData.RelativeFilePath, locData.StartLine, locData.EndLine)
 		}
 		return nil, fmt.Errorf("location out of file range")
 	}
-	if stableLocation, ok := physicalLineLocation(scanData.FileText, locData.StartLine); ok {
+	if stableLocation, ok := physicalLineLocation(scanData.FileContent.Text, locData.StartLine); ok {
 		locData = stableLocation
 	}
 

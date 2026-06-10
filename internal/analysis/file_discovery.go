@@ -113,7 +113,7 @@ func (fd *FileDiscoverer) collectCandidates(ctx context.Context, base string) ([
 			name := de.Name()
 			if de.IsDir() {
 				switch name {
-				case ".git", "bazel-out", "bazel-bin", "bazel-testlogs", ".cache":
+				case ".git", "bazel-out", "bazel-bin", "bazel-testlogs", ".cache", "node_modules", "dist", ".next":
 					return filepath.SkipDir
 				}
 				return nil

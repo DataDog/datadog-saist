@@ -73,9 +73,9 @@ const VerificationUserPrompt = `Please verify if the reported finding is a real 
 var verificationUserPromptTemplate = prompt.NewPromptTemplate(VerificationUserPrompt)
 
 func getVerificationUserPrompt(scanData *model.ScanData, violation model.LLMResultViolation) string {
-	numberedCode := scanData.NumberedFileText
+	numberedCode := scanData.FileContent.Numbered
 	if numberedCode == "" {
-		numberedCode = utils.AddLineNumbers(scanData.FileText)
+		numberedCode = utils.AddLineNumbers(scanData.FileContent.Text)
 	}
 	result, err := verificationUserPromptTemplate.Format(map[string]any{
 		"RuleContent":     scanData.Rule.Content,
