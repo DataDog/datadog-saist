@@ -520,7 +520,7 @@ func (agent *DetectionAgent) basicDetection(ctx context.Context, scanData *model
 					message = violation.Reason
 				}
 				located := violation
-				if fallbackLocation, ok := physicalLineLocation(scanData.FileText, violation.StartLine); ok {
+				if fallbackLocation, ok := physicalLineLocation(scanData.FileContent.Text, violation.StartLine); ok {
 					located.StartLine = fallbackLocation.StartLine
 					located.StartColumn = fallbackLocation.StartColumn
 					located.EndLine = fallbackLocation.EndLine
