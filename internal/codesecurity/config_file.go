@@ -29,10 +29,9 @@ var localConfigFilenames = []string{
 	"static-analysis.datadog.yml",
 }
 
-// IsLegacyConfigBasename reports whether basename refers to a legacy config filename
-// (static-analysis.datadog.*). An empty basename (no file found) is also treated as
-// legacy, matching code-workload-runner readLocalConfigFile which returns isLegacy=true
-// for the no-file case so that repositories without any config still get AI SAST coverage.
+// IsLegacyConfigBasename reports whether basename is a legacy config filename
+// (static-analysis.datadog.*). An empty basename (no file found) is also treated as legacy
+// so that repositories without any config file still receive AI SAST coverage.
 func IsLegacyConfigBasename(basename string) bool {
 	return basename == "" || basename == "static-analysis.datadog.yaml" || basename == "static-analysis.datadog.yml"
 }

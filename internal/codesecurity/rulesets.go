@@ -137,9 +137,7 @@ func IsExplicitAISastDisablement(s *Sast) bool {
 
 // FilterRulesBySastConfig applies SAIST ruleset filtering. When the filtered result is empty, the
 // fallback to all rules fires only for legacy configs (static-analysis.datadog.* or no local file)
-// and when the config does not represent an explicit AI SAST disablement. code-security.datadog.*
-// configs (isLegacy=false) are treated as intentional SAIST-aware configs — zero filtered rules is
-// respected and the fallback does not fire, matching code-workload-runner shouldUseFallbackRules.
+// and when the config does not represent an explicit AI SAST disablement.
 //
 // The third return value is true when the fallback was applied. Callers should log this so that
 // unexpected no-coverage situations are visible in local runs.

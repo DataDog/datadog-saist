@@ -74,9 +74,6 @@ func TestFilterRulesBySastConfig_LegacyConvertedConfigKeepsDefaultRules(t *testi
 	}
 	rules := []api.AiPrompt{{ID: "datadog/go-sqli"}, {ID: "datadog/python-sqli"}}
 	f := false
-	// Legacy (static-analysis.datadog.yaml) with only classic SA rulesets.
-	// use-rulesets is non-empty so IsExplicitAISastDisablement returns false → falls back to all rules.
-	// enabled is empty because "python-design" is not in rulesetToRules (not an AI SAST ruleset).
 	s := &Sast{
 		UseDefaultRulesets: &f,
 		UseRulesets:        &[]string{"python-design"},
@@ -96,8 +93,6 @@ func TestFilterRulesBySastConfig_NonLegacyClassicOnlyConfigNoFallback(t *testing
 	}
 	rules := []api.AiPrompt{{ID: "datadog/go-sqli"}, {ID: "datadog/python-sqli"}}
 	f := false
-	// code-security.datadog.yaml (isLegacy=false) with only classic SA rulesets.
-	// Zero filtered rules but non-legacy config → intentional, no fallback.
 	s := &Sast{
 		UseDefaultRulesets: &f,
 		UseRulesets:        &[]string{"python-design"},
@@ -116,8 +111,6 @@ func TestFilterRulesBySastConfig_ExplicitOptOutRespectedRegardlessOfLegacy(t *te
 	}
 	rules := []api.AiPrompt{{ID: "datadog/go-sqli"}}
 	f := false
-	// Explicit disablement: use-default-rulesets: false with no use-rulesets.
-	// Must produce zero rules and no fallback for both legacy and non-legacy files.
 	s := &Sast{UseDefaultRulesets: &f}
 
 	for _, isLegacy := range []bool{true, false} {

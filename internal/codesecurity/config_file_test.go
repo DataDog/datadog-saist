@@ -82,8 +82,6 @@ func TestIsLegacyConfigBasename(t *testing.T) {
 	// Legacy filenames → true
 	assert.True(t, IsLegacyConfigBasename("static-analysis.datadog.yaml"))
 	assert.True(t, IsLegacyConfigBasename("static-analysis.datadog.yml"))
-	// Empty basename (no file found) → treated as legacy so repositories without any
-	// config file still receive AI SAST coverage via the fallback path.
 	assert.True(t, IsLegacyConfigBasename(""))
 	// SAIST-aware filenames → false
 	assert.False(t, IsLegacyConfigBasename("code-security.datadog.yaml"))
