@@ -70,7 +70,7 @@ func (w *ResultAggregator) Finalize() error {
 		return fmt.Errorf("error generating sarif report: %v", err)
 	}
 
-	if err := sarif.WriteSarifContent(sarifReport, w.outputPath); err != nil {
+	if err := sarif.WriteSarifContentAtomic(sarifReport, w.outputPath); err != nil {
 		return fmt.Errorf("error writing sarif report: %v", err)
 	}
 
@@ -334,7 +334,7 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 	// Periodically checkpoint partial results so a kill (task timeout, OOM) still
 	// leaves completed (file, rule) pairs on disk to be cached. The snapshot closure
 	// owns synchronization; the checkpointer just persists on a timer.
-	stopCheckpointer := startCheckpointer(ctx, opts, func() []model.FileResult {
+	stopCheckpointer := startCheckpointer(ctx, opts, checkpointInterval, func() []model.FileResult {
 		resultSync.Lock()
 		defer resultSync.Unlock()
 		snapshot := make([]model.FileResult, len(allFilesResults))
@@ -444,14 +444,20 @@ const checkpointInterval = 30 * time.Second
 // returned stop function is called. snapshot must return a consistent copy of the
 // results collected so far; the caller owns its synchronization. Returns a no-op
 // stop when opts.Output is empty (nowhere to checkpoint).
-func startCheckpointer(ctx context.Context, opts *model.AnalysisOptions,
+//
+// stop blocks until the checkpoint goroutine has fully exited, so no checkpoint
+// write can still be in flight when the caller writes the final report to the same
+// path afterward.
+func startCheckpointer(ctx context.Context, opts *model.AnalysisOptions, interval time.Duration,
 	snapshot func() []model.FileResult) (stop func()) {
 	if opts.Output == "" {
 		return func() {}
 	}
 	done := make(chan struct{})
+	finished := make(chan struct{})
 	go func() {
-		ticker := time.NewTicker(checkpointInterval)
+		defer close(finished)
+		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
 			select {
@@ -464,7 +470,10 @@ func startCheckpointer(ctx context.Context, opts *model.AnalysisOptions,
 			}
 		}
 	}()
-	return func() { close(done) }
+	return func() {
+		close(done)
+		<-finished
+	}
 }
 
 // writeCheckpoint generates a SARIF report from the results collected so far and

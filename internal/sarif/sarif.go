@@ -237,22 +237,6 @@ func createResult(violation *model.Violation, ruleDescriptions map[string]string
 	return result
 }
 
-func WriteSarifContent(sarifReport *sarif.Report, output string) error {
-	// Remove the output file if it already exists, otherwise, the file is overwritten
-	if _, err := os.Stat(output); err == nil {
-		err = os.Remove(output)
-		if err != nil {
-			return err
-		}
-	}
-
-	err := sarifReport.WriteFile(output)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 // WriteSarifContentAtomic writes the report to a temp file in the same directory
 // as output and atomically renames it into place, so a reader (or a kill mid-write)
 // never observes a partially written file.
