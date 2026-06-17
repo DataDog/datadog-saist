@@ -334,6 +334,7 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 	// Periodically checkpoint partial results so a kill (task timeout, OOM) still
 	// leaves completed (file, rule) pairs on disk to be cached.
 	checkpointDone := make(chan struct{})
+	// Skip checkpointing when there's no output path to write to.
 	if opts.Output != "" {
 		go func() {
 			ticker := time.NewTicker(checkpointInterval)
