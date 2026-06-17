@@ -332,29 +332,16 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 	allFilesResults := make([]model.FileResult, 0)
 
 	// Periodically checkpoint partial results so a kill (task timeout, OOM) still
-	// leaves completed (file, rule) pairs on disk to be cached.
-	checkpointDone := make(chan struct{})
-	// Skip checkpointing when there's no output path to write to.
-	if opts.Output != "" {
-		go func() {
-			ticker := time.NewTicker(checkpointInterval)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-checkpointDone:
-					return
-				case <-ticker.C:
-					resultSync.Lock()
-					snapshot := make([]model.FileResult, len(allFilesResults))
-					copy(snapshot, allFilesResults)
-					resultSync.Unlock()
-					if err := writeCheckpoint(opts, snapshot); err != nil {
-						log.FromContext(ctx).Warnf("partial SARIF checkpoint failed: %v", err)
-					}
-				}
-			}
-		}()
-	}
+	// leaves completed (file, rule) pairs on disk to be cached. The snapshot closure
+	// owns synchronization; the checkpointer just persists on a timer.
+	stopCheckpointer := startCheckpointer(ctx, opts, func() []model.FileResult {
+		resultSync.Lock()
+		defer resultSync.Unlock()
+		snapshot := make([]model.FileResult, len(allFilesResults))
+		copy(snapshot, allFilesResults)
+		return snapshot
+	})
+	defer stopCheckpointer()
 
 	for i := range allResults {
 		if len(allResults[i].applicableRules) == 0 {
@@ -428,7 +415,6 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 	}
 
 	filesWg.Wait()
-	close(checkpointDone) // stop periodic checkpointing; the final SARIF is written by the caller
 	log.FromContext(ctx).Infof("Build+scan phase: %d scans across %d files completed in %v",
 		totalScansRun.Load(), totalFilesScanned.Load(), time.Since(scanPhaseStart))
 
@@ -453,6 +439,33 @@ func analyzeAndGenerateReport(ctx context.Context, opts *model.AnalysisOptions) 
 // checkpointInterval is how often the scan phase flushes partial results to the
 // SARIF output. Time-based (not per-file) to bound rewrite cost on large repos.
 const checkpointInterval = 30 * time.Second
+
+// startCheckpointer periodically writes partial results to opts.Output until the
+// returned stop function is called. snapshot must return a consistent copy of the
+// results collected so far; the caller owns its synchronization. Returns a no-op
+// stop when opts.Output is empty (nowhere to checkpoint).
+func startCheckpointer(ctx context.Context, opts *model.AnalysisOptions,
+	snapshot func() []model.FileResult) (stop func()) {
+	if opts.Output == "" {
+		return func() {}
+	}
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(checkpointInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				if err := writeCheckpoint(opts, snapshot()); err != nil {
+					log.FromContext(ctx).Warnf("partial SARIF checkpoint failed: %v", err)
+				}
+			}
+		}
+	}()
+	return func() { close(done) }
+}
 
 // writeCheckpoint generates a SARIF report from the results collected so far and
 // atomically writes it to opts.Output.
