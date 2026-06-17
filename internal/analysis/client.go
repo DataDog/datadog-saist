@@ -148,6 +148,7 @@ func RunAnalysis(ctx context.Context, directory string, detectionModelStr, valid
 	if err != nil {
 		return AnalysisSummary{}, err
 	}
+	opts.Output = output
 
 	if opts.Debug {
 		opts.Display()

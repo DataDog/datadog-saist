@@ -202,7 +202,8 @@ func filterScanDataForDatadogDriver(filesAndRules map[string][]string, scans []m
 	return scansToPerform
 }
 
-// analyzeFiles processes files in batches to minimize memory usage
+// analyzeFiles processes files in batches to minimize memory usage.
+// Partial results are periodically checkpointed to opts.Output; if it is empty, checkpointing is disabled.
 // nolint: gocyclo
 func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOptions,
 	aiContext *model.AiContextProject) ([]model.FileResult, error) {
@@ -330,6 +331,30 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 	var totalScansRun atomic.Int32
 	allFilesResults := make([]model.FileResult, 0)
 
+	// Periodically checkpoint partial results so a kill (task timeout, OOM) still
+	// leaves completed (file, rule) pairs on disk to be cached.
+	checkpointDone := make(chan struct{})
+	if opts.Output != "" {
+		go func() {
+			ticker := time.NewTicker(checkpointInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-checkpointDone:
+					return
+				case <-ticker.C:
+					resultSync.Lock()
+					snapshot := make([]model.FileResult, len(allFilesResults))
+					copy(snapshot, allFilesResults)
+					resultSync.Unlock()
+					if err := writeCheckpoint(opts, snapshot); err != nil {
+						log.FromContext(ctx).Warnf("partial SARIF checkpoint failed: %v", err)
+					}
+				}
+			}
+		}()
+	}
+
 	for i := range allResults {
 		if len(allResults[i].applicableRules) == 0 {
 			continue
@@ -402,6 +427,7 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 	}
 
 	filesWg.Wait()
+	close(checkpointDone) // stop periodic checkpointing; the final SARIF is written by the caller
 	log.FromContext(ctx).Infof("Build+scan phase: %d scans across %d files completed in %v",
 		totalScansRun.Load(), totalFilesScanned.Load(), time.Since(scanPhaseStart))
 
@@ -414,13 +440,28 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 	return allFilesResults, nil
 }
 
-// analyzeAndGenerateReport performs analysis and generates SARIF report
+// analyzeAndGenerateReport performs analysis and generates SARIF report.
 func analyzeAndGenerateReport(ctx context.Context, opts *model.AnalysisOptions) ([]model.FileResult, error) {
 	files, aiContext, err := processDirectory(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
 	return analyzeFiles(ctx, files, opts, aiContext)
+}
+
+// checkpointInterval is how often the scan phase flushes partial results to the
+// SARIF output. Time-based (not per-file) to bound rewrite cost on large repos.
+const checkpointInterval = 30 * time.Second
+
+// writeCheckpoint generates a SARIF report from the results collected so far and
+// atomically writes it to opts.Output.
+func writeCheckpoint(opts *model.AnalysisOptions, results []model.FileResult) error {
+	info := sarif.GenerateSarifInformation(opts, results)
+	report, err := sarif.GenerateSarifReport(&info)
+	if err != nil {
+		return err
+	}
+	return sarif.WriteSarifContentAtomic(report, opts.Output)
 }
 
 func processDirectory(ctx context.Context, opts *model.AnalysisOptions) ([]fileMeta, *model.AiContextProject, error) {

@@ -1,12 +1,16 @@
 package sarif
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/DataDog/datadog-saist/internal/model"
 	"github.com/DataDog/datadog-saist/internal/model/api"
 	"github.com/owenrumney/go-sarif/v2/sarif"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestAddPropertyTag(t *testing.T) {
@@ -570,4 +574,66 @@ func TestGenerateSarifReport_RuleIndex(t *testing.T) {
 	assert.Equal(t, "xss", *result2.RuleID)
 	assert.NotNil(t, result2.RuleIndex)
 	assert.Equal(t, uint(1), *result2.RuleIndex)
+}
+
+// reportWithFiles builds a SARIF report with one artifact per given path, used to
+// produce reports of differing sizes for the atomic-write tests.
+func reportWithFiles(t *testing.T, paths ...string) *sarif.Report {
+	t.Helper()
+	results := make([]model.FileResult, 0, len(paths))
+	for _, p := range paths {
+		results = append(results, model.FileResult{Path: p, RulesSucceeded: []string{"datadog/go-sqli"}})
+	}
+	info := SarifReportInformation{FileResults: results}
+	report, err := GenerateSarifReport(&info)
+	require.NoError(t, err)
+	return report
+}
+
+func TestWriteSarifContentAtomic(t *testing.T) {
+	t.Run("writes valid JSON to the output path", func(t *testing.T) {
+		dir := t.TempDir()
+		output := filepath.Join(dir, "out.sarif")
+
+		err := WriteSarifContentAtomic(reportWithFiles(t, "a.go"), output)
+		require.NoError(t, err)
+
+		content, err := os.ReadFile(output)
+		require.NoError(t, err)
+		assert.NotEmpty(t, content)
+		assert.True(t, json.Valid(content), "output should be valid JSON")
+	})
+
+	t.Run("overwrite with shorter content leaves no stale bytes", func(t *testing.T) {
+		dir := t.TempDir()
+		output := filepath.Join(dir, "out.sarif")
+
+		// First write a larger report (many artifacts), then a smaller one.
+		require.NoError(t, WriteSarifContentAtomic(
+			reportWithFiles(t, "a.go", "b.go", "c.go", "d.go", "e.go"), output))
+		large, err := os.ReadFile(output)
+		require.NoError(t, err)
+
+		require.NoError(t, WriteSarifContentAtomic(reportWithFiles(t, "a.go"), output))
+		small, err := os.ReadFile(output)
+		require.NoError(t, err)
+
+		// The second write must fully replace the first: valid JSON, strictly
+		// smaller, and free of any leftover artifact from the larger report.
+		assert.True(t, json.Valid(small), "overwritten output should be valid JSON")
+		assert.Less(t, len(small), len(large))
+		assert.NotContains(t, string(small), "e.go", "stale bytes from the larger write must not remain")
+	})
+
+	t.Run("no temp files remain after a successful write", func(t *testing.T) {
+		dir := t.TempDir()
+		output := filepath.Join(dir, "out.sarif")
+
+		require.NoError(t, WriteSarifContentAtomic(reportWithFiles(t, "a.go"), output))
+
+		entries, err := os.ReadDir(dir)
+		require.NoError(t, err)
+		assert.Len(t, entries, 1, "only the output file should remain")
+		assert.Equal(t, "out.sarif", entries[0].Name())
+	})
 }
