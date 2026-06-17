@@ -29,6 +29,13 @@ var localConfigFilenames = []string{
 	"static-analysis.datadog.yml",
 }
 
+// IsLegacyConfigBasename reports whether basename is a legacy config filename
+// (static-analysis.datadog.*). An empty basename (no file found) is also treated as legacy
+// so that repositories without any config file still receive AI SAST coverage.
+func IsLegacyConfigBasename(basename string) bool {
+	return basename == "" || basename == "static-analysis.datadog.yaml" || basename == "static-analysis.datadog.yml"
+}
+
 // File represents the parts of a v1 Code Security file we need for SAIST scoping.
 type File struct {
 	SchemaVersion string `yaml:"schema-version"`

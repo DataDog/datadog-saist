@@ -234,7 +234,8 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 				configBasename)
 		} else if cfg != nil && cfg.Sast != nil {
 			rulesetToRules := codesecurity.BuildRulesetToRuleIDs(opts.Rules)
-			enabled, filtered, fallbackUsed := codesecurity.FilterRulesBySastConfig(opts.Rules, cfg.Sast, rulesetToRules)
+			isLegacy := codesecurity.IsLegacyConfigBasename(configBasename)
+			enabled, filtered, fallbackUsed := codesecurity.FilterRulesBySastConfig(opts.Rules, cfg.Sast, rulesetToRules, isLegacy)
 			if fallbackUsed {
 				log.FromContext(ctx).Infof(
 					"Code Security config produced zero valid AI SAST rulesets without explicit disablement; using all %d default rules",
