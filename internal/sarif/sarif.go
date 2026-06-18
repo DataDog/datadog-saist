@@ -3,6 +3,7 @@ package sarif
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -236,18 +237,24 @@ func createResult(violation *model.Violation, ruleDescriptions map[string]string
 	return result
 }
 
-func WriteSarifContent(sarifReport *sarif.Report, output string) error {
-	// Remove the output file if it already exists, otherwise, the file is overwritten
-	if _, err := os.Stat(output); err == nil {
-		err = os.Remove(output)
-		if err != nil {
-			return err
-		}
-	}
-
-	err := sarifReport.WriteFile(output)
+// WriteSarifContentAtomic writes the report to a temp file in the same directory
+// as output and atomically renames it into place, so a reader (or a kill mid-write)
+// never observes a partially written file.
+func WriteSarifContentAtomic(sarifReport *sarif.Report, output string) error {
+	dir := filepath.Dir(output)
+	tmp, err := os.CreateTemp(dir, ".sarif-checkpoint-*.tmp")
 	if err != nil {
 		return err
 	}
-	return nil
+	tmpName := tmp.Name()
+	_ = tmp.Close()
+	// Best-effort cleanup; a no-op once the rename below succeeds.
+	defer func() { _ = os.Remove(tmpName) }()
+
+	// WriteFile opens O_CREATE|O_WRONLY without truncating, but the temp file is
+	// freshly created and empty, so the write is clean.
+	if err := sarifReport.WriteFile(tmpName); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, output)
 }

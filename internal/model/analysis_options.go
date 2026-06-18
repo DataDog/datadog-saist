@@ -23,6 +23,9 @@ type AnalysisOptions struct {
 	RepositoryID      string
 	SkipIndexing      bool
 	DatadogDriver     *DatadogDriverConfig
+	// Output is the SARIF output path. Used for the final report write and for
+	// periodic partial-result checkpointing during the scan phase.
+	Output string
 }
 
 // Display prints the AnalysisOptions information to stdout

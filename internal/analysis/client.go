@@ -148,6 +148,7 @@ func RunAnalysis(ctx context.Context, directory string, detectionModelStr, valid
 	if err != nil {
 		return AnalysisSummary{}, err
 	}
+	opts.Output = output
 
 	if opts.Debug {
 		opts.Display()
@@ -164,7 +165,7 @@ func RunAnalysis(ctx context.Context, directory string, detectionModelStr, valid
 		return AnalysisSummary{}, err
 	}
 
-	err = sarif.WriteSarifContent(sarifReport, output)
+	err = sarif.WriteSarifContentAtomic(sarifReport, output)
 	if err != nil {
 		logger.Errorf("error writing sarif report: %v", err)
 	} else {

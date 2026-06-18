@@ -70,7 +70,7 @@ func (w *ResultAggregator) Finalize() error {
 		return fmt.Errorf("error generating sarif report: %v", err)
 	}
 
-	if err := sarif.WriteSarifContent(sarifReport, w.outputPath); err != nil {
+	if err := sarif.WriteSarifContentAtomic(sarifReport, w.outputPath); err != nil {
 		return fmt.Errorf("error writing sarif report: %v", err)
 	}
 
@@ -202,7 +202,8 @@ func filterScanDataForDatadogDriver(filesAndRules map[string][]string, scans []m
 	return scansToPerform
 }
 
-// analyzeFiles processes files in batches to minimize memory usage
+// analyzeFiles processes files in batches to minimize memory usage.
+// Partial results are periodically checkpointed to opts.Output; if it is empty, checkpointing is disabled.
 // nolint: gocyclo
 func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOptions,
 	aiContext *model.AiContextProject) ([]model.FileResult, error) {
@@ -331,6 +332,18 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 	var totalScansRun atomic.Int32
 	allFilesResults := make([]model.FileResult, 0)
 
+	// Periodically checkpoint partial results so a kill (task timeout, OOM) still
+	// leaves completed (file, rule) pairs on disk to be cached. The snapshot closure
+	// owns synchronization; the checkpointer just persists on a timer.
+	stopCheckpointer := startCheckpointer(ctx, opts, checkpointInterval, func() []model.FileResult {
+		resultSync.Lock()
+		defer resultSync.Unlock()
+		snapshot := make([]model.FileResult, len(allFilesResults))
+		copy(snapshot, allFilesResults)
+		return snapshot
+	})
+	defer stopCheckpointer()
+
 	for i := range allResults {
 		if len(allResults[i].applicableRules) == 0 {
 			continue
@@ -415,13 +428,64 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 	return allFilesResults, nil
 }
 
-// analyzeAndGenerateReport performs analysis and generates SARIF report
+// analyzeAndGenerateReport performs analysis and generates SARIF report.
 func analyzeAndGenerateReport(ctx context.Context, opts *model.AnalysisOptions) ([]model.FileResult, error) {
 	files, aiContext, err := processDirectory(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
 	return analyzeFiles(ctx, files, opts, aiContext)
+}
+
+// checkpointInterval is how often the scan phase flushes partial results to the
+// SARIF output. Time-based (not per-file) to bound rewrite cost on large repos.
+const checkpointInterval = 30 * time.Second
+
+// startCheckpointer periodically writes partial results to opts.Output until the
+// returned stop function is called. snapshot must return a consistent copy of the
+// results collected so far; the caller owns its synchronization. Returns a no-op
+// stop when opts.Output is empty (nowhere to checkpoint).
+//
+// stop blocks until the checkpoint goroutine has fully exited, so no checkpoint
+// write can still be in flight when the caller writes the final report to the same
+// path afterward.
+func startCheckpointer(ctx context.Context, opts *model.AnalysisOptions, interval time.Duration,
+	snapshot func() []model.FileResult) (stop func()) {
+	if opts.Output == "" {
+		return func() {}
+	}
+	done := make(chan struct{})
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				if err := writeCheckpoint(opts, snapshot()); err != nil {
+					log.FromContext(ctx).Warnf("partial SARIF checkpoint failed: %v", err)
+				}
+			}
+		}
+	}()
+	return func() {
+		close(done)
+		<-finished
+	}
+}
+
+// writeCheckpoint generates a SARIF report from the results collected so far and
+// atomically writes it to opts.Output.
+func writeCheckpoint(opts *model.AnalysisOptions, results []model.FileResult) error {
+	info := sarif.GenerateSarifInformation(opts, results)
+	report, err := sarif.GenerateSarifReport(&info)
+	if err != nil {
+		return err
+	}
+	return sarif.WriteSarifContentAtomic(report, opts.Output)
 }
 
 func processDirectory(ctx context.Context, opts *model.AnalysisOptions) ([]fileMeta, *model.AiContextProject, error) {
