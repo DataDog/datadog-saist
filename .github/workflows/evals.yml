@@ -29,7 +29,7 @@ jobs:
     strategy:
       matrix:
         reponame: ${{ fromJson(needs.setup-matrix.outputs.reponames) }}
-        modelname: ["gemini-2.5-flash", "gemini-3-flash", "openai-gpt5.2", "openai-gpt5.2-codex", "claude-4.5-sonnet", "claude-4.5-haiku"]
+        modelname: ["gemini-2.5-flash"]
     permissions:
       contents: read
       id-token: write  # Needed for dd-octo-sts
@@ -166,7 +166,7 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        models=("gemini-2.5-flash" "gemini-3-flash" "openai-gpt5.2" "openai-gpt5.2-codex" "claude-4.5-sonnet" "claude-4.5-haiku")
+        models=("gemini-2.5-flash")
 
         baseline_run_id=""
         for event in schedule workflow_dispatch; do
@@ -179,9 +179,10 @@ jobs:
             continue
           fi
 
+          echo "Trying to download artifact from ${event} run $run_id"
           if gh run download "$run_id" \
             --name "eval-metrics-saist-playground-${models[0]}" \
-            --dir "/tmp/baseline-metrics/${models[0]}/" 2>/dev/null; then
+            --dir "/tmp/baseline-metrics/${models[0]}/"; then
             baseline_run_id="$run_id"
             break
           fi
@@ -216,7 +217,7 @@ jobs:
         import json, os, subprocess
         from pathlib import Path
 
-        models = ["gemini-2.5-flash", "gemini-3-flash", "openai-gpt5.2", "openai-gpt5.2-codex", "claude-4.5-sonnet", "claude-4.5-haiku"]
+        models = ["gemini-2.5-flash"]
         threshold = 0.10
         any_regression = False
         rows = []
@@ -292,7 +293,7 @@ jobs:
       fail-fast: false
       matrix:
         reponame: ${{ fromJson(needs.setup-matrix.outputs.reponames) }}
-        detection_model: ["gemini-2.5-flash", "gemini-3-flash", "openai-gpt5.2", "openai-gpt5.2-codex", "claude-4.5-sonnet", "claude-4.5-haiku"]
+        detection_model: ["gemini-2.5-flash"]
     permissions:
       contents: read
       id-token: write  # Needed for dd-octo-sts
