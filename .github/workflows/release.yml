@@ -1,15 +1,16 @@
 name: Release new version
 
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version tag (e.g., v0.0.1-test)'
+        description: 'Version tag (e.g., v1.2.3)'
         required: true
         default: 'v0.0.0-test'
+      prerelease:
+        description: 'Mark as pre-release (test/branch release)'
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -61,11 +62,7 @@ jobs:
         id: version
         shell: bash
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-          else
-            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          fi
+          echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
 
       - name: Build binary
         shell: bash
@@ -123,21 +120,17 @@ jobs:
           sha256sum *.zip > checksums.txt
           cat checksums.txt
 
-      - name: Get release version
-        id: release-version
+      - name: Create release
         shell: bash
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "tag=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-          else
-            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          PRERELEASE_FLAG=""
+          if [[ "${{ github.event.inputs.prerelease }}" == "true" ]]; then
+            PRERELEASE_FLAG="--prerelease"
           fi
-
-      - name: Create release
-        run: |
           gh release create --draft --generate-notes \
             --target ${{ github.sha }} \
-            ${{ steps.release-version.outputs.tag }} \
+            $PRERELEASE_FLAG \
+            ${{ github.event.inputs.version }} \
             artifacts/*.zip \
             artifacts/checksums.txt
         env:
