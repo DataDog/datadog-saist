@@ -7,13 +7,28 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "0 10 1,15 * *"
+  push: #Trigger on all commits
 
 jobs:
+  setup-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      reponames: ${{ steps.set-matrix.outputs.reponames }}
+    steps:
+      - id: set-matrix
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            echo 'reponames=["saist-playground"]' >> $GITHUB_OUTPUT
+          else
+            echo 'reponames=["saist-playground","BenchmarkJava","vulnpy-ibmappsec","gowasp"]' >> $GITHUB_OUTPUT
+          fi
+
   evaluations:
+    needs: setup-matrix
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        reponame: [saist-playground, BenchmarkJava, vulnpy-ibmappsec, gowasp]
+        reponame: ${{ fromJson(needs.setup-matrix.outputs.reponames) }}
         modelname: ["gemini-2.5-flash", "gemini-3-flash", "openai-gpt5.2", "openai-gpt5.2-codex", "claude-4.5-sonnet", "claude-4.5-haiku"]
     permissions:
       contents: read
@@ -117,7 +132,7 @@ jobs:
         name: eval-metrics-${{ matrix.reponame }}-${{ matrix.modelname }}
         path: /tmp/eval-metrics.json
         if-no-files-found: warn
-        retention-days: 1
+        retention-days: 90
 
     - name: Flush metrics before shutdown
       run: |
@@ -130,15 +145,153 @@ jobs:
         # Check final agent status
         sudo datadog-agent status
 
+  eval-summary:
+    name: Post eval summary comment
+    needs: [setup-matrix, evaluations]
+    if: always() && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      pull-requests: write
+    steps:
+    - name: Download current eval artifacts
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      with:
+        pattern: eval-metrics-saist-playground-*
+        path: /tmp/current-metrics/
+        merge-multiple: false
+
+    - name: Find and download baseline artifacts
+      id: baseline
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        models=("gemini-2.5-flash" "gemini-3-flash" "openai-gpt5.2" "openai-gpt5.2-codex" "claude-4.5-sonnet" "claude-4.5-haiku")
+
+        baseline_run_id=""
+        for event in schedule workflow_dispatch; do
+          branch_filter=$([[ "$event" == "schedule" ]] && echo "&branch=main" || echo "")
+          run_id=$(gh api \
+            "repos/${{ github.repository }}/actions/workflows/evals.yml/runs?event=${event}${branch_filter}" \
+            --jq '.workflow_runs[0].id')
+
+          if [[ -z "$run_id" || "$run_id" == "null" ]]; then
+            continue
+          fi
+
+          if gh run download "$run_id" \
+            --name "eval-metrics-saist-playground-${models[0]}" \
+            --dir "/tmp/baseline-metrics/${models[0]}/" 2>/dev/null; then
+            baseline_run_id="$run_id"
+            break
+          fi
+        done
+
+        if [[ -z "$baseline_run_id" ]]; then
+          echo "No baseline found, skipping summary"
+          echo "found=false" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+
+        for model in "${models[@]:1}"; do
+          gh run download "$baseline_run_id" \
+            --name "eval-metrics-saist-playground-${model}" \
+            --dir "/tmp/baseline-metrics/${model}/" 2>/dev/null || true
+        done
+
+        echo "found=true" >> $GITHUB_OUTPUT
+        echo "run_id=$baseline_run_id" >> $GITHUB_OUTPUT
+
+    - name: Post summary comment
+      if: steps.baseline.outputs.found == 'true'
+      continue-on-error: true
+      env:
+        GH_TOKEN: ${{ github.token }}
+        BASELINE_RUN_ID: ${{ steps.baseline.outputs.run_id }}
+        REPO: ${{ github.repository }}
+        COMMIT_SHA: ${{ github.sha }}
+        BRANCH: ${{ github.ref_name }}
+      run: |
+        python3 - <<'EOF'
+        import json, os, subprocess
+        from pathlib import Path
+
+        models = ["gemini-2.5-flash", "gemini-3-flash", "openai-gpt5.2", "openai-gpt5.2-codex", "claude-4.5-sonnet", "claude-4.5-haiku"]
+        threshold = 0.10
+        any_regression = False
+        rows = []
+
+        for model in models:
+            current_path = Path(f"/tmp/current-metrics/eval-metrics-saist-playground-{model}/eval-metrics.json")
+            baseline_path = Path(f"/tmp/baseline-metrics/{model}/eval-metrics.json")
+
+            if not current_path.exists():
+                rows.append(f"| `{model}` | — | — | — | ⚠️ no results |")
+                continue
+
+            current = json.loads(current_path.read_text())
+
+            if not baseline_path.exists():
+                f1 = current.get("f1", "—")
+                p = current.get("precision", "—")
+                r = current.get("recall", "—")
+                fmt = lambda v: f"{v:.3f}" if isinstance(v, float) else v
+                rows.append(f"| `{model}` | {fmt(f1)} | {fmt(p)} | {fmt(r)} | — no baseline |")
+                continue
+
+            baseline = json.loads(baseline_path.read_text())
+
+            def fmt_delta(metric):
+                c, b = current.get(metric), baseline.get(metric)
+                if c is None or b is None:
+                    return "—"
+                delta = c - b
+                sign = "+" if delta >= 0 else ""
+                return f"{b:.3f} → {c:.3f} ({sign}{delta:.3f})"
+
+            f1_c, f1_b = current.get("f1"), baseline.get("f1")
+            regression = f1_c is not None and f1_b is not None and (f1_c - f1_b) < -threshold
+            if regression:
+                any_regression = True
+                print(f"::warning::F1 regression for {model}: {f1_b:.3f} -> {f1_c:.3f}")
+
+            status = "⚠️" if regression else "✅"
+            rows.append(f"| `{model}` | {fmt_delta('f1')} | {fmt_delta('precision')} | {fmt_delta('recall')} | {status} |")
+
+        baseline_run_id = os.environ["BASELINE_RUN_ID"]
+        repo = os.environ["REPO"]
+        commit = os.environ["COMMIT_SHA"]
+        branch = os.environ["BRANCH"]
+        baseline_url = f"https://github.com/{repo}/actions/runs/{baseline_run_id}"
+
+        header = "⚠️ **Eval regressions detected** for `saist-playground`" if any_regression else "✅ **Evals passed** for `saist-playground`"
+        table = "\n".join([
+            "| Model | F1 | Precision | Recall | |",
+            "|-------|-----|-----------|--------|---|",
+        ] + rows)
+
+        body = f"{header}\n\n**Commit:** {commit}\n**Baseline:** [run {baseline_run_id}]({baseline_url})\n\n{table}"
+
+        result = subprocess.run(
+            ["gh", "pr", "comment", branch, "--repo", repo, "--body", body, "--edit-last"],
+        )
+        if result.returncode != 0:
+            # No existing comment to edit, create a new one
+            subprocess.run(
+                ["gh", "pr", "comment", branch, "--repo", repo, "--body", body],
+                check=True
+            )
+        EOF
+
   ddeval:
     name: Run ddeval LLMObs experiment
-    needs: [evaluations]
+    needs: [setup-matrix, evaluations]
     if: always()
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        reponame: [saist-playground, BenchmarkJava, vulnpy-ibmappsec, gowasp]
+        reponame: ${{ fromJson(needs.setup-matrix.outputs.reponames) }}
         detection_model: ["gemini-2.5-flash", "gemini-3-flash", "openai-gpt5.2", "openai-gpt5.2-codex", "claude-4.5-sonnet", "claude-4.5-haiku"]
     permissions:
       contents: read
