@@ -11,7 +11,12 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "0 10 1,15 * *"
-  push: #Trigger on all commits
+  push: #Trigger on all commits except dependency updates and CI-only changes
+    paths-ignore:
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/**'
+      - '**.md'
 
 jobs:
   setup-matrix:
