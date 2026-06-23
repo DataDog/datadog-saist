@@ -3,6 +3,10 @@ name: Run Evaluations
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+
 on:
   workflow_dispatch:
   schedule:
@@ -14,9 +18,11 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       reponames: ${{ steps.set-matrix.outputs.reponames }}
+      modelnames: ${{ steps.set-matrix.outputs.modelnames }}
     steps:
       - id: set-matrix
         run: |
+          echo 'modelnames=["gemini-2.5-flash","gemini-3-flash","openai-gpt5.2","openai-gpt5.2-codex","claude-4.5-sonnet","claude-4.5-haiku"]' >> $GITHUB_OUTPUT
           if [[ "${{ github.event_name }}" == "push" ]]; then
             echo 'reponames=["saist-playground"]' >> $GITHUB_OUTPUT
           else
@@ -29,7 +35,7 @@ jobs:
     strategy:
       matrix:
         reponame: ${{ fromJson(needs.setup-matrix.outputs.reponames) }}
-        modelname: ["gemini-2.5-flash", "gemini-3-flash", "openai-gpt5.2", "openai-gpt5.2-codex", "claude-4.5-sonnet", "claude-4.5-haiku"]
+        modelname: ${{ fromJson(needs.setup-matrix.outputs.modelnames) }}
     permissions:
       contents: read
       id-token: write  # Needed for dd-octo-sts
@@ -148,7 +154,7 @@ jobs:
   eval-summary:
     name: Post eval summary comment
     needs: [setup-matrix, evaluations]
-    if: always() && github.event_name == 'push'
+    if: always() && github.event_name == 'push' && github.ref_name != 'main'
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -169,13 +175,13 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        models=("gemini-2.5-flash" "gemini-3-flash" "openai-gpt5.2" "openai-gpt5.2-codex" "claude-4.5-sonnet" "claude-4.5-haiku")
+        models=($(echo '${{ needs.setup-matrix.outputs.modelnames }}' | python3 -c "import json,sys; print(' '.join(json.load(sys.stdin)))"))
 
         baseline_run_id=""
         for event in schedule workflow_dispatch; do
-          branch_filter=$([[ "$event" == "schedule" ]] && echo "&branch=main" || echo "")
+          branch_filter="&branch=main"
           run_id=$(gh api \
-            "repos/${{ github.repository }}/actions/workflows/evals.yml/runs?event=${event}${branch_filter}" \
+            "repos/${{ github.repository }}/actions/workflows/evals.yml/runs?event=${event}&status=completed${branch_filter}" \
             --jq '.workflow_runs[0].id')
 
           if [[ -z "$run_id" || "$run_id" == "null" ]]; then
@@ -215,12 +221,13 @@ jobs:
         REPO: ${{ github.repository }}
         COMMIT_SHA: ${{ github.sha }}
         BRANCH: ${{ github.ref_name }}
+        MODELNAMES: ${{ needs.setup-matrix.outputs.modelnames }}
       run: |
         python3 - <<'EOF'
         import json, os, subprocess
         from pathlib import Path
 
-        models = ["gemini-2.5-flash", "gemini-3-flash", "openai-gpt5.2", "openai-gpt5.2-codex", "claude-4.5-sonnet", "claude-4.5-haiku"]
+        models = json.loads(os.environ["MODELNAMES"])
         threshold = 0.10
         any_regression = False
         rows = []
@@ -296,7 +303,7 @@ jobs:
       fail-fast: false
       matrix:
         reponame: ${{ fromJson(needs.setup-matrix.outputs.reponames) }}
-        detection_model: ["gemini-2.5-flash", "gemini-3-flash", "openai-gpt5.2", "openai-gpt5.2-codex", "claude-4.5-sonnet", "claude-4.5-haiku"]
+        detection_model: ${{ fromJson(needs.setup-matrix.outputs.modelnames) }}
     permissions:
       contents: read
       id-token: write  # Needed for dd-octo-sts
