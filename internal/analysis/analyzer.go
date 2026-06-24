@@ -18,6 +18,7 @@ import (
 	"github.com/DataDog/datadog-saist/internal/model"
 	"github.com/DataDog/datadog-saist/internal/model/api"
 	"github.com/DataDog/datadog-saist/internal/sarif"
+	"github.com/DataDog/datadog-saist/internal/telemetry"
 	"github.com/panjf2000/ants/v2"
 )
 
@@ -290,6 +291,7 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 	}
 
 	// Phase 1: Determine applicable rules for all files
+	telemetry.SetPhase("rule-matching")
 	rulePhaseStart := time.Now()
 	allResults := determineApplicableRules(ctx, files, ruleProcessor)
 	log.FromContext(ctx).Infof("Rule matching phase: %d files in %v", len(files), time.Since(rulePhaseStart))
@@ -305,6 +307,7 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 	// Phase 2: Index files BEFORE building scan data so that aiContext is populated
 	// when BuildScanDataForResult calls getRelatedFiles and assembles the prompt.
 	if len(filesToIndex) > 0 && !opts.SkipIndexing {
+		telemetry.SetPhase("indexing")
 		indexStart := time.Now()
 		indexFilesForContext(ctx, opts.Directory, filesToIndex, aiContext, opts.Debug)
 		log.FromContext(ctx).Infof("Indexed %d files in %v", len(filesToIndex), time.Since(indexStart))
@@ -313,6 +316,7 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 	// Phase 3: Build ScanData and scan immediately per file so that peak memory
 	// is bounded by FileConcurrency files at a time rather than the entire matched
 	// file set.
+	telemetry.SetPhase("analysis")
 	scanPhaseStart := time.Now()
 	filePool, err := ants.NewPool(opts.FileConcurrency)
 	if err != nil {
@@ -430,6 +434,7 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 
 // analyzeAndGenerateReport performs analysis and generates SARIF report.
 func analyzeAndGenerateReport(ctx context.Context, opts *model.AnalysisOptions) ([]model.FileResult, error) {
+	telemetry.SetPhase("discovery")
 	files, aiContext, err := processDirectory(ctx, opts)
 	if err != nil {
 		return nil, err

@@ -10,6 +10,7 @@ import (
 
 	"github.com/DataDog/datadog-saist/internal/analysis"
 	"github.com/DataDog/datadog-saist/internal/model"
+	"github.com/DataDog/datadog-saist/internal/telemetry"
 )
 
 const (
@@ -109,11 +110,16 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Sample process memory for the duration of the analysis.
+	stopMemWatch := telemetry.Start(context.Background(), telemetry.NewSink())
+	defer stopMemWatch()
+
 	result, err := analysis.RunAnalysis(context.Background(), directory, detectionModelStr, validationModelStr,
 		output, debug, openaiBaseURL, requestTimeoutSec, fileConcurrency, writePrompts, isAIGateway,
 		aiGuardEnabled, apiKey, jwtToken, 2, "test-repo", useLocalPrompts, skipIndexing)
 
 	if err != nil {
+		stopMemWatch() // flush the sink before the deferred call is skipped by os.Exit
 		_, _ = fmt.Fprintf(os.Stderr, "error calling RunAnalysis: %s", err)
 		os.Exit(1)
 	}
