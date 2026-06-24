@@ -19,6 +19,7 @@ const (
 	metricGoHeap = "saist.engine.memory.go_heap_bytes"
 
 	defaultInterval = 2 * time.Second // overridable via SAIST_MEM_SAMPLE
+	bytesPerMiB     = 1 << 20
 )
 
 var currentPhase atomic.Pointer[string]
@@ -140,8 +141,8 @@ func (s *statsdSink) Close() { _ = s.c.Close() }
 type stderrSink struct{ w io.Writer }
 
 func (s *stderrSink) Emit(sm sample, phase string) {
-	fmt.Fprintf(s.w, "[saist-mem] phase=%s rss=%dMiB go_heap=%dMiB\n",
-		phase, sm.rssBytes>>20, sm.goHeapBytes>>20)
+	_, _ = fmt.Fprintf(s.w, "[saist-mem] phase=%s rss=%dMiB go_heap=%dMiB\n",
+		phase, sm.rssBytes/bytesPerMiB, sm.goHeapBytes/bytesPerMiB)
 }
 
 func (s *stderrSink) Close() {}
