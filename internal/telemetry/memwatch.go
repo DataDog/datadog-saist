@@ -22,11 +22,20 @@ const (
 	bytesPerMiB     = 1 << 20
 )
 
-var currentPhase atomic.Pointer[string]
+var (
+	currentPhase atomic.Pointer[string]
+	phaseSignal  = make(chan struct{}, 1) // wakes the sampler to emit on a phase change
+)
 
-// SetPhase sets the phase label samples are tagged with. Call from single-threaded
-// orchestration points, not per-file workers (their concurrency makes it flap).
-func SetPhase(p string) { currentPhase.Store(&p) }
+// SetPhase sets the phase label samples are tagged with, and wakes the sampler so each
+// phase emits at least once even on a sub-interval scan.
+func SetPhase(p string) {
+	currentPhase.Store(&p)
+	select {
+	case phaseSignal <- struct{}{}:
+	default:
+	}
+}
 
 func phase() string {
 	if p := currentPhase.Load(); p != nil {
@@ -66,16 +75,23 @@ func Start(parent context.Context, sink MemSink) (stop func()) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
+		emit := func() {
+			if s, ok := readSample(proc); ok {
+				sink.Emit(s, phase())
+			}
+		}
+		emit() // baseline, so a sub-interval scan still reports at least once
 		t := time.NewTicker(interval)
 		defer t.Stop()
 		for {
 			select {
 			case <-ctx.Done():
+				emit() // final sample at end of scan
 				return
+			case <-phaseSignal:
+				emit() // capture memory at each phase boundary
 			case <-t.C:
-				if s, ok := readSample(proc); ok {
-					sink.Emit(s, phase())
-				}
+				emit()
 			}
 		}
 	}()
@@ -126,13 +142,13 @@ func statsdAddr() string {
 	return ""
 }
 
-// statsdSink emits one gauge per sample, tagged only by phase to keep cardinality low.
+// statsdSink emits a distribution sample, tagged only by phase
 type statsdSink struct{ c *statsd.Client }
 
 func (s *statsdSink) Emit(sm sample, phase string) {
 	tags := []string{"phase:" + phase}
-	_ = s.c.Gauge(metricRSS, float64(sm.rssBytes), tags, 1)
-	_ = s.c.Gauge(metricGoHeap, float64(sm.goHeapBytes), tags, 1)
+	_ = s.c.Distribution(metricRSS, float64(sm.rssBytes), tags, 1)
+	_ = s.c.Distribution(metricGoHeap, float64(sm.goHeapBytes), tags, 1)
 }
 
 func (s *statsdSink) Close() { _ = s.c.Close() }
