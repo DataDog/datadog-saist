@@ -19,6 +19,16 @@ This project is under development and is in preview stage.
 - **Context-Aware**: Builds project context for more accurate analysis
 
 
+## Requirements & Limitations
+
+SAIST can be run standalone, but has the following dependencies:
+
+- **LLM API key**: You must provide your own API key for one of the supported LLM providers (Anthropic, OpenAI, or Google Gemini). See [LLM key](#llm-key) below.
+- **Datadog API & App key**: SAIST fetches its AI analysis prompts (detection rules) from a Datadog-hosted API. This requires a valid Datadog API key and App key. Without these, the tool cannot function. Set them via the `DD_API_KEY` and `DD_APP_KEY` environment variables.
+- **Datadog site** *(optional)*: Defaults to `datadoghq.com`. If your Datadog account is on a different site (e.g. EU), set `DD_SITE` accordingly.
+
+> **Note for open source users**: Due to the Datadog API dependency, SAIST cannot currently be used without a Datadog account. If you'd like to see a mode that works fully without a Datadog subscription, please open an issue.
+
 ## Dependencies
 
 - **[Go Tree-sitter](https://github.com/tree-sitter/go-tree-sitter)**: Go bindings for Tree-sitter parsing library
