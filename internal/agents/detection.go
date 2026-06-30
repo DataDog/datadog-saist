@@ -401,6 +401,7 @@ func (agent *DetectionAgent) basicDetection(ctx context.Context, scanData *model
 		MaxTokens:    8192,
 		ResponseType: "application/json",
 		Temperature:  1.0, // default temperature
+		Tags:         scanData.Tags,
 		Schema: clients.GenerateOptionSchema{
 			Name:        "results",
 			Description: "list of violations from the analysis",
@@ -628,6 +629,7 @@ func (agent *DetectionAgent) VerifyViolation(ctx context.Context, scanData *mode
 		MaxTokens:    8192,
 		ResponseType: "application/json",
 		Temperature:  1.0,
+		Tags:         scanData.Tags,
 		Schema: clients.GenerateOptionSchema{
 			Name:        "results",
 			Description: "verify if a violation is a false positive or not",

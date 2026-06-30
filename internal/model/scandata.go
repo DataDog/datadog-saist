@@ -21,6 +21,7 @@ type ScanData struct {
 	EngineVersion    string
 	RelativeFilePath string
 	FileHash         string
+	Tags             map[string]string
 
 	// FileContent is shared across all ScanData built for the same file.
 	FileContent *FileContent
