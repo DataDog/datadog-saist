@@ -80,7 +80,6 @@ var typescriptTestPathPatterns = []string{
 	"**/__mocks__/**/*.cts",
 }
 
-// Kotlin test files conventionally end in Test/Tests/Spec/IT (e.g. FooTest.kt).
 var kotlinTestPathPatterns = []string{
 	"**/*Test.kt",
 	"**/*Tests.kt",
