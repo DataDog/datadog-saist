@@ -22,6 +22,7 @@ var JavaScriptFunctionsToNotRegister = map[string]struct{}{
 //go:embed tree-sitter-tags/javascript.scm
 var javascriptTagsQuery []byte
 
+// nolint: dupl
 func JavaScriptGetTags(data GetFunctionData) ([]model.Tag, error) {
 	res := make([]model.Tag, 0)
 

@@ -22,6 +22,7 @@ var TypeScriptFunctionsToNotRegister = map[string]struct{}{
 //go:embed tree-sitter-tags/typescript.scm
 var typescriptTagsQuery []byte
 
+// nolint: dupl
 func TypeScriptGetTags(data GetFunctionData) ([]model.Tag, error) {
 	res := make([]model.Tag, 0)
 
