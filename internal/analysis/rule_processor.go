@@ -155,6 +155,18 @@ func (rp *RuleProcessor) ProcessFileRulesBatched(files []fileMeta) ([]ProcessFil
 	return results, nil
 }
 
+func (rp *RuleProcessor) aiGatewayTags(language, ruleID string) map[string]string {
+	if !rp.opts.IsAIGateway {
+		return nil
+	}
+	return map[string]string{
+		"org":        fmt.Sprintf("%d", rp.orgID),
+		"repository": rp.repositoryID,
+		"language":   language,
+		"rule_id":    ruleID,
+	}
+}
+
 // BuildScanDataForResult reads file content and builds ScanData for rules that apply to this file.
 // This should be called after ProcessFileRulesBatched for results that have applicableRules.
 func (rp *RuleProcessor) BuildScanDataForResult(ctx context.Context, result *ProcessFileResult) error {
@@ -224,6 +236,7 @@ func (rp *RuleProcessor) BuildScanDataForResult(ctx context.Context, result *Pro
 			EngineVersion:    model.EngineVersion,
 			RelativeFilePath: fm.RelPath,
 			FileHash:         fm.Hash,
+			Tags:             rp.aiGatewayTags(fm.Language.String(), rule.ID),
 			FileContent:      fc,
 			Rule:             rule,
 		}

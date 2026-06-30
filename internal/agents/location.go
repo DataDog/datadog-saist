@@ -193,6 +193,7 @@ func (agent *DetectionAgent) DetermineViolationLocation(ctx context.Context, sca
 		MaxTokens:    4096,
 		ResponseType: "application/json",
 		Temperature:  1.0,
+		Tags:         scanData.Tags,
 		Schema: clients.GenerateOptionSchema{
 			Name:        "location",
 			Description: "SARIF-style region for a verified vulnerability",

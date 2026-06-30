@@ -17,6 +17,7 @@ type GenerateOptions struct {
 	Temperature  float64
 	ResponseType string
 	Schema       GenerateOptionSchema
+	Tags         map[string]string
 }
 
 type GenerateResponse struct {
