@@ -37,6 +37,8 @@ func codeUsedForDetection(inputCode string, language model.Language) string {
 		return stripJavaScriptComments(inputCode)
 	case model.TypeScript:
 		return stripTypeScriptComments(inputCode)
+	case model.Kotlin:
+		return stripKotlinComments(inputCode)
 	default:
 		return inputCode
 	}
@@ -122,6 +124,13 @@ func stripJavaScriptComments(code string) string {
 func stripTypeScriptComments(code string) string {
 	return stripCStyleComments(code, func(trimmed string) bool {
 		return trimmed == ""
+	})
+}
+
+func stripKotlinComments(code string) string {
+	// Kotlin uses C-style comments; skip empty and bare "*" lines (KDoc bodies).
+	return stripCStyleComments(code, func(trimmed string) bool {
+		return trimmed == "" || trimmed == "*"
 	})
 }
 

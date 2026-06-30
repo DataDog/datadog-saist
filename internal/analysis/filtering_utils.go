@@ -80,6 +80,14 @@ var typescriptTestPathPatterns = []string{
 	"**/__mocks__/**/*.cts",
 }
 
+// Kotlin test files conventionally end in Test/Tests/Spec/IT (e.g. FooTest.kt).
+var kotlinTestPathPatterns = []string{
+	"**/*Test.kt",
+	"**/*Tests.kt",
+	"**/*Spec.kt",
+	"**/*IT.kt",
+}
+
 var DefaultIgnoredGlobs = []string{
 	"**/node_modules/**/*",
 	"**/jspm_packages/**/*",
@@ -175,6 +183,11 @@ func IsGeneratedFileFromContent(fullContent []byte, path string, language model.
 	case model.TypeScript:
 		return strings.Contains(content, GeneratedByMarker) ||
 			strings.HasSuffix(path, ".d.ts")
+
+	case model.Kotlin:
+		return strings.Contains(content, GeneratedByMarker) ||
+			strings.Contains(content, ProtoBufHeader) ||
+			strings.Contains(content, ThriftHeader)
 
 	default:
 		return isGeneratedFileSuffix(path)
@@ -274,6 +287,11 @@ func IsGeneratedFileByContent(content []byte, path string, language model.Langua
 		return strings.Contains(header, GeneratedByMarker) ||
 			strings.HasSuffix(path, ".d.ts")
 
+	case model.Kotlin:
+		return strings.Contains(header, GeneratedByMarker) ||
+			strings.Contains(header, ProtoBufHeader) ||
+			strings.Contains(header, ThriftHeader)
+
 	default:
 		return false
 	}
@@ -326,6 +344,14 @@ func hasTestLikePath(path string, language model.Language) bool {
 		patterns = append(patterns, typescriptTestPathPatterns...)
 		return matchesAnyGlob(path, patterns)
 
+	case model.Kotlin:
+		// Kotlin: default folders + filenames + Kotlin naming (FooTest.kt, FooSpec.kt)
+		var patterns []string
+		patterns = append(patterns, defaultTestPaths...)
+		patterns = append(patterns, defaultTestFilenames...)
+		patterns = append(patterns, kotlinTestPathPatterns...)
+		return matchesAnyGlob(path, patterns)
+
 	default:
 		// For other languages we don't classify here
 		return false
@@ -342,6 +368,8 @@ func hasTestLikeImport(language model.Language, code, path string) bool {
 		return javaHasTestLikeImport(code)
 	case model.Python:
 		return pythonHasTestLikeImport(code)
+	case model.Kotlin:
+		return kotlinHasTestLikeImport(code)
 	default:
 		return false
 	}
@@ -425,6 +453,48 @@ func javaHasTestLikeImport(code string) bool {
 		}
 		// Now line should be a FQN like org.junit.Assert or org.mockito.Mockito
 		for _, prefix := range javaTestPrefixes {
+			if line == prefix || strings.HasPrefix(line, prefix+".") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// ----- Kotlin import detection -----
+func kotlinHasTestLikeImport(code string) bool {
+	kotlinTestPrefixes := []string{
+		"org.junit",
+		"kotlin.test",
+		"io.kotest",
+		"io.kotlintest",
+		"io.mockk",
+		"org.mockito",
+		"com.nhaarman.mockitokotlin2",
+		"org.mockito.kotlin",
+		"org.spekframework",
+		"org.assertj",
+		"org.amshove.kluent",
+		"org.testng",
+		"org.robolectric",
+		"androidx.test",
+	}
+
+	scanner := bufio.NewScanner(strings.NewReader(code))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if !strings.HasPrefix(line, "import ") {
+			continue
+		}
+		// Strip "import" keyword (Kotlin imports have no trailing ';').
+		line = strings.TrimSpace(strings.TrimPrefix(line, "import"))
+		// Drop an "as alias" suffix, then a trailing ".*" wildcard.
+		if i := strings.IndexByte(line, ' '); i >= 0 {
+			line = line[:i]
+		}
+		line = strings.TrimSuffix(line, ".*")
+		// Now line should be a FQN like org.junit.jupiter.api.Test
+		for _, prefix := range kotlinTestPrefixes {
 			if line == prefix || strings.HasPrefix(line, prefix+".") {
 				return true
 			}

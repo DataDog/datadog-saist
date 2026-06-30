@@ -7,6 +7,7 @@ import (
 
 	"github.com/DataDog/datadog-saist/internal/model"
 	"github.com/stretchr/testify/assert"
+	treesitterkotlin "github.com/tree-sitter-grammars/tree-sitter-kotlin/bindings/go"
 	treesitter "github.com/tree-sitter/go-tree-sitter"
 	treesitterjavascript "github.com/tree-sitter/tree-sitter-javascript/bindings/go"
 	treesitterpython "github.com/tree-sitter/tree-sitter-python/bindings/go"
@@ -494,6 +495,116 @@ function actualCode() {}
 	assert.NotContains(t, names, "it")
 	assert.NotContains(t, names, "beforeEach")
 	assert.NotContains(t, names, "afterEach")
+	assert.Contains(t, names, "actualCode")
+}
+
+// Kotlin tests
+
+func TestGetContextFromFileKotlin(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+
+	err := os.WriteFile(
+		filepath.Join(tmpDir, "App.kt"),
+		[]byte(`class Server {
+    fun handleRequest(req: Request) {
+        processInput(req.body)
+    }
+}
+
+fun processInput(data: String): String {
+    return data
+}
+`),
+		0644,
+	)
+	assert.NoError(t, err)
+
+	llmContext, err := GetContextFromFile(tmpDir, "App.kt")
+	assert.NoError(t, err)
+	assert.Equal(t, model.Kotlin, llmContext.Language)
+
+	names := make([]string, len(llmContext.Tags))
+	for i, tag := range llmContext.Tags {
+		names[i] = tag.Name
+	}
+	assert.Contains(t, names, "Server")
+	assert.Contains(t, names, "handleRequest")
+	assert.Contains(t, names, "processInput")
+}
+
+func TestKotlinGetTags_Definitions(t *testing.T) {
+	t.Parallel()
+	code := `class Greeter {
+    fun sayHi() {
+        greet("world")
+    }
+}
+
+object Config
+
+fun greet(name: String): String {
+    return "hello " + name
+}
+`
+	parser := treesitter.NewParser()
+	defer parser.Close()
+	parser.SetLanguage(treesitter.NewLanguage(treesitterkotlin.Language()))
+
+	tree := parser.Parse([]byte(code), nil)
+	defer tree.Close()
+
+	data := GetFunctionData{
+		root:     tree.RootNode(),
+		path:     "App.kt",
+		code:     []byte(code),
+		language: model.Kotlin,
+	}
+
+	tags, err := KotlinGetTags(data)
+	assert.NoError(t, err)
+
+	names := make([]string, len(tags))
+	for i, tag := range tags {
+		names[i] = tag.Name
+	}
+	assert.Contains(t, names, "Greeter")
+	assert.Contains(t, names, "Config")
+	assert.Contains(t, names, "sayHi")
+	assert.Contains(t, names, "greet")
+}
+
+func TestKotlinGetTags_FilteredFunctions(t *testing.T) {
+	t.Parallel()
+	code := `class FooTest {
+    fun setUp() {}
+    fun tearDown() {}
+    fun actualCode() {}
+}
+`
+	parser := treesitter.NewParser()
+	defer parser.Close()
+	parser.SetLanguage(treesitter.NewLanguage(treesitterkotlin.Language()))
+
+	tree := parser.Parse([]byte(code), nil)
+	defer tree.Close()
+
+	data := GetFunctionData{
+		root:     tree.RootNode(),
+		path:     "FooTest.kt",
+		code:     []byte(code),
+		language: model.Kotlin,
+	}
+
+	tags, err := KotlinGetTags(data)
+	assert.NoError(t, err)
+
+	names := make([]string, len(tags))
+	for i, tag := range tags {
+		names[i] = tag.Name
+	}
+	assert.NotContains(t, names, "setUp")
+	assert.NotContains(t, names, "tearDown")
 	assert.Contains(t, names, "actualCode")
 }
 

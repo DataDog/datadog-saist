@@ -21,6 +21,7 @@ var languageGlobs = map[string][]string{
 	"csharp":     {"**/*.cs"},
 	"javascript": {"**/*.js", "**/*.jsx", "**/*.mjs"},
 	"typescript": {"**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"},
+	"kotlin":     {"**/*.kt", "**/*.kts"},
 }
 
 // LoadLocalRules returns one api.AiPrompt per embedded *.md file in this

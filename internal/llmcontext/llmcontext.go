@@ -18,6 +18,8 @@ import (
 	treesitterjavascript "github.com/tree-sitter/tree-sitter-javascript/bindings/go"
 
 	treesittertypescript "github.com/tree-sitter/tree-sitter-typescript/bindings/go"
+
+	treesitterkotlin "github.com/tree-sitter-grammars/tree-sitter-kotlin/bindings/go"
 )
 
 const (
@@ -58,6 +60,10 @@ var contextRetrievers = map[model.Language]ContextRetriever{
 		// the retriever map keyed by language rather than per-extension.
 		Language:        treesitter.NewLanguage(treesittertypescript.LanguageTSX()),
 		FunctionGetTags: TypeScriptGetTags,
+	},
+	model.Kotlin: {
+		Language:        treesitter.NewLanguage(treesitterkotlin.Language()),
+		FunctionGetTags: KotlinGetTags,
 	},
 }
 
