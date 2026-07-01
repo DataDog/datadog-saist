@@ -17,7 +17,12 @@ type GenerateOptions struct {
 	Temperature  float64
 	ResponseType string
 	Schema       GenerateOptionSchema
-	Tags         map[string]string
+}
+
+type aiGatewayTagsKey struct{}
+
+func WithAIGatewayTags(ctx context.Context, tags map[string]string) context.Context {
+	return context.WithValue(ctx, aiGatewayTagsKey{}, tags)
 }
 
 type GenerateResponse struct {
