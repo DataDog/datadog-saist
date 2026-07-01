@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"strings"
 	"sync"
 	"time"
@@ -47,6 +48,15 @@ type DetectionResult struct {
 	Path         string
 	InputTokens  int32
 	OutputTokens int32
+}
+
+func withCallType(baseTags map[string]string, callType string) map[string]string {
+	if baseTags == nil {
+		return nil
+	}
+	tagsWithCallType := maps.Clone(baseTags)
+	tagsWithCallType["call_type"] = callType
+	return tagsWithCallType
 }
 
 type VerificationResultInternal struct {
@@ -401,7 +411,6 @@ func (agent *DetectionAgent) basicDetection(ctx context.Context, scanData *model
 		MaxTokens:    8192,
 		ResponseType: "application/json",
 		Temperature:  1.0, // default temperature
-		Tags:         scanData.Tags,
 		Schema: clients.GenerateOptionSchema{
 			Name:        "results",
 			Description: "list of violations from the analysis",
@@ -419,7 +428,10 @@ func (agent *DetectionAgent) basicDetection(ctx context.Context, scanData *model
 		}
 	}
 
-	contextWithDeadline, cancelFunc := context.WithDeadline(ctx, time.Now().Add(time.Second*time.Duration(timeout)))
+	contextWithDeadline, cancelFunc := context.WithDeadline(
+		clients.WithAIGatewayTags(ctx, withCallType(scanData.Tags, "detection")),
+		time.Now().Add(time.Second*time.Duration(timeout)),
+	)
 	defer cancelFunc()
 
 	if agent.agentOption.DebugEnabled {
@@ -629,7 +641,6 @@ func (agent *DetectionAgent) VerifyViolation(ctx context.Context, scanData *mode
 		MaxTokens:    8192,
 		ResponseType: "application/json",
 		Temperature:  1.0,
-		Tags:         scanData.Tags,
 		Schema: clients.GenerateOptionSchema{
 			Name:        "results",
 			Description: "verify if a violation is a false positive or not",
@@ -637,6 +648,7 @@ func (agent *DetectionAgent) VerifyViolation(ctx context.Context, scanData *mode
 		},
 	}
 
+	ctx = clients.WithAIGatewayTags(ctx, withCallType(scanData.Tags, "verification"))
 	response, err := agent.verificationGenerateContent(ctx, scanData, violation.StartLine,
 		VerificationSystemPrompt, userPrompt, options)
 	if err != nil {

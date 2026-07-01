@@ -193,7 +193,6 @@ func (agent *DetectionAgent) DetermineViolationLocation(ctx context.Context, sca
 		MaxTokens:    4096,
 		ResponseType: "application/json",
 		Temperature:  1.0,
-		Tags:         scanData.Tags,
 		Schema: clients.GenerateOptionSchema{
 			Name:        "location",
 			Description: "SARIF-style region for a verified vulnerability",
@@ -201,6 +200,7 @@ func (agent *DetectionAgent) DetermineViolationLocation(ctx context.Context, sca
 		},
 	}
 
+	ctx = clients.WithAIGatewayTags(ctx, withCallType(scanData.Tags, "location"))
 	response, err := agent.verificationGenerateContent(ctx, scanData, violation.StartLine,
 		LocationDeterminationSystemPrompt, userPrompt, options)
 	if err != nil {
