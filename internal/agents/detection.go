@@ -428,10 +428,8 @@ func (agent *DetectionAgent) basicDetection(ctx context.Context, scanData *model
 		}
 	}
 
-	contextWithDeadline, cancelFunc := context.WithDeadline(
-		clients.WithAIGatewayTags(ctx, withCallType(scanData.Tags, "detection")),
-		time.Now().Add(time.Second*time.Duration(timeout)),
-	)
+	ctx = clients.WithAIGatewayTags(ctx, withCallType(scanData.Tags, "detection"))
+	contextWithDeadline, cancelFunc := context.WithDeadline(ctx, time.Now().Add(time.Second*time.Duration(timeout)))
 	defer cancelFunc()
 
 	if agent.agentOption.DebugEnabled {
