@@ -15,6 +15,7 @@ const (
 	CSharp
 	JavaScript
 	TypeScript
+	Kotlin
 )
 
 func (l Language) String() string {
@@ -31,6 +32,8 @@ func (l Language) String() string {
 		return "JavaScript"
 	case TypeScript:
 		return "TypeScript"
+	case Kotlin:
+		return "Kotlin"
 	default:
 		return "LanguageUnknown"
 	}
@@ -52,6 +55,8 @@ func GetLanguage(filePath string) Language {
 		return JavaScript
 	case ".ts", ".tsx", ".mts", ".cts":
 		return TypeScript
+	case ".kt", ".kts":
+		return Kotlin
 	default:
 		return LanguageUnknown
 	}
@@ -70,5 +75,6 @@ func GetAllLanguages() []Language {
 		CSharp,
 		JavaScript,
 		TypeScript,
+		Kotlin,
 	}
 }
