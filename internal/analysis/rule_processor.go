@@ -160,7 +160,6 @@ func (rp *RuleProcessor) aiGatewayTags(language, ruleID string) map[string]strin
 		return nil
 	}
 	return map[string]string{
-		"org":        fmt.Sprintf("%d", rp.orgID),
 		"repository": rp.repositoryID,
 		"language":   language,
 		"rule_id":    ruleID,
