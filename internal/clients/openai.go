@@ -154,6 +154,9 @@ func (c *OpenAIClient) GenerateContent(ctx context.Context, systemPrompt, userPr
 		if cacheKey := openAIPromptCacheKey(c.model, c.orgID, systemPrompt, userPrompt); cacheKey != "" {
 			params.PromptCacheKey = openai.String(cacheKey)
 		}
+		if tags, _ := ctx.Value(aiGatewayTagsKey{}).(map[string]string); len(tags) > 0 {
+			params.SetExtraFields(map[string]any{"tags": tags})
+		}
 	}
 
 	// Some newer OpenAI models require MaxCompletionTokens instead of MaxTokens

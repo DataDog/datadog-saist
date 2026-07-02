@@ -200,6 +200,7 @@ func (agent *DetectionAgent) DetermineViolationLocation(ctx context.Context, sca
 		},
 	}
 
+	ctx = clients.WithAIGatewayTags(ctx, withCallType(scanData.Tags, "location"))
 	response, err := agent.verificationGenerateContent(ctx, scanData, violation.StartLine,
 		LocationDeterminationSystemPrompt, userPrompt, options)
 	if err != nil {

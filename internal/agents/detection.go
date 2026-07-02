@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"strings"
 	"sync"
 	"time"
@@ -47,6 +48,15 @@ type DetectionResult struct {
 	Path         string
 	InputTokens  int32
 	OutputTokens int32
+}
+
+func withCallType(baseTags map[string]string, callType string) map[string]string {
+	if baseTags == nil {
+		return nil
+	}
+	tagsWithCallType := maps.Clone(baseTags)
+	tagsWithCallType["call_type"] = callType
+	return tagsWithCallType
 }
 
 type VerificationResultInternal struct {
@@ -418,6 +428,7 @@ func (agent *DetectionAgent) basicDetection(ctx context.Context, scanData *model
 		}
 	}
 
+	ctx = clients.WithAIGatewayTags(ctx, withCallType(scanData.Tags, "detection"))
 	contextWithDeadline, cancelFunc := context.WithDeadline(ctx, time.Now().Add(time.Second*time.Duration(timeout)))
 	defer cancelFunc()
 
@@ -635,6 +646,7 @@ func (agent *DetectionAgent) VerifyViolation(ctx context.Context, scanData *mode
 		},
 	}
 
+	ctx = clients.WithAIGatewayTags(ctx, withCallType(scanData.Tags, "verification"))
 	response, err := agent.verificationGenerateContent(ctx, scanData, violation.StartLine,
 		VerificationSystemPrompt, userPrompt, options)
 	if err != nil {

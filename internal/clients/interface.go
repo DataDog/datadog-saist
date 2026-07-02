@@ -19,6 +19,15 @@ type GenerateOptions struct {
 	Schema       GenerateOptionSchema
 }
 
+type aiGatewayTagsKey struct{}
+
+func WithAIGatewayTags(ctx context.Context, tags map[string]string) context.Context {
+	if len(tags) == 0 {
+		return ctx
+	}
+	return context.WithValue(ctx, aiGatewayTagsKey{}, tags)
+}
+
 type GenerateResponse struct {
 	Content      string
 	InputTokens  int32
