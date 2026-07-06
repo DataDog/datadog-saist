@@ -341,6 +341,14 @@ func shouldAnalyzeGoSqliCtx(ctx *model.DetectionContext) bool {
 		"gorm.io/gorm",
 		"sqlquery",
 		"sqlstmt",
+		"jackc/pgx",
+		"pgx.",
+		"pgxpool",
+		".query(ctx",
+		".queryrow(ctx",
+		".exec(ctx",
+		".querycontext(",
+		".execcontext(",
 	}
 
 	// SQL string construction patterns
