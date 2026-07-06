@@ -151,6 +151,22 @@ func TestShouldAnalyze_KeywordAsPartOfLargerWord(t *testing.T) {
 	assert.True(t, result, "Expected ShouldAnalyze to return true with DB import and select keyword")
 }
 
+func TestShouldAnalyze_GoSqliPgx(t *testing.T) {
+	ctx := model.DetectionContext{
+		Language: model.Go,
+		Rule:     api.AiPrompt{ID: "datadog/go-sqli"},
+		Code: "import \"github.com/jackc/pgx/v5\"\n" +
+			"func f(orgStore Store, ctx context.Context) {\n" +
+			"\tqueryString := `\n\tSELECT sa.org_id FROM supportadmin_approvals sa`\n" +
+			"\trows, err := orgStore.PostgresClient.Query(ctx, queryString)\n" +
+			"\t_ = pgx.CollectRows(rows, pgx.RowToStructByName[Approval])\n" +
+			"}",
+	}
+
+	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	assert.True(t, result, "Expected ShouldAnalyze to return true for pgx driver with non-db handle and raw-string SQL")
+}
+
 func TestShouldAnalyze_WithFileSearchKeywordsFromRule(t *testing.T) {
 	// Test that FileSearchKeywords from rule definition are used for filtering
 	ctx := model.DetectionContext{
