@@ -21,6 +21,8 @@ import (
 	treesittertypescript "github.com/tree-sitter/tree-sitter-typescript/bindings/go"
 
 	treesitterkotlin "github.com/tree-sitter-grammars/tree-sitter-kotlin/bindings/go"
+
+	treesitterphp "github.com/tree-sitter/tree-sitter-php/bindings/go"
 )
 
 const (
@@ -65,6 +67,10 @@ var contextRetrievers = map[model.Language]ContextRetriever{
 	model.Kotlin: {
 		Language:        treesitter.NewLanguage(treesitterkotlin.Language()),
 		FunctionGetTags: KotlinGetTags,
+	},
+	model.PHP: {
+		Language:        treesitter.NewLanguage(treesitterphp.LanguagePHP()),
+		FunctionGetTags: PHPGetTags,
 	},
 }
 

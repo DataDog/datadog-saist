@@ -10,6 +10,7 @@ import (
 	treesitterkotlin "github.com/tree-sitter-grammars/tree-sitter-kotlin/bindings/go"
 	treesitter "github.com/tree-sitter/go-tree-sitter"
 	treesitterjavascript "github.com/tree-sitter/tree-sitter-javascript/bindings/go"
+	treesitterphp "github.com/tree-sitter/tree-sitter-php/bindings/go"
 	treesitterpython "github.com/tree-sitter/tree-sitter-python/bindings/go"
 	treesittertypescript "github.com/tree-sitter/tree-sitter-typescript/bindings/go"
 )
@@ -597,6 +598,124 @@ func TestKotlinGetTags_FilteredFunctions(t *testing.T) {
 	}
 
 	tags, err := KotlinGetTags(data)
+	assert.NoError(t, err)
+
+	names := make([]string, len(tags))
+	for i, tag := range tags {
+		names[i] = tag.Name
+	}
+	assert.NotContains(t, names, "setUp")
+	assert.NotContains(t, names, "tearDown")
+	assert.Contains(t, names, "actualCode")
+}
+
+// PHP tests
+
+func TestGetContextFromFilePHP(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+
+	err := os.WriteFile(
+		filepath.Join(tmpDir, "app.php"),
+		[]byte(`<?php
+class Server {
+    public function handleRequest($req) {
+        processInput($req->body);
+    }
+}
+
+function processInput($data) {
+    return $data;
+}
+`),
+		0644,
+	)
+	assert.NoError(t, err)
+
+	llmContext, err := GetContextFromFile(tmpDir, "app.php")
+	assert.NoError(t, err)
+	assert.Equal(t, model.PHP, llmContext.Language)
+
+	names := make([]string, len(llmContext.Tags))
+	for i, tag := range llmContext.Tags {
+		names[i] = tag.Name
+	}
+	assert.Contains(t, names, "Server")
+	assert.Contains(t, names, "handleRequest")
+	assert.Contains(t, names, "processInput")
+}
+
+func TestPHPGetTags_Definitions(t *testing.T) {
+	t.Parallel()
+	code := `<?php
+class Greeter {
+    public function sayHi() {
+        greet("world");
+    }
+}
+
+interface Salutation {
+}
+
+trait Friendly {
+}
+
+function greet(string $name): string {
+    return "hello " . $name;
+}
+`
+	parser := treesitter.NewParser()
+	defer parser.Close()
+	parser.SetLanguage(treesitter.NewLanguage(treesitterphp.LanguagePHP()))
+
+	tree := parser.Parse([]byte(code), nil)
+	defer tree.Close()
+
+	data := GetFunctionData{
+		root:     tree.RootNode(),
+		path:     "app.php",
+		code:     []byte(code),
+		language: model.PHP,
+	}
+
+	tags, err := PHPGetTags(data)
+	assert.NoError(t, err)
+
+	names := make([]string, len(tags))
+	for i, tag := range tags {
+		names[i] = tag.Name
+	}
+	assert.Contains(t, names, "Greeter")
+	assert.Contains(t, names, "Salutation")
+	assert.Contains(t, names, "Friendly")
+	assert.Contains(t, names, "sayHi")
+	assert.Contains(t, names, "greet")
+}
+
+func TestPHPGetTags_FilteredFunctions(t *testing.T) {
+	t.Parallel()
+	code := `<?php
+class FooTest {
+    public function setUp() {}
+    public function tearDown() {}
+    public function actualCode() {}
+}
+`
+	parser := treesitter.NewParser()
+	defer parser.Close()
+	parser.SetLanguage(treesitter.NewLanguage(treesitterphp.LanguagePHP()))
+
+	tree := parser.Parse([]byte(code), nil)
+	defer tree.Close()
+
+	data := GetFunctionData{
+		root:     tree.RootNode(),
+		path:     "FooTest.php",
+		code:     []byte(code),
+		language: model.PHP,
+	}
+
+	tags, err := PHPGetTags(data)
 	assert.NoError(t, err)
 
 	names := make([]string, len(tags))

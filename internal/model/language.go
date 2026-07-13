@@ -16,6 +16,7 @@ const (
 	JavaScript
 	TypeScript
 	Kotlin
+	PHP
 )
 
 func (l Language) String() string {
@@ -34,6 +35,8 @@ func (l Language) String() string {
 		return "TypeScript"
 	case Kotlin:
 		return "Kotlin"
+	case PHP:
+		return "PHP"
 	default:
 		return "LanguageUnknown"
 	}
@@ -57,6 +60,8 @@ func GetLanguage(filePath string) Language {
 		return TypeScript
 	case ".kt", ".kts":
 		return Kotlin
+	case ".php", ".phtml", ".php3", ".php4", ".php5":
+		return PHP
 	default:
 		return LanguageUnknown
 	}
@@ -76,5 +81,6 @@ func GetAllLanguages() []Language {
 		JavaScript,
 		TypeScript,
 		Kotlin,
+		PHP,
 	}
 }

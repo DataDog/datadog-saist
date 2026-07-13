@@ -87,6 +87,13 @@ var kotlinTestPathPatterns = []string{
 	"**/*IT.kt",
 }
 
+var phpTestPathPatterns = []string{
+	"**/*Test.php",
+	"**/*Tests.php",
+	"**/*TestCase.php",
+	"**/*Spec.php",
+}
+
 var DefaultIgnoredGlobs = []string{
 	"**/node_modules/**/*",
 	"**/jspm_packages/**/*",
@@ -187,6 +194,9 @@ func IsGeneratedFileFromContent(fullContent []byte, path string, language model.
 		return strings.Contains(content, GeneratedByMarker) ||
 			strings.Contains(content, ProtoBufHeader) ||
 			strings.Contains(content, ThriftHeader)
+
+	case model.PHP:
+		return strings.Contains(content, GeneratedByMarker)
 
 	default:
 		return isGeneratedFileSuffix(path)
@@ -291,6 +301,9 @@ func IsGeneratedFileByContent(content []byte, path string, language model.Langua
 			strings.Contains(header, ProtoBufHeader) ||
 			strings.Contains(header, ThriftHeader)
 
+	case model.PHP:
+		return strings.Contains(header, GeneratedByMarker)
+
 	default:
 		return false
 	}
@@ -351,6 +364,14 @@ func hasTestLikePath(path string, language model.Language) bool {
 		patterns = append(patterns, kotlinTestPathPatterns...)
 		return matchesAnyGlob(path, patterns)
 
+	case model.PHP:
+		// PHP: default folders + PHPUnit naming (FooTest.php, FooSpec.php)
+		var patterns []string
+		patterns = append(patterns, defaultTestPaths...)
+		patterns = append(patterns, defaultTestFilenames...)
+		patterns = append(patterns, phpTestPathPatterns...)
+		return matchesAnyGlob(path, patterns)
+
 	default:
 		// For other languages we don't classify here
 		return false
@@ -369,6 +390,8 @@ func hasTestLikeImport(language model.Language, code, path string) bool {
 		return pythonHasTestLikeImport(code)
 	case model.Kotlin:
 		return kotlinHasTestLikeImport(code)
+	case model.PHP:
+		return phpHasTestLikeImport(code)
 	default:
 		return false
 	}
@@ -555,6 +578,43 @@ func pythonImportMatches(module string, prefixes []string) bool {
 	for _, prefix := range prefixes {
 		if module == prefix || strings.HasPrefix(module, prefix+".") {
 			return true
+		}
+	}
+	return false
+}
+
+// ----- PHP import detection -----
+func phpHasTestLikeImport(code string) bool {
+	// PHP uses "use Vendor\Namespace\Class;" statements.
+	phpTestPrefixes := []string{
+		"PHPUnit\\",
+		"Mockery\\",
+		"Codeception\\",
+		"Behat\\",
+		"Prophecy\\",
+		"AspectMock\\",
+	}
+
+	scanner := bufio.NewScanner(strings.NewReader(code))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if !strings.HasPrefix(line, "use ") {
+			continue
+		}
+		rest := strings.TrimSpace(strings.TrimPrefix(line, "use"))
+		// Drop trailing ';'
+		if i := strings.Index(rest, ";"); i >= 0 {
+			rest = rest[:i]
+		}
+		// Drop "as Alias" suffix
+		if i := strings.Index(rest, " as "); i >= 0 {
+			rest = rest[:i]
+		}
+		rest = strings.TrimSpace(rest)
+		for _, prefix := range phpTestPrefixes {
+			if strings.HasPrefix(rest, prefix) {
+				return true
+			}
 		}
 	}
 	return false
