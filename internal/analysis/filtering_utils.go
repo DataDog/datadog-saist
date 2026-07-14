@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/DataDog/datadog-saist/internal/model"
@@ -366,11 +367,7 @@ func hasTestLikePath(path string, language model.Language) bool {
 
 	case model.PHP:
 		// PHP: default folders + PHPUnit naming (FooTest.php, FooSpec.php)
-		var patterns []string
-		patterns = append(patterns, defaultTestPaths...)
-		patterns = append(patterns, defaultTestFilenames...)
-		patterns = append(patterns, phpTestPathPatterns...)
-		return matchesAnyGlob(path, patterns)
+		return matchesAnyGlob(path, slices.Concat(defaultTestPaths, defaultTestFilenames, phpTestPathPatterns))
 
 	default:
 		// For other languages we don't classify here
