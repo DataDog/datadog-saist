@@ -33,6 +33,8 @@ func languageKeyFromModel(lang model.Language) string {
 		return "typescript"
 	case model.Kotlin:
 		return "kotlin"
+	case model.PHP:
+		return "php"
 	default:
 		return ""
 	}

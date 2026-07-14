@@ -12,6 +12,11 @@ import (
 var (
 	reJavaBlock = regexp.MustCompile(`(?s)/\*.*?\*/`)
 	reJavaLine  = regexp.MustCompile(`//.*`)
+	// Like //.*,  this strips # inside string literals too (e.g. "#ff0000" becomes "").
+	// The false-strip rate is higher than for // because # appears in PHP strings far more
+	// often (hex colors, regex delimiters, URL fragments). Accepted tradeoff: keyword
+	// matching only needs a rough signal, not perfect fidelity.
+	rePHPHash = regexp.MustCompile(`#.*`)
 
 	reGoBlock = regexp.MustCompile(`(?s)/\*.*?\*/`)
 
@@ -39,6 +44,8 @@ func codeUsedForDetection(inputCode string, language model.Language) string {
 		return stripTypeScriptComments(inputCode)
 	case model.Kotlin:
 		return stripKotlinComments(inputCode)
+	case model.PHP:
+		return stripPHPComments(inputCode)
 	default:
 		return inputCode
 	}
@@ -132,6 +139,22 @@ func stripKotlinComments(code string) string {
 	return stripCStyleComments(code, func(trimmed string) bool {
 		return trimmed == "" || trimmed == "*"
 	})
+}
+
+func stripPHPComments(code string) string {
+	// PHP supports C-style block/line comments and also # for single-line comments.
+	code = reJavaBlock.ReplaceAllString(code, "")
+	code = reJavaLine.ReplaceAllString(code, "")
+	code = rePHPHash.ReplaceAllString(code, "")
+	lines := strings.Split(code, "\n")
+	out := lines[:0]
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		out = append(out, line)
+	}
+	return strings.Join(out, "\n")
 }
 
 func stripCSharpComments(code string) string {
