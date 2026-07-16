@@ -1,89 +1,104 @@
 # Datadog Static AI Security Testing (SAIST) tool
 
-This project is an AI-Native SAST tool. Unlike traditional SAST tools that rely solely on parsing
-and analysis rules, this project uses LLM (e.g. Claude from Anthropic, GPT from OpenAI or Gemini from Google)
-to find vulnerabilities.
+  This project is an AI-Native SAST tool. Unlike traditional SAST tools that rely solely on
+  parsing and analysis rules, this project uses LLMs (e.g. Claude from Anthropic, GPT from
+  OpenAI, or Gemini from Google) to find vulnerabilities.
 
-This project can be used standalone on your laptop. It is available as part of the [Datadog Code Security](https://docs.datadoghq.com/security/code_security/) 
-offering.
+  This project can be used standalone on your laptop. It is also available as part of the
+  [Datadog Code Security](https://docs.datadoghq.com/security/code_security/) offering.
 
-## Project Status
+  ## Project Status
 
-This project is under development and is in preview stage.
+  This project is under development and is in preview stage.
 
-## Features
+  ## Features
 
-- **AI-Powered Analysis**: Uses advanced AI models to detect security vulnerabilities
-- **Multiple Language Support**: Analyzes code in various programming languages. Java, Python and Go are currently supported. C# support coming soon.
-- **SARIF Output**: Generates industry-standard SARIF reports
-- **Context-Aware**: Builds project context for more accurate analysis
+  - **AI-Powered Analysis**: Uses advanced AI models to detect security vulnerabilities
+  - **Multiple Language Support**: Go, Java, Python, C#, JavaScript, TypeScript, and Kotlin
+  - **SARIF Output**: Generates industry-standard SARIF reports
+  - **Context-Aware**: Builds project context for more accurate analysis
 
+  ## Requirements
 
-## Requirements & Limitations
+  - **LLM API key**: You must provide an API key for one of the supported LLM providers
+  (Anthropic, OpenAI, or Google Gemini). See [LLM key](#llm-key) below.
 
-SAIST can be run standalone, but has the following dependencies:
+  No Datadog account is required. SAIST fetches its detection rules from a public
+  Datadog-hosted API endpoint — no Datadog API key or App key needed.
 
-- **LLM API key**: You must provide your own API key for one of the supported LLM providers (Anthropic, OpenAI, or Google Gemini). See [LLM key](#llm-key) below.
-- **Datadog API & App key**: SAIST fetches its AI analysis prompts (detection rules) from a Datadog-hosted API. This requires a valid Datadog API key and App key. Without these, the tool cannot function. Set them via the `DD_API_KEY` and `DD_APP_KEY` environment variables.
-- **Datadog site** *(optional)*: Defaults to `datadoghq.com`. If your Datadog account is on a different site (e.g. EU), set `DD_SITE` accordingly.
+  ## Dependencies
 
-> **Note for open source users**: Due to the Datadog API dependency, SAIST cannot currently be used without a Datadog account. If you'd like to see a mode that works fully without a Datadog subscription, please open an issue.
+  - **[Go Tree-sitter](https://github.com/tree-sitter/go-tree-sitter)**: Go bindings for
+  Tree-sitter parsing library
+  - **Standard Go text/template**: Built-in Go templating for prompt generation
+  - **[Go-SARIF](https://github.com/owenrumney/go-sarif)**: SARIF (Static Analysis Results
+  Interchange Format) library
 
-## Dependencies
+  ## Usage
 
-- **[Go Tree-sitter](https://github.com/tree-sitter/go-tree-sitter)**: Go bindings for Tree-sitter parsing library
-- **Standard Go text/template**: Built-in Go templating for prompt generation
-- **[Go-SARIF](https://github.com/owenrumney/go-sarif)**: SARIF (Static Analysis Results Interchange Format) library
+  ### LLM key
 
+  Set the environment variable for your LLM provider:
 
-## Usage
+  - Anthropic: `ANTHROPIC_API_KEY`
+  - OpenAI: `OPENAI_API_KEY`
+  - Google Gemini: `GOOGLE_API_KEY`
 
-### LLM key
+  ### Command Line Interface
 
-Set the following environment variables to specify the API key to your LLM provider
+  Build and run the binary:
 
- - Anthropic: `ANTHROPIC_API_KEY`
- - OpenAI: `OPENAI_API_KEY`
- - Google Gemini: `GOOGLE_API_KEY`
-
-### Command Line Interface
-
-Build and run the binary:
-
-```bash
-make build
-./bin/datadog-saist --directory <path> --output <output-file> --detection-model <model> --validation-model <model> [options]
+  ```bash
+  make build
+  ./bin/datadog-saist --directory <path> --output <output-file> --detection-model <model>
+  --validation-model <model> [options]
 ```
 
-Example to run with Gemini
-
+  Example with Gemini:
 ```bash
-make build
-GOOGLE_API_KEY=<...> ./bin/datadog-saist --directory <path> --output <output-file> --detection-model gemini-3-flash --validation-model gemini-3-flash
+  make build
+  GOOGLE_API_KEY=<...> ./bin/datadog-saist --directory <path> --output <output-file>
+  --detection-model gemini-2.5-flash --validation-model gemini-2.5-flash
 ```
 
-### Required Arguments
+  Required Arguments
+  - --directory: Directory to analyze
+  - --output: Output file path for SARIF report
+  - --detection-model: Model to use for vulnerability detection
+  - --validation-model: Model to use for result validation
 
-- `--directory`: Directory to analyze (required)
-- `--output`: Output file path for SARIF report (required) 
-- `--model`: Model to use for analysis (required)
+  Available Models
+```
+  ┌───────────────────────┬───────────┐
+  │       CLI name        │ Provider  │
+  ├───────────────────────┼───────────┤
+  │ openai-gpt5-mini      │ OpenAI    │
+  ├───────────────────────┼───────────┤
+  │ openai-gpt5.2         │ OpenAI    │
+  ├───────────────────────┼───────────┤
+  │ openai-gpt5.2-codex   │ OpenAI    │
+  ├───────────────────────┼───────────┤
+  │ claude-4.5-sonnet     │ Anthropic │
+  ├───────────────────────┼───────────┤
+  │ claude-4.5-haiku      │ Anthropic │
+  ├───────────────────────┼───────────┤
+  │ gemini-2.5-pro        │ Google    │
+  ├───────────────────────┼───────────┤
+  │ gemini-2.5-flash      │ Google    │
+  ├───────────────────────┼───────────┤
+  │ gemini-2.0-flash-lite │ Google    │
+  ├───────────────────────┼───────────┤
+  │ gemini-3-flash        │ Google    │
+  └───────────────────────┴───────────┘
+```
+  Optional Arguments
 
-### Available Models
-
-- `openai-gpt5.2`: OpenAI GPT-5.2
-- `openai-gpt5.2-codex`: OpenAI GPT-5.2 codex
-- `claude-4.5-haiku`: Claude 4.5 Haiku
-- `claude-4.5-opus`: Claude 4.5 Haiku
-- `gemini-2.5-pro`: Gemini 2.5 Pro
-- `gemini-2.5-flash`: Gemini 2.5 Flash
-- `gemini-3-flash`: Gemini 3 Flash
-
-### Optional Arguments
-
-- `--debug`: Enable debug mode for verbose output
-- `--request-timeout-sec`: Request timeout in seconds (default: 30)
-- `--file-concurrency`: Number of concurrent files to analyze (default: 20)
-- `--write-prompts`: Write prompts to files during analysis
-- `--skip-indexing`: Disable cross-file context indexing. When set, related files are not collected and included in prompts. Reduces memory usage on large repositories at the cost of cross-file vulnerability detection.
-
-
+  - --debug: Enable debug mode for verbose output
+  - --request-timeout-sec: Request timeout in seconds for LLM API calls (default: 30)
+  - --file-concurrency: Number of concurrent files to analyze (default: 20)
+  - --write-prompts: Write prompts to files during analysis (suffixed .userprompt and
+  .systemprompt)
+  - --local-prompts: Use detection rules embedded in the binary instead of fetching from the
+  Datadog API
+  - --skip-indexing: Disable cross-file context indexing. Reduces memory usage on large
+  repositories at the cost of cross-file vulnerability detection.
