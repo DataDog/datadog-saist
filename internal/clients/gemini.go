@@ -40,7 +40,13 @@ func (c *GeminiClient) GenerateContent(ctx context.Context, systemPrompt,
 	userPrompt string, options *GenerateOptions) (*GenerateResponse, error) {
 	modelValue := c.client.GenerativeModel(c.model)
 	modelValue.SetMaxOutputTokens(int32(options.MaxTokens))
-	modelValue.SetTemperature(float32(options.Temperature))
+	temperature, topP := AppliedSampling(c.model, options)
+	if temperature != nil {
+		modelValue.SetTemperature(float32(*temperature))
+	}
+	if topP != nil {
+		modelValue.SetTopP(float32(*topP))
+	}
 
 	if options.ResponseType == ApplicationJsonHeader {
 		modelValue.ResponseMIMEType = ApplicationJsonHeader
@@ -92,5 +98,6 @@ func (c *GeminiClient) GenerateContent(ctx context.Context, systemPrompt,
 		Content:      content,
 		InputTokens:  inputTokens,
 		OutputTokens: outputTokens,
+		UsageKnown:   resp.UsageMetadata != nil,
 	}, nil
 }

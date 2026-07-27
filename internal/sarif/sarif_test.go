@@ -346,6 +346,17 @@ func TestGenerateSarifReport_EmptyViolations(t *testing.T) {
 	assert.Len(t, report.Runs[0].Results, 0)
 }
 
+func TestGenerateSarifInformationIncludesModelCalls(t *testing.T) {
+	info := GenerateSarifInformation(&model.AnalysisOptions{}, []model.FileResult{
+		{Path: "first.go", InputTokens: 11, OutputTokens: 7, LLMCalls: 3},
+		{Path: "second.go", InputTokens: 13, OutputTokens: 5, LLMCalls: 4},
+	})
+
+	assert.Equal(t, int32(24), info.InputTokens)
+	assert.Equal(t, int32(12), info.OutputTokens)
+	assert.Equal(t, int32(7), info.ModelCalls)
+}
+
 func TestGenerateSarifReport_RuleMetadata(t *testing.T) {
 	cwe := "89"
 	rule := api.AiPrompt{

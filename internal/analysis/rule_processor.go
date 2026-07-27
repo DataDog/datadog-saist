@@ -213,15 +213,16 @@ func (rp *RuleProcessor) BuildScanDataForResult(ctx context.Context, result *Pro
 		}
 
 		scanData := model.ScanData{
-			Model:            rp.opts.DetectionModel,
-			UserPrompt:       userPrompt,
-			SystemPrompt:     systemPrompt,
-			EngineVersion:    model.EngineVersion,
-			RelativeFilePath: fm.RelPath,
-			FileHash:         fm.Hash,
-			FileText:         fileText,
-			NumberedFileText: numberedFileText,
-			Rule:             rule,
+			Model:                      rp.opts.DetectionModel,
+			UserPrompt:                 userPrompt,
+			SystemPrompt:               systemPrompt,
+			EngineVersion:              model.EngineVersion,
+			RelativeFilePath:           fm.RelPath,
+			RepositoryRelativeFilePath: repositoryRelativeScanPath(rp.opts.RepositoryRoot, rp.opts.CandidateScanRoot, fm.RelPath),
+			FileHash:                   fm.Hash,
+			FileText:                   fileText,
+			NumberedFileText:           numberedFileText,
+			Rule:                       rule,
 		}
 		allScanData = append(allScanData, scanData)
 	}
@@ -230,20 +231,37 @@ func (rp *RuleProcessor) BuildScanDataForResult(ctx context.Context, result *Pro
 	return nil
 }
 
+func repositoryRelativeScanPath(repositoryRoot, scanRoot, relativeFilePath string) string {
+	if repositoryRoot == "" {
+		return ""
+	}
+	if scanRoot == "" || scanRoot == "." {
+		return path.Clean(relativeFilePath)
+	}
+	return path.Join(scanRoot, relativeFilePath)
+}
+
 type RunScanResult struct {
 	Violations       []model.Violation
 	FileInputTokens  int32
 	FileOutputTokens int32
+	FileLLMCalls     int32
 }
 
 // Runs an individual scan, returning input token count, output token count, and any violations found.
 func (rp *RuleProcessor) runScan(ctx context.Context, scanData *model.ScanData) (RunScanResult, error) {
 	dr, err := rp.agent.Detect(ctx, scanData)
+	result := RunScanResult{}
+	if dr != nil {
+		result.FileInputTokens = dr.InputTokens
+		result.FileOutputTokens = dr.OutputTokens
+		result.FileLLMCalls = dr.ModelCalls
+	}
 	if err != nil {
 		if rp.debug {
 			log.FromContext(ctx).Debugf("detect error file=%s rule=%s: %v", scanData.RelativeFilePath, scanData.Rule.ID, err)
 		}
-		return RunScanResult{}, err
+		return result, err
 	}
 
 	filtered := filtering.FilterViolationsByKeywords(dr.Violations, scanData.Rule.ResultKeywordsExclude)
@@ -261,11 +279,8 @@ func (rp *RuleProcessor) runScan(ctx context.Context, scanData *model.ScanData) 
 	}
 	filtered = dedupeViolationsByFingerprint(filtered)
 
-	return RunScanResult{
-		Violations:       filtered,
-		FileInputTokens:  dr.InputTokens,
-		FileOutputTokens: dr.OutputTokens,
-	}, nil
+	result.Violations = filtered
+	return result, nil
 }
 
 func dedupeViolationsByFingerprint(violations []model.Violation) []model.Violation {
@@ -298,6 +313,12 @@ type RunScansResult struct {
 	FileLLMCalls     int32
 }
 
+func accumulateRunScanUsage(inputTokens, outputTokens, modelCalls *int32, result RunScanResult) {
+	*inputTokens += result.FileInputTokens
+	*outputTokens += result.FileOutputTokens
+	*modelCalls += result.FileLLMCalls
+}
+
 // RunScans runs and returns metrics for the provided list of ScanData. For accurate metrics, the caller should ensure
 // that all ScanData are for the same file.
 func (rp *RuleProcessor) RunScans(ctx context.Context, scanDataList []model.ScanData) (RunScansResult, error) {
@@ -311,7 +332,7 @@ func (rp *RuleProcessor) RunScans(ctx context.Context, scanDataList []model.Scan
 	for i := range scanDataList {
 		scanData := &scanDataList[i]
 		runScanResult, err := rp.runScan(ctx, scanData)
-		fileLLMCalls++
+		accumulateRunScanUsage(&fileInputTokens, &fileOutputTokens, &fileLLMCalls, runScanResult)
 		if err != nil {
 			// On rate limit, return error immediately
 			if clients.IsRateLimitError(err) {
@@ -330,15 +351,11 @@ func (rp *RuleProcessor) RunScans(ctx context.Context, scanDataList []model.Scan
 			}
 
 			rulesFailed = append(rulesFailed, scanData.Rule.ID)
-			fileInputTokens += runScanResult.FileInputTokens
-			fileOutputTokens += runScanResult.FileOutputTokens
 			continue
 		}
 
 		rulesSuccess = append(rulesSuccess, scanData.Rule.ID)
 		fileViolations = append(fileViolations, runScanResult.Violations...)
-		fileInputTokens += runScanResult.FileInputTokens
-		fileOutputTokens += runScanResult.FileOutputTokens
 	}
 
 	return RunScansResult{

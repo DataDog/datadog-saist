@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/DataDog/datadog-saist/internal/agents"
+	"github.com/DataDog/datadog-saist/internal/candidates"
 	"github.com/DataDog/datadog-saist/internal/clients"
 	"github.com/DataDog/datadog-saist/internal/codesecurity"
 	"github.com/DataDog/datadog-saist/internal/llmcontext"
@@ -62,6 +63,7 @@ func (w *ResultAggregator) Finalize() error {
 		Violations:   w.allViolations,
 		OutputTokens: w.totalOutputTokens,
 		InputTokens:  w.totalInputTokens,
+		ModelCalls:   w.totalLLMCalls,
 		FileResults:  w.allFileResults,
 		Rules:        w.rules,
 	})
@@ -251,24 +253,73 @@ func filterScanDataForDatadogDriver(filesAndRules map[string][]string, scans []m
 	return scansToPerform
 }
 
+func newDetectionAgent(ctx context.Context, opts *model.AnalysisOptions) (*agents.DetectionAgent, error) {
+	return newDetectionAgentWithSource(ctx, opts, "")
+}
+
+// newDetectionAgentWithSource builds a detection agent whose clients carry the
+// given AI Gateway source. An empty source defaults to clients.SourceDefault
+// inside agents.NewDetectionAgent, so callers that do not set a source keep the
+// production attribution unchanged. The verifier benchmark passes
+// clients.SourceAgenticBenchmark so its traffic is attributed separately.
+func newDetectionAgentWithSource(ctx context.Context, opts *model.AnalysisOptions,
+	source string) (*agents.DetectionAgent, error) {
+	var candidateExporter *candidates.Exporter
+	if opts.ExportCandidatesPath != "" {
+		var err error
+		candidateExporter, err = candidates.NewExporter(opts.ExportCandidatesPath)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	agent, err := agents.NewDetectionAgent(ctx, &agents.AgentOption{
+		DetectionModel:          opts.DetectionModel,
+		ValidationModel:         opts.ValidationModel,
+		OpenAiBaseUrl:           opts.OpenAIBaseURL,
+		Source:                  source,
+		RequestTimeoutSec:       opts.RequestTimeoutSec,
+		IsAIGateway:             opts.IsAIGateway,
+		AIGuardEnabled:          opts.AIGuardEnabled,
+		DisableProviderFallback: opts.DisableProviderFallback,
+		OrgID:                   opts.OrgID,
+		DebugEnabled:            opts.Debug,
+
+		AgenticDetection:     opts.AgenticDetection,
+		AgenticVerification:  opts.AgenticVerification,
+		ScanRoot:             opts.Directory,
+		AgenticMaxIterations: opts.AgenticMaxIterations,
+		AgenticMaxToolCalls:  opts.AgenticMaxToolCalls,
+
+		RepositoryID:      opts.RepositoryID,
+		RepositorySHA:     opts.RepositorySHA,
+		RepositoryDirty:   opts.RepositoryDirty,
+		CandidateScanRoot: opts.CandidateScanRoot,
+		CandidateExporter: candidateExporter,
+	})
+	if err != nil {
+		if candidateExporter != nil {
+			_ = candidateExporter.Close()
+		}
+		return nil, err
+	}
+	return agent, nil
+}
+
 // analyzeFiles processes files in batches to minimize memory usage
 // nolint: gocyclo
 func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOptions,
 	aiContext *model.AiContextProject) ([]model.FileResult, error) {
-	agent, err := agents.NewDetectionAgent(ctx, &agents.AgentOption{
-		DetectionModel:    opts.DetectionModel,
-		ValidationModel:   opts.ValidationModel,
-		OpenAiBaseUrl:     opts.OpenAIBaseURL,
-		RequestTimeoutSec: opts.RequestTimeoutSec,
-		IsAIGateway:       opts.IsAIGateway,
-		AIGuardEnabled:    opts.AIGuardEnabled,
-		OrgID:             opts.OrgID,
-		DebugEnabled:      opts.Debug,
-	})
+	agent, err := newDetectionAgent(ctx, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create detection agent for models detection=%s, validation=%s (timeout: %ds, AI gateway: %t): %w",
 			opts.DetectionModel, opts.ValidationModel, opts.RequestTimeoutSec, opts.IsAIGateway, err)
 	}
+	defer func() {
+		if err := agent.Close(); err != nil {
+			log.FromContext(ctx).Warnf("Failed to close candidate exporter: %v", err)
+		}
+	}()
 
 	// When not using Datadog driver mode (.datadog-driver.json + env), honor local Code Security YAML
 	// (same filenames as dd-source SAIST) by narrowing rules and file→rule pairs like code-workload-runner.
@@ -356,6 +407,7 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 		indexFilesForContext(ctx, opts.Directory, filesToIndex, aiContext, opts.Debug)
 		log.FromContext(ctx).Infof("Indexed %d files in %v", len(filesToIndex), time.Since(indexStart))
 	}
+	agent.SetProjectSymbolIndex(aiContext)
 
 	// Phase 3: Build ScanData (and prompts) now that aiContext is populated.
 	// ShouldAnalyze inside BuildScanDataForResult may drop some file/rule pairs, so the

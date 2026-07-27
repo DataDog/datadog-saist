@@ -20,6 +20,8 @@ type AnthropicClient struct {
 type anthropicRequest struct {
 	Model        string                 `json:"model"`
 	MaxTokens    int                    `json:"max_tokens"`
+	Temperature  *float64               `json:"temperature,omitempty"`
+	TopP         *float64               `json:"top_p,omitempty"`
 	Messages     []anthropicMessage     `json:"messages"`
 	System       string                 `json:"system,omitempty"`
 	OutputConfig *anthropicOutputConfig `json:"output_config,omitempty"`
@@ -75,10 +77,13 @@ func NewAnthropicClient(ctx context.Context, model string) (*AnthropicClient, er
 
 func (c *AnthropicClient) GenerateContent(ctx context.Context, systemPrompt, userPrompt string,
 	options *GenerateOptions) (*GenerateResponse, error) {
+	temperature, topP := AppliedSampling(c.model, options)
 	reqBody := anthropicRequest{
-		Model:     c.model,
-		MaxTokens: options.MaxTokens,
-		System:    systemPrompt,
+		Model:       c.model,
+		MaxTokens:   options.MaxTokens,
+		Temperature: temperature,
+		TopP:        topP,
+		System:      systemPrompt,
 		Messages: []anthropicMessage{
 			{
 				Role:    "user",
@@ -145,5 +150,6 @@ func (c *AnthropicClient) GenerateContent(ctx context.Context, systemPrompt, use
 		Content:      anthropicResp.Content[0].Text,
 		InputTokens:  int32(anthropicResp.Usage.InputTokens),
 		OutputTokens: int32(anthropicResp.Usage.OutputTokens),
+		UsageKnown:   true,
 	}, nil
 }

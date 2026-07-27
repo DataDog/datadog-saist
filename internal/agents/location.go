@@ -13,6 +13,19 @@ import (
 	"github.com/DataDog/datadog-saist/internal/utils"
 )
 
+func locationDeterminationOptions() clients.GenerateOptions {
+	return clients.GenerateOptions{
+		MaxTokens:    locationMaxTokens,
+		ResponseType: verificationResponseType,
+		Temperature:  locationTemperature,
+		Schema: clients.GenerateOptionSchema{
+			Name:        "location",
+			Description: "SARIF-style region for a verified vulnerability",
+			JsonSchema:  clients.GenerateSchema[LocationDeterminationResultData](),
+		},
+	}
+}
+
 const LocationDeterminationSystemPrompt = `You are a security expert. A vulnerability was already verified as a true positive.
 Your only task is to choose the SARIF-style source line for that single finding: where the dangerous sink lives in the file.
 
@@ -62,6 +75,7 @@ type LocationDeterminationResult struct {
 	LocationDeterminationResultData
 	InputTokens  int32
 	OutputTokens int32
+	Telemetry    *VerificationTelemetry
 }
 
 func getLocationDeterminationUserPrompt(
@@ -181,52 +195,52 @@ func (agent *DetectionAgent) DetermineViolationLocation(ctx context.Context, sca
 	violation model.LLMResultViolation, verification *VerificationResult) (*LocationDeterminationResult, error) {
 	logger := log.FromContext(ctx)
 	userPrompt := getLocationDeterminationUserPrompt(scanData, violation, verification)
-	options := &clients.GenerateOptions{
-		MaxTokens:    1024,
-		ResponseType: "application/json",
-		Temperature:  0.0,
-		Schema: clients.GenerateOptionSchema{
-			Name:        "location",
-			Description: "SARIF-style region for a verified vulnerability",
-			JsonSchema:  clients.GenerateSchema[LocationDeterminationResultData](),
-		},
-	}
+	options := locationDeterminationOptions()
 
-	response, err := agent.verificationGenerateContent(ctx, scanData, violation.StartLine,
-		LocationDeterminationSystemPrompt, userPrompt, options)
+	telemetry := prepareVerificationTelemetry(verification.Telemetry)
+	verification.Telemetry = telemetry
+	inputBefore := telemetry.InputTokens
+	outputBefore := telemetry.OutputTokens
+	response, err := agent.verificationGenerateContentWithTelemetry(ctx, scanData, violation.StartLine,
+		LocationDeterminationSystemPrompt, userPrompt, &options, telemetry, ModelCallKindLocation)
+	result := &LocationDeterminationResult{
+		InputTokens:  telemetry.InputTokens - inputBefore,
+		OutputTokens: telemetry.OutputTokens - outputBefore,
+		Telemetry:    telemetry,
+	}
 	if err != nil {
-		return nil, err
+		return result, err
 	}
 
 	locData, err := parseLocationDeterminationResult(response.Content)
 	if err != nil {
+		telemetry.markLastModelCallError(err)
 		if agent.agentOption.DebugEnabled {
 			logger.Warnf("[debug] location determination parse failed for %s:%d, using detection region: %s",
 				scanData.RelativeFilePath, violation.StartLine, err)
 		}
-		return nil, err
+		return result, err
 	}
 	if err := validateLocationDetermination(locData); err != nil {
+		telemetry.markLastModelCallError(err)
 		if agent.agentOption.DebugEnabled {
 			logger.Warnf("[debug] location determination validation failed for %s:%d: %s",
 				scanData.RelativeFilePath, violation.StartLine, err)
 		}
-		return nil, err
+		return result, err
 	}
 	if !locationFitsFile(locData, scanData.FileText) {
+		telemetry.markLastModelCallError(fmt.Errorf("location out of file range"))
 		if agent.agentOption.DebugEnabled {
 			logger.Warnf("[debug] location determination out of range for %s (lines %d-%d)",
 				scanData.RelativeFilePath, locData.StartLine, locData.EndLine)
 		}
-		return nil, fmt.Errorf("location out of file range")
+		return result, fmt.Errorf("location out of file range")
 	}
 	if stableLocation, ok := physicalLineLocation(scanData.FileText, locData.StartLine); ok {
 		locData = stableLocation
 	}
 
-	return &LocationDeterminationResult{
-		LocationDeterminationResultData: locData,
-		InputTokens:                     response.InputTokens,
-		OutputTokens:                    response.OutputTokens,
-	}, nil
+	result.LocationDeterminationResultData = locData
+	return result, nil
 }

@@ -1,10 +1,30 @@
 package agents
 
 import (
+	"context"
+	"fmt"
 	"testing"
 
+	"github.com/DataDog/datadog-saist/internal/clients"
+	"github.com/DataDog/datadog-saist/internal/model"
+	"github.com/DataDog/datadog-saist/internal/model/api"
 	"github.com/stretchr/testify/assert"
 )
+
+type locationSequenceClient struct {
+	responses []*clients.GenerateResponse
+	next      int
+}
+
+func (client *locationSequenceClient) GenerateContent(_ context.Context, _, _ string,
+	_ *clients.GenerateOptions) (*clients.GenerateResponse, error) {
+	if client.next >= len(client.responses) {
+		return nil, fmt.Errorf("unexpected model call %d", client.next+1)
+	}
+	response := client.responses[client.next]
+	client.next++
+	return response, nil
+}
 
 func TestParseLocationDeterminationResult_DirectJSON(t *testing.T) {
 	content := `{"startLine":10,"startColumn":1,"endLine":10,"endColumn":25}`
@@ -71,4 +91,90 @@ func TestLocationFitsFile(t *testing.T) {
 	assert.False(t, locationFitsFile(LocationDeterminationResultData{
 		StartLine: 1, StartColumn: 1, EndLine: 99, EndColumn: 2,
 	}, "a\nb"))
+}
+
+func TestVerifyCandidateIncludesLocationCallAndTokens(t *testing.T) {
+	client := &locationSequenceClient{responses: []*clients.GenerateResponse{
+		{
+			Content:      `{"confirmed":true,"confidence":"high","reason":"verified"}`,
+			InputTokens:  11,
+			OutputTokens: 7,
+		},
+		{
+			Content:      `{"startLine":1,"startColumn":1,"endLine":1,"endColumn":9}`,
+			InputTokens:  3,
+			OutputTokens: 2,
+		},
+	}}
+	agent := &DetectionAgent{
+		verificationLLMClient: client,
+		agentOption:           &AgentOption{RequestTimeoutSec: 30},
+	}
+	scanData := &model.ScanData{
+		RelativeFilePath: "file.go",
+		FileText:         "danger()",
+		Rule:             &api.AiPrompt{ID: "test-rule", Content: "test rule"},
+	}
+	candidate := model.LLMResultViolation{
+		StartLine: 1, StartColumn: 1, EndLine: 1, EndColumn: 9, Reason: "candidate",
+	}
+
+	violation, result, err := agent.VerifyCandidate(context.Background(), scanData, candidate)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, violation)
+	assert.Equal(t, int32(14), result.InputTokens)
+	assert.Equal(t, int32(9), result.OutputTokens)
+	assert.GreaterOrEqual(t, result.DurationMillis, int64(0))
+	if assert.Len(t, result.Telemetry.ModelCalls, 2) {
+		assert.Equal(t, ModelCallKindStandardVerification, result.Telemetry.ModelCalls[0].Kind)
+		assert.Equal(t, ModelCallKindLocation, result.Telemetry.ModelCalls[1].Kind)
+		if assert.NotNil(t, result.Telemetry.ModelCalls[0].Temperature) {
+			assert.Equal(t, verificationTemperature, *result.Telemetry.ModelCalls[0].Temperature)
+		}
+		if assert.NotNil(t, result.Telemetry.ModelCalls[1].Temperature) {
+			assert.Equal(t, locationTemperature, *result.Telemetry.ModelCalls[1].Temperature)
+		}
+		assert.Equal(t, verificationMaxTokens, result.Telemetry.ModelCalls[0].MaxTokens)
+		assert.Equal(t, locationMaxTokens, result.Telemetry.ModelCalls[1].MaxTokens)
+	}
+}
+
+func TestVerifyCandidatePreservesLocationUsageOnParseFailure(t *testing.T) {
+	client := &locationSequenceClient{responses: []*clients.GenerateResponse{
+		{
+			Content:      `{"confirmed":true,"confidence":"high","reason":"verified"}`,
+			InputTokens:  11,
+			OutputTokens: 7,
+		},
+		{
+			Content:      `{invalid`,
+			InputTokens:  3,
+			OutputTokens: 2,
+		},
+	}}
+	agent := &DetectionAgent{
+		verificationLLMClient: client,
+		agentOption:           &AgentOption{RequestTimeoutSec: 30},
+	}
+	scanData := &model.ScanData{
+		RelativeFilePath: "file.go",
+		FileText:         "danger()",
+		Rule:             &api.AiPrompt{ID: "test-rule", Content: "test rule"},
+	}
+	candidate := model.LLMResultViolation{
+		StartLine: 1, StartColumn: 1, EndLine: 1, EndColumn: 9, Reason: "candidate",
+	}
+
+	violation, result, err := agent.VerifyCandidate(context.Background(), scanData, candidate)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, violation)
+	assert.Equal(t, uint(1), violation.StartLine)
+	assert.Equal(t, int32(14), result.InputTokens)
+	assert.Equal(t, int32(9), result.OutputTokens)
+	if assert.Len(t, result.Telemetry.ModelCalls, 2) {
+		assert.Equal(t, ModelCallKindLocation, result.Telemetry.ModelCalls[1].Kind)
+		assert.NotEmpty(t, result.Telemetry.ModelCalls[1].Error)
+	}
 }

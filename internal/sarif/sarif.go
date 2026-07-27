@@ -18,6 +18,7 @@ const ruleSuccessTag = "RULE_SUCCESS"
 const ruleFailureTag = "RULE_FAILURE"
 const inputTokensTag = "DATADOG_SAIST_INPUT_TOKENS"   // nolint: gosec
 const outputTokensTag = "DATADOG_SAIST_OUTPUT_TOKENS" // nolint: gosec
+const modelCallsTag = "DATADOG_SAIST_MODEL_CALLS"
 const cweTag = "CWE"
 const ruleTypeTag = "DATADOG_RULE_TYPE"
 const tagsKey = "tags"
@@ -29,6 +30,7 @@ type SarifReportInformation struct {
 	Violations    []model.Violation
 	InputTokens   int32
 	OutputTokens  int32
+	ModelCalls    int32
 	FilesAnalyzed []string
 	FileResults   []model.FileResult
 	Rules         []api.AiPrompt
@@ -41,12 +43,14 @@ func GenerateSarifInformation(opts *model.AnalysisOptions, filesResults []model.
 	fileAnalyzedSet := make(map[string]struct{})
 	inputTokens := int32(0)
 	outputTokens := int32(0)
+	modelCalls := int32(0)
 
 	for _, fr := range filesResults {
 		fileAnalyzedSet[fr.Path] = struct{}{}
 		violations = append(violations, fr.Violations...)
 		inputTokens += fr.InputTokens
 		outputTokens += fr.OutputTokens
+		modelCalls += fr.LLMCalls
 	}
 
 	filesAnalyzed := make([]string, 0, len(fileAnalyzedSet))
@@ -58,6 +62,7 @@ func GenerateSarifInformation(opts *model.AnalysisOptions, filesResults []model.
 		Violations:    violations,
 		InputTokens:   inputTokens,
 		OutputTokens:  outputTokens,
+		ModelCalls:    modelCalls,
 		Rules:         opts.Rules,
 		FileResults:   filesResults,
 		FilesAnalyzed: filesAnalyzed,
@@ -155,6 +160,7 @@ func GenerateSarifReport(sarifInformation *SarifReportInformation) (*sarif.Repor
 	run.Properties = sarif.Properties{}
 	run.Properties = AddPropertyTag(run.Properties, outputTokensTag, strconv.Itoa(int(sarifInformation.OutputTokens)))
 	run.Properties = AddPropertyTag(run.Properties, inputTokensTag, strconv.Itoa(int(sarifInformation.InputTokens)))
+	run.Properties = AddPropertyTag(run.Properties, modelCallsTag, strconv.Itoa(int(sarifInformation.ModelCalls)))
 
 	report.AddRun(run)
 	return report, nil

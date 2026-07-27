@@ -13,7 +13,10 @@ type ScanData struct {
 
 	EngineVersion    string
 	RelativeFilePath string
-	FileHash         string
+	CandidateID      string
+	// RepositoryRelativeFilePath is set when source revision metadata is available.
+	RepositoryRelativeFilePath string
+	FileHash                   string
 
 	// Content for verification
 	FileText string

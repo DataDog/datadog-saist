@@ -21,15 +21,35 @@ type AnalysisSummary struct {
 	FilesAnalyzed []string
 	Rules         []modelApi.AiPrompt
 	Violations    []Violation
+	InputTokens   int32
+	OutputTokens  int32
+	ModelCalls    int32
 }
 
 type Violation = model.Violation
 
 func configure(ctx context.Context, directory string, detectionModelStr, validationModelStr string,
 	debug bool, baseURL string, requestTimeoutSec, fileConcurrency int, writePrompts, isAIGateway, aiGuardEnabled bool,
-	apiKey string, jwtToken string, orgID int64, repositoryID string, useLocalPrompts bool) (model.AnalysisOptions, error) {
+	apiKey string, jwtToken string, orgID int64, repositoryID string, useLocalPrompts bool,
+	agenticDetection, agenticVerification bool,
+	agenticMaxIterations, agenticMaxToolCalls int,
+	exportCandidatesPath, replayCandidatesPath string, allowSourceDrift bool) (model.AnalysisOptions, error) {
+	if exportCandidatesPath != "" && replayCandidatesPath != "" {
+		return model.AnalysisOptions{}, fmt.Errorf("candidate export and replay cannot be enabled together")
+	}
+	if allowSourceDrift && replayCandidatesPath == "" {
+		return model.AnalysisOptions{}, fmt.Errorf("source drift can only be allowed during candidate replay")
+	}
+	if repositoryID == "" {
+		return model.AnalysisOptions{}, fmt.Errorf("repository ID is required")
+	}
+
 	var rules []modelApi.AiPrompt
-	if useLocalPrompts {
+	if replayCandidatesPath != "" {
+		if debug {
+			log.FromContext(ctx).Info("Candidate replay uses rule metadata from the manifest")
+		}
+	} else if useLocalPrompts {
 		var err error
 		rules, err = agents.LoadLocalRules()
 		if err != nil {
@@ -59,6 +79,23 @@ func configure(ctx context.Context, directory string, detectionModelStr, validat
 		return model.AnalysisOptions{}, fmt.Errorf("directory '%s' does not exist", directory)
 	}
 
+	var repositoryRoot string
+	var repositorySHA string
+	var repositoryDirty bool
+	var candidateScanRoot string
+	if exportCandidatesPath != "" || replayCandidatesPath != "" {
+		var err error
+		repositoryRoot, repositorySHA, repositoryDirty, candidateScanRoot, err = resolveSourceRevision(ctx, directory)
+		if err != nil {
+			return model.AnalysisOptions{}, err
+		}
+		if exportCandidatesPath != "" {
+			if err := validateCandidateExportPath(repositoryRoot, exportCandidatesPath); err != nil {
+				return model.AnalysisOptions{}, err
+			}
+		}
+	}
+
 	detectionModel, err := model.GetModelOrPassthrough(detectionModelStr, isAIGateway)
 	if err != nil {
 		availableModels := strings.Join(model.GetAllModelStrings(), ", ")
@@ -80,7 +117,7 @@ func configure(ctx context.Context, directory string, detectionModelStr, validat
 	// Load Datadog driver configuration if enabled
 	var driverConfig *model.DatadogDriverConfig
 	datadogDriverEnabledEnvVar := os.Getenv(model.DatadogDriverEnabledEnvVar)
-	if datadogDriverEnabledEnvVar == "true" {
+	if replayCandidatesPath == "" && datadogDriverEnabledEnvVar == "true" {
 		config, err := utils.LoadDatadogDriverConfig(directory)
 		if err != nil {
 			return model.AnalysisOptions{}, fmt.Errorf("failed to load Datadog driver config: %w", err)
@@ -108,6 +145,19 @@ func configure(ctx context.Context, directory string, detectionModelStr, validat
 		RepositoryID:      repositoryID,
 		SkipIndexing:      false, // Set to true to skip code indexing
 		DatadogDriver:     driverConfig,
+
+		AgenticDetection:     agenticDetection,
+		AgenticVerification:  agenticVerification,
+		AgenticMaxIterations: agenticMaxIterations,
+		AgenticMaxToolCalls:  agenticMaxToolCalls,
+
+		ExportCandidatesPath: exportCandidatesPath,
+		ReplayCandidatesPath: replayCandidatesPath,
+		AllowSourceDrift:     allowSourceDrift,
+		RepositoryRoot:       repositoryRoot,
+		RepositorySHA:        repositorySHA,
+		RepositoryDirty:      repositoryDirty,
+		CandidateScanRoot:    candidateScanRoot,
 	}, nil
 }
 
@@ -139,18 +189,27 @@ func setAPIKey(modelValue model.Model, baseURL, apiKey string) {
 func RunAnalysis(ctx context.Context, directory string, detectionModelStr, validationModelStr, output string,
 	debug bool, baseURL string, requestTimeoutSec, fileConcurrency int, writePrompts, isAIGateway,
 	aiGuardEnabled bool, apiKey string, jwtToken string, orgID int64, repositoryID string,
-	useLocalPrompts bool) (AnalysisSummary, error) {
+	useLocalPrompts bool, agenticDetection, agenticVerification bool,
+	agenticMaxIterations, agenticMaxToolCalls int,
+	exportCandidatesPath, replayCandidatesPath string, allowSourceDrift bool) (AnalysisSummary, error) {
 	logger := log.NewDefaultLogger()
 	ctx = ContextWithShimmedLogger(ctx, logger)
 
 	opts, err := configure(ctx, directory, detectionModelStr, validationModelStr, debug, baseURL, requestTimeoutSec,
-		fileConcurrency, writePrompts, isAIGateway, aiGuardEnabled, apiKey, jwtToken, orgID, repositoryID, useLocalPrompts)
+		fileConcurrency, writePrompts, isAIGateway, aiGuardEnabled, apiKey, jwtToken, orgID, repositoryID, useLocalPrompts,
+		agenticDetection, agenticVerification, agenticMaxIterations, agenticMaxToolCalls,
+		exportCandidatesPath, replayCandidatesPath, allowSourceDrift)
 	if err != nil {
 		return AnalysisSummary{}, err
 	}
+	logger.Infof("Agentic modes configured, detection=%t verification=%t",
+		opts.AgenticDetection, opts.AgenticVerification)
 
 	if opts.Debug {
 		opts.Display()
+	}
+	if opts.ReplayCandidatesPath != "" {
+		return runCandidateReplay(ctx, &opts, output)
 	}
 
 	result, err := analyzeAndGenerateReport(ctx, &opts)
@@ -175,6 +234,9 @@ func RunAnalysis(ctx context.Context, directory string, detectionModelStr, valid
 		Violations:    sarifInformation.Violations,
 		Rules:         sarifInformation.Rules,
 		FilesAnalyzed: sarifInformation.FilesAnalyzed,
+		InputTokens:   sarifInformation.InputTokens,
+		OutputTokens:  sarifInformation.OutputTokens,
+		ModelCalls:    sarifInformation.ModelCalls,
 	}, nil
 }
 

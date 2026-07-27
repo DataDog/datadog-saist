@@ -48,7 +48,7 @@ var (
 	// OpenAI models
 	OpenAIGPT5Mini   = Model{ID: 12, Name: OpenAIGPT5MiniName, Provider: ProviderOpenAI}
 	OpenAIGPT52      = Model{ID: 13, Name: OpenAIGPT52Name, Provider: ProviderOpenAI}
-	OpenAIGPT52Codex = Model{ID: 13, Name: OpenAIGPT52CodexName, Provider: ProviderOpenAI}
+	OpenAIGPT52Codex = Model{ID: 14, Name: OpenAIGPT52CodexName, Provider: ProviderOpenAI}
 
 	// Anthropic models
 	Claude45Sonnet = Model{ID: 34, Name: Claude45SonnetName, Provider: ProviderAnthropic}
@@ -126,7 +126,8 @@ func GetModelOrPassthrough(modelStr string, allowPassthrough bool) (Model, error
 }
 
 func GetAllModels() []Model {
-	return []Model{OpenAIGPT5Mini, Gemini25Pro, Gemini25Flash, Gemini2FlashLite, Gemini3Flash}
+	return []Model{OpenAIGPT5Mini, OpenAIGPT52, OpenAIGPT52Codex,
+		Gemini25Pro, Gemini25Flash, Gemini2FlashLite, Gemini3Flash}
 }
 
 func GetAllModelStrings() []string {
