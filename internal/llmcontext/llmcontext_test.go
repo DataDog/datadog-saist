@@ -12,6 +12,7 @@ import (
 	treesitterjavascript "github.com/tree-sitter/tree-sitter-javascript/bindings/go"
 	treesitterphp "github.com/tree-sitter/tree-sitter-php/bindings/go"
 	treesitterpython "github.com/tree-sitter/tree-sitter-python/bindings/go"
+	treesitterrust "github.com/tree-sitter/tree-sitter-rust/bindings/go"
 	treesittertypescript "github.com/tree-sitter/tree-sitter-typescript/bindings/go"
 )
 
@@ -725,6 +726,123 @@ class FooTest {
 	assert.NotContains(t, names, "setUp")
 	assert.NotContains(t, names, "tearDown")
 	assert.Contains(t, names, "actualCode")
+}
+
+// Rust tests
+
+func TestGetContextFromFileRust(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+
+	err := os.WriteFile(
+		filepath.Join(tmpDir, "app.rs"),
+		[]byte(`struct Server;
+
+impl Server {
+    fn handle_request(&self, req: &Request) {
+        process_input(&req.body);
+    }
+}
+
+fn process_input(data: &[u8]) -> &[u8] {
+    data
+}
+`),
+		0644,
+	)
+	assert.NoError(t, err)
+
+	llmContext, err := GetContextFromFile(tmpDir, "app.rs")
+	assert.NoError(t, err)
+	assert.Equal(t, model.Rust, llmContext.Language)
+
+	names := make([]string, len(llmContext.Tags))
+	for i, tag := range llmContext.Tags {
+		names[i] = tag.Name
+	}
+	assert.Contains(t, names, "Server")
+	assert.Contains(t, names, "handle_request")
+	assert.Contains(t, names, "process_input")
+}
+
+func TestRustGetTags_Definitions(t *testing.T) {
+	t.Parallel()
+	code := `struct Greeter;
+
+trait Salutation {
+}
+
+impl Greeter {
+    fn say_hi(&self) {
+        greet("world");
+    }
+}
+
+fn greet(name: &str) -> String {
+    std::process::Command::new(name).spawn().unwrap();
+    format!("hello {}", name)
+}
+`
+	parser := treesitter.NewParser()
+	defer parser.Close()
+	parser.SetLanguage(treesitter.NewLanguage(treesitterrust.Language()))
+
+	tree := parser.Parse([]byte(code), nil)
+	defer tree.Close()
+
+	data := GetFunctionData{
+		root:     tree.RootNode(),
+		path:     "app.rs",
+		code:     []byte(code),
+		language: model.Rust,
+	}
+
+	tags, err := RustGetTags(data)
+	assert.NoError(t, err)
+
+	names := make([]string, len(tags))
+	for i, tag := range tags {
+		names[i] = tag.Name
+	}
+	assert.Contains(t, names, "Greeter")
+	assert.Contains(t, names, "Salutation")
+	assert.Contains(t, names, "say_hi")
+	assert.Contains(t, names, "greet")
+	assert.Contains(t, names, "new")
+}
+
+func TestRustGetTags_FilteredFunctions(t *testing.T) {
+	t.Parallel()
+	code := `mod tests {
+    fn setUp() {}
+    fn tearDown() {}
+    fn actual_code() {}
+}
+`
+	parser := treesitter.NewParser()
+	defer parser.Close()
+	parser.SetLanguage(treesitter.NewLanguage(treesitterrust.Language()))
+
+	tree := parser.Parse([]byte(code), nil)
+	defer tree.Close()
+
+	data := GetFunctionData{
+		root:     tree.RootNode(),
+		path:     "tests.rs",
+		code:     []byte(code),
+		language: model.Rust,
+	}
+
+	tags, err := RustGetTags(data)
+	assert.NoError(t, err)
+
+	names := make([]string, len(tags))
+	for i, tag := range tags {
+		names[i] = tag.Name
+	}
+	assert.NotContains(t, names, "setUp")
+	assert.NotContains(t, names, "tearDown")
+	assert.Contains(t, names, "actual_code")
 }
 
 // Common stuff
