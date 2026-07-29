@@ -2267,7 +2267,9 @@ func shouldAnalyzeRubySqliCtx(ctx *model.DetectionContext) bool {
 	dbHints := []string{
 		"sqlite3",
 		"mysql2",
-		"pg",
+		"pg::connection",
+		"require 'pg'",
+		"require \"pg\"",
 		"activerecord",
 		"sequel",
 		".execute(",
@@ -2319,7 +2321,6 @@ func shouldAnalyzeRubyXssCtx(ctx *model.DetectionContext) bool {
 	}
 
 	responseSinks := []string{
-		"render",
 		"render(",
 		"html_safe",
 		"raw(",
@@ -2384,8 +2385,9 @@ func shouldAnalyzeRubyZipslipCtx(ctx *model.DetectionContext) bool {
 		"rubyzip",
 		"zip::file",
 		"zip::inputstream",
-		"tar",
-		"zlib",
+		"minitar",
+		"archive::tar",
+		"zlib::gzipreader",
 		"minizip",
 	}
 
@@ -2395,21 +2397,15 @@ func shouldAnalyzeRubyZipslipCtx(ctx *model.DetectionContext) bool {
 func shouldAnalyzeRubyLdapiCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
 
-	ldapPatterns := []string{
+	ldapLibrary := []string{
 		"net/ldap",
 		"net::ldap",
-		".search(",
-		".bind(",
 		"ldap.search",
 		"ldap.bind",
-		"filter",
-		"base_dn",
-		"dc=",
-		"cn=",
-		"ou=",
+		"ldap.open",
 	}
 
-	return containsAny(code, ldapPatterns)
+	return containsAny(code, ldapLibrary)
 }
 
 func shouldAnalyzeRubyCodeiCtx(ctx *model.DetectionContext) bool {
@@ -2421,8 +2417,6 @@ func shouldAnalyzeRubyCodeiCtx(ctx *model.DetectionContext) bool {
 		"class_eval(",
 		"module_eval(",
 		"binding.eval(",
-		"require(",
-		"load(",
 	}
 
 	inputSources := []string{
@@ -2591,13 +2585,13 @@ func shouldAnalyzeRubyBrokencryptoCtx(ctx *model.DetectionContext) bool {
 		"openssl::cipher::des",
 		"openssl::cipher::rc4",
 		"openssl::cipher::rc2",
+		"openssl::cipher::bf",
 		"openssl::digest::md5",
 		"openssl::digest::sha1",
-		"des",
-		"rc4",
-		"blowfish",
 		"cipher.new('des",
 		"cipher.new('rc4",
+		"cipher.new('rc2",
+		"cipher.new('bf",
 	}
 
 	return containsAny(code, weakCryptoPatterns)
@@ -2615,8 +2609,6 @@ func shouldAnalyzeRubyWeakhashCtx(ctx *model.DetectionContext) bool {
 		"md5.digest",
 		"sha1.hexdigest",
 		"sha1.digest",
-		"md5(",
-		"sha1(",
 	}
 
 	return containsAny(code, weakHashPatterns)
@@ -2637,7 +2629,6 @@ func shouldAnalyzeRubyWeakrandomnessCtx(ctx *model.DetectionContext) bool {
 		"password",
 		"session",
 		"secret",
-		"key",
 		"otp",
 		"verification",
 		"csrf",
@@ -2792,10 +2783,9 @@ func shouldAnalyzeRubyExcessiveagencyCtx(ctx *model.DetectionContext) bool {
 		"llm",
 		"chatgpt",
 		"gpt-4",
-		"claude",
 		"tool_call",
 		"function_call",
-		"agent",
+		"langchain::agent",
 	}
 
 	return containsAny(code, aiPatterns)
@@ -2810,7 +2800,6 @@ func shouldAnalyzeRubySystempromptleakageCtx(ctx *model.DetectionContext) bool {
 		"systemprompt",
 		"role: 'system'",
 		"role: \"system\"",
-		"{role:",
 	}
 
 	aiPatterns := []string{
@@ -2829,19 +2818,20 @@ func shouldAnalyzeRubySystempromptleakageCtx(ctx *model.DetectionContext) bool {
 func shouldAnalyzeRubyUnboundedconsumptionCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
 
+	aiLibrary := []string{
+		"openai",
+		"anthropic",
+		"langchain",
+		"llm",
+	}
+
 	resourcePatterns := []string{
 		"max_tokens",
 		"max_length",
 		"temperature",
-		"openai",
-		"anthropic",
-		"llm",
-		"loop do",
-		"while true",
-		"recursive",
 	}
 
-	return containsAny(code, resourcePatterns)
+	return containsAny(code, aiLibrary) && containsAny(code, resourcePatterns)
 }
 
 func shouldAnalyzeRubyVectorembeddingweaknessesCtx(ctx *model.DetectionContext) bool {
@@ -2873,7 +2863,6 @@ func shouldAnalyzeRubyDatamodelpoisoningCtx(ctx *model.DetectionContext) bool {
 		"corpus",
 		"llm",
 		"model.train",
-		"fit(",
 	}
 
 	return containsAny(code, trainingPatterns)
@@ -2886,10 +2875,10 @@ func shouldAnalyzeRubyMisinformationCtx(ctx *model.DetectionContext) bool {
 		"llm",
 		"openai",
 		"anthropic",
-		"generate(",
-		"completion",
-		"chat(",
-		"response.text",
+		"langchain",
+		"chat_completion",
+		"completions.create",
+		"messages.create",
 	}
 
 	return containsAny(code, misinfoPatterns)
