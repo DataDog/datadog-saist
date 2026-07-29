@@ -23,6 +23,8 @@ import (
 	treesitterkotlin "github.com/tree-sitter-grammars/tree-sitter-kotlin/bindings/go"
 
 	treesitterphp "github.com/tree-sitter/tree-sitter-php/bindings/go"
+
+	treesitterswift "github.com/alex-pinkus/tree-sitter-swift/bindings/go"
 )
 
 const (
@@ -71,6 +73,10 @@ var contextRetrievers = map[model.Language]ContextRetriever{
 	model.PHP: {
 		Language:        treesitter.NewLanguage(treesitterphp.LanguagePHP()),
 		FunctionGetTags: PHPGetTags,
+	},
+	model.Swift: {
+		Language:        treesitter.NewLanguage(treesitterswift.Language()),
+		FunctionGetTags: SwiftGetTags,
 	},
 }
 

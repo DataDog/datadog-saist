@@ -95,6 +95,13 @@ var phpTestPathPatterns = []string{
 	"**/*Spec.php",
 }
 
+var swiftTestPathPatterns = []string{
+	"**/*Tests.swift",
+	"**/*Test.swift",
+	"**/*Spec.swift",
+	"**/*UITests.swift",
+}
+
 var DefaultIgnoredGlobs = []string{
 	"**/node_modules/**/*",
 	"**/jspm_packages/**/*",
@@ -198,6 +205,11 @@ func IsGeneratedFileFromContent(fullContent []byte, path string, language model.
 
 	case model.PHP:
 		return strings.Contains(content, GeneratedByMarker)
+
+	case model.Swift:
+		return strings.Contains(content, GeneratedByMarker) ||
+			strings.Contains(content, ProtoBufHeader) ||
+			strings.Contains(content, ThriftHeader)
 
 	default:
 		return isGeneratedFileSuffix(path)
@@ -305,6 +317,11 @@ func IsGeneratedFileByContent(content []byte, path string, language model.Langua
 	case model.PHP:
 		return strings.Contains(header, GeneratedByMarker)
 
+	case model.Swift:
+		return strings.Contains(header, GeneratedByMarker) ||
+			strings.Contains(header, ProtoBufHeader) ||
+			strings.Contains(header, ThriftHeader)
+
 	default:
 		return false
 	}
@@ -369,6 +386,10 @@ func hasTestLikePath(path string, language model.Language) bool {
 		// PHP: default folders + PHPUnit naming (FooTest.php, FooSpec.php)
 		return matchesAnyGlob(path, slices.Concat(defaultTestPaths, defaultTestFilenames, phpTestPathPatterns))
 
+	case model.Swift:
+		// Swift: default folders + XCTest/Quick naming (FooTests.swift, FooSpec.swift)
+		return matchesAnyGlob(path, slices.Concat(defaultTestPaths, defaultTestFilenames, swiftTestPathPatterns))
+
 	default:
 		// For other languages we don't classify here
 		return false
@@ -389,6 +410,8 @@ func hasTestLikeImport(language model.Language, code, path string) bool {
 		return kotlinHasTestLikeImport(code)
 	case model.PHP:
 		return phpHasTestLikeImport(code)
+	case model.Swift:
+		return swiftHasTestLikeImport(code)
 	default:
 		return false
 	}
@@ -612,6 +635,38 @@ func phpHasTestLikeImport(code string) bool {
 			if strings.HasPrefix(rest, prefix) {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+// ----- Swift import detection -----
+func swiftHasTestLikeImport(code string) bool {
+	// Swift uses "import Module" (optionally prefixed with "@testable ").
+	swiftTestModules := map[string]struct{}{
+		"XCTest": {},
+		"Quick":  {},
+		"Nimble": {},
+	}
+
+	scanner := bufio.NewScanner(strings.NewReader(code))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		line = strings.TrimPrefix(line, "@testable ")
+		if !strings.HasPrefix(line, "import ") {
+			continue
+		}
+		fields := strings.Fields(strings.TrimPrefix(line, "import"))
+		if len(fields) == 0 {
+			continue
+		}
+		// Last field handles submodule imports like "import struct Foundation.Data".
+		module := fields[len(fields)-1]
+		if i := strings.IndexByte(module, '.'); i >= 0 {
+			module = module[:i]
+		}
+		if _, ok := swiftTestModules[module]; ok {
+			return true
 		}
 	}
 	return false

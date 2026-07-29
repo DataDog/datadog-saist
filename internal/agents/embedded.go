@@ -23,6 +23,7 @@ var languageGlobs = map[string][]string{
 	"typescript": {"**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"},
 	"kotlin":     {"**/*.kt", "**/*.kts"},
 	"php":        {"**/*.php", "**/*.phtml", "**/*.php3", "**/*.php4", "**/*.php5"},
+	"swift":      {"**/*.swift"},
 }
 
 // LoadLocalRules returns one api.AiPrompt per embedded *.md file in this

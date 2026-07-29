@@ -46,6 +46,8 @@ func codeUsedForDetection(inputCode string, language model.Language) string {
 		return stripKotlinComments(inputCode)
 	case model.PHP:
 		return stripPHPComments(inputCode)
+	case model.Swift:
+		return stripSwiftComments(inputCode)
 	default:
 		return inputCode
 	}
@@ -155,6 +157,13 @@ func stripPHPComments(code string) string {
 		out = append(out, line)
 	}
 	return strings.Join(out, "\n")
+}
+
+func stripSwiftComments(code string) string {
+	// Swift uses C-style comments; skip empty and bare "*" lines (doc-comment bodies).
+	return stripCStyleComments(code, func(trimmed string) bool {
+		return trimmed == "" || trimmed == "*"
+	})
 }
 
 func stripCSharpComments(code string) string {

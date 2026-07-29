@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/DataDog/datadog-saist/internal/model"
+	treesitterswift "github.com/alex-pinkus/tree-sitter-swift/bindings/go"
 	"github.com/stretchr/testify/assert"
 	treesitterkotlin "github.com/tree-sitter-grammars/tree-sitter-kotlin/bindings/go"
 	treesitter "github.com/tree-sitter/go-tree-sitter"
@@ -716,6 +717,117 @@ class FooTest {
 	}
 
 	tags, err := PHPGetTags(data)
+	assert.NoError(t, err)
+
+	names := make([]string, len(tags))
+	for i, tag := range tags {
+		names[i] = tag.Name
+	}
+	assert.NotContains(t, names, "setUp")
+	assert.NotContains(t, names, "tearDown")
+	assert.Contains(t, names, "actualCode")
+}
+
+// Swift tests
+
+func TestGetContextFromFileSwift(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+
+	err := os.WriteFile(
+		filepath.Join(tmpDir, "app.swift"),
+		[]byte(`class Server {
+    func handleRequest(_ req: Request) {
+        processInput(req.body)
+    }
+}
+
+func processInput(_ data: Data) -> Data {
+    return data
+}
+`),
+		0644,
+	)
+	assert.NoError(t, err)
+
+	llmContext, err := GetContextFromFile(tmpDir, "app.swift")
+	assert.NoError(t, err)
+	assert.Equal(t, model.Swift, llmContext.Language)
+
+	names := make([]string, len(llmContext.Tags))
+	for i, tag := range llmContext.Tags {
+		names[i] = tag.Name
+	}
+	assert.Contains(t, names, "Server")
+	assert.Contains(t, names, "handleRequest")
+	assert.Contains(t, names, "processInput")
+}
+
+func TestSwiftGetTags_Definitions(t *testing.T) {
+	t.Parallel()
+	code := `class Greeter {
+    func sayHi() {
+        greet(name: "world")
+    }
+}
+
+protocol Salutation {
+}
+
+func greet(name: String) -> String {
+    return "hello " + name
+}
+`
+	parser := treesitter.NewParser()
+	defer parser.Close()
+	parser.SetLanguage(treesitter.NewLanguage(treesitterswift.Language()))
+
+	tree := parser.Parse([]byte(code), nil)
+	defer tree.Close()
+
+	data := GetFunctionData{
+		root:     tree.RootNode(),
+		path:     "app.swift",
+		code:     []byte(code),
+		language: model.Swift,
+	}
+
+	tags, err := SwiftGetTags(data)
+	assert.NoError(t, err)
+
+	names := make([]string, len(tags))
+	for i, tag := range tags {
+		names[i] = tag.Name
+	}
+	assert.Contains(t, names, "Greeter")
+	assert.Contains(t, names, "Salutation")
+	assert.Contains(t, names, "sayHi")
+	assert.Contains(t, names, "greet")
+}
+
+func TestSwiftGetTags_FilteredFunctions(t *testing.T) {
+	t.Parallel()
+	code := `class FooTests: XCTestCase {
+    func setUp() {}
+    func tearDown() {}
+    func actualCode() {}
+}
+`
+	parser := treesitter.NewParser()
+	defer parser.Close()
+	parser.SetLanguage(treesitter.NewLanguage(treesitterswift.Language()))
+
+	tree := parser.Parse([]byte(code), nil)
+	defer tree.Close()
+
+	data := GetFunctionData{
+		root:     tree.RootNode(),
+		path:     "FooTests.swift",
+		code:     []byte(code),
+		language: model.Swift,
+	}
+
+	tags, err := SwiftGetTags(data)
 	assert.NoError(t, err)
 
 	names := make([]string, len(tags))
