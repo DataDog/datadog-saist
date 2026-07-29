@@ -95,6 +95,12 @@ var phpTestPathPatterns = []string{
 	"**/*Spec.php",
 }
 
+var rubyTestPathPatterns = []string{
+	"**/*_spec.rb",
+	"**/spec/**",
+	"**/*_test.rb",
+}
+
 var DefaultIgnoredGlobs = []string{
 	"**/node_modules/**/*",
 	"**/jspm_packages/**/*",
@@ -369,6 +375,10 @@ func hasTestLikePath(path string, language model.Language) bool {
 		// PHP: default folders + PHPUnit naming (FooTest.php, FooSpec.php)
 		return matchesAnyGlob(path, slices.Concat(defaultTestPaths, defaultTestFilenames, phpTestPathPatterns))
 
+	case model.Ruby:
+		// Ruby: default folders + RSpec/Minitest naming
+		return matchesAnyGlob(path, slices.Concat(defaultTestPaths, defaultTestFilenames, rubyTestPathPatterns))
+
 	default:
 		// For other languages we don't classify here
 		return false
@@ -389,6 +399,8 @@ func hasTestLikeImport(language model.Language, code, path string) bool {
 		return kotlinHasTestLikeImport(code)
 	case model.PHP:
 		return phpHasTestLikeImport(code)
+	case model.Ruby:
+		return rubyHasTestLikeImport(code)
 	default:
 		return false
 	}
@@ -610,6 +622,36 @@ func phpHasTestLikeImport(code string) bool {
 		rest = strings.TrimSpace(rest)
 		for _, prefix := range phpTestPrefixes {
 			if strings.HasPrefix(rest, prefix) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// ----- Ruby import detection -----
+func rubyHasTestLikeImport(code string) bool {
+	// Ruby uses require/require_relative for loading test frameworks.
+	rubyTestLibs := []string{
+		"rspec",
+		"minitest",
+		"test/unit",
+		"shoulda",
+		"cucumber",
+		"capybara",
+		"factory_bot",
+		"faker",
+	}
+
+	scanner := bufio.NewScanner(strings.NewReader(code))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		// Match: require 'rspec', require "minitest/autorun", require_relative 'spec_helper'
+		if !strings.HasPrefix(line, "require") {
+			continue
+		}
+		for _, lib := range rubyTestLibs {
+			if strings.Contains(line, lib) {
 				return true
 			}
 		}

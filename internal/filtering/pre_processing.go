@@ -46,6 +46,8 @@ func codeUsedForDetection(inputCode string, language model.Language) string {
 		return stripKotlinComments(inputCode)
 	case model.PHP:
 		return stripPHPComments(inputCode)
+	case model.Ruby:
+		return stripRubyComments(inputCode)
 	default:
 		return inputCode
 	}
@@ -164,6 +166,30 @@ func stripCSharpComments(code string) string {
 	})
 }
 
+func stripRubyComments(code string) string {
+	lines := strings.Split(code, "\n")
+	out := lines[:0]
+	inBlock := false
+	for _, line := range lines {
+		// =begin/=end must start at column 0 in Ruby.
+		if strings.HasPrefix(line, "=begin") {
+			inBlock = true
+			continue
+		}
+		if inBlock {
+			if strings.HasPrefix(line, "=end") {
+				inBlock = false
+			}
+			continue
+		}
+		if strings.HasPrefix(strings.TrimSpace(line), "#") {
+			continue
+		}
+		out = append(out, line)
+	}
+	return strings.Join(out, "\n")
+}
+
 func containsAny(code string, keywords []string) bool {
 	for _, kw := range keywords {
 		if strings.Contains(code, kw) {
@@ -276,6 +302,36 @@ var ruleFilters = map[string]ruleFilterFunc{
 	"datadog/go-weakrandomness":     shouldAnalyzeGoWeakrandomnessCtx,
 	"datadog/python-weakrandomness": shouldAnalyzePythonWeakrandomnessCtx,
 	"datadog/csharp-weakrandomness": shouldAnalyzeCSharpWeakrandomnessCtx,
+
+	// Ruby
+	"datadog/ruby-sqli":                      shouldAnalyzeRubySqliCtx,
+	"datadog/ruby-cmdi":                      shouldAnalyzeRubyCmdiCtx,
+	"datadog/ruby-xss":                       shouldAnalyzeRubyXssCtx,
+	"datadog/ruby-pathtraversal":             shouldAnalyzeRubyPathtraversalCtx,
+	"datadog/ruby-zipslip":                   shouldAnalyzeRubyZipslipCtx,
+	"datadog/ruby-ldapi":                     shouldAnalyzeRubyLdapiCtx,
+	"datadog/ruby-codei":                     shouldAnalyzeRubyCodeiCtx,
+	"datadog/ruby-loginjection":              shouldAnalyzeRubyLoginjectionCtx,
+	"datadog/ruby-integeroverflow":           shouldAnalyzeRubyIntegeroverflowCtx,
+	"datadog/ruby-sensitiveinfodisclosure":   shouldAnalyzeRubySensitiveinfodisclosureCtx,
+	"datadog/ruby-errorinfoleak":             shouldAnalyzeRubyErrorinfoleakCtx,
+	"datadog/ruby-accesscontrol":             shouldAnalyzeRubyAccesscontrolCtx,
+	"datadog/ruby-brokencrypto":              shouldAnalyzeRubyBrokencryptoCtx,
+	"datadog/ruby-weakhash":                  shouldAnalyzeRubyWeakhashCtx,
+	"datadog/ruby-weakrandomness":            shouldAnalyzeRubyWeakrandomnessCtx,
+	"datadog/ruby-deserialization":           shouldAnalyzeRubyDeserializationCtx,
+	"datadog/ruby-trustboundary":             shouldAnalyzeRubyTrustboundaryCtx,
+	"datadog/ruby-openredirect":              shouldAnalyzeRubyOpenredirectCtx,
+	"datadog/ruby-insecurecookie":            shouldAnalyzeRubyInsecurecookieCtx,
+	"datadog/ruby-xpathi":                    shouldAnalyzeRubyXpathiCtx,
+	"datadog/ruby-improperoutputhandling":    shouldAnalyzeRubyImproperoutputhandlingCtx,
+	"datadog/ruby-excessiveagency":           shouldAnalyzeRubyExcessiveagencyCtx,
+	"datadog/ruby-systempromptleakage":       shouldAnalyzeRubySystempromptleakageCtx,
+	"datadog/ruby-unboundedconsumption":      shouldAnalyzeRubyUnboundedconsumptionCtx,
+	"datadog/ruby-vectorembeddingweaknesses": shouldAnalyzeRubyVectorembeddingweaknessesCtx,
+	"datadog/ruby-datamodelpoisoning":        shouldAnalyzeRubyDatamodelpoisoningCtx,
+	"datadog/ruby-misinformation":            shouldAnalyzeRubyMisinformationCtx,
+	"datadog/ruby-promptinjection":           shouldAnalyzeRubyPromptinjectionCtx,
 }
 
 // shouldAnalyzePythonSqliCtx checks for Python SQL injection patterns.
@@ -2199,6 +2255,664 @@ func shouldAnalyzeCSharpWeakrandomnessCtx(ctx *model.DetectionContext) bool {
 	hasSecurityContext := containsAny(code, securityContext)
 
 	return hasWeakRandom && hasSecurityContext
+}
+
+// ============================================================
+// Ruby Rules
+// ============================================================
+
+func shouldAnalyzeRubySqliCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	dbHints := []string{
+		"sqlite3",
+		"mysql2",
+		"pg::connection",
+		"require 'pg'",
+		"require \"pg\"",
+		"activerecord",
+		"sequel",
+		".execute(",
+		".query(",
+		"connection.exec",
+		"connection.query",
+		"db.exec",
+		"db.query",
+		"find_by_sql",
+		"where(",
+		"joins(",
+	}
+
+	sqlWords := []string{"select", "update", "insert", "delete", "from", "where"}
+
+	hasDb := containsAny(code, dbHints)
+	hasSql := containsAnyWord(code, sqlWords)
+
+	return hasDb && hasSql
+}
+
+func shouldAnalyzeRubyCmdiCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	cmdiPatterns := []string{
+		"system(",
+		"exec(",
+		"`",
+		"spawn(",
+		"open(",
+		"popen(",
+		"io.popen(",
+		"kernel#`",
+		"%x{",
+		"/bin/sh",
+		"/bin/bash",
+		"shellwords",
+	}
+
+	return containsAny(code, cmdiPatterns)
+}
+
+func shouldAnalyzeRubyXssCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	htmlHints := []string{
+		"<html", "<body", "<script", "<form", "<input", "<img", "<iframe",
+		"<div", "<span",
+	}
+
+	responseSinks := []string{
+		"render(",
+		"html_safe",
+		"raw(",
+		"content_tag(",
+		"response.body",
+		"response.write(",
+		"erb(",
+	}
+
+	inputSources := []string{
+		"params[",
+		"params.fetch",
+		"request.params",
+		"request.query_string",
+		"cookies[",
+		"session[",
+	}
+
+	hasHTML := containsAny(code, htmlHints)
+	hasSink := containsAny(code, responseSinks)
+	hasInput := containsAny(code, inputSources)
+
+	return hasHTML || hasSink || hasInput
+}
+
+func shouldAnalyzeRubyPathtraversalCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	fileSinks := []string{
+		"file.open(",
+		"file.read(",
+		"file.write(",
+		"file.delete(",
+		"file.new(",
+		"io.read(",
+		"send_file(",
+		"send_data(",
+		"dir.glob(",
+		"fileutils.",
+		"pathname.new(",
+	}
+
+	inputSources := []string{
+		"params[",
+		"params.fetch",
+		"request.params",
+		"cookies[",
+		"session[",
+	}
+
+	hasSink := containsAny(code, fileSinks)
+	hasInput := containsAny(code, inputSources)
+
+	return hasSink && hasInput
+}
+
+func shouldAnalyzeRubyZipslipCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	zipPatterns := []string{
+		"zipfile",
+		"rubyzip",
+		"zip::file",
+		"zip::inputstream",
+		"minitar",
+		"archive::tar",
+		"zlib::gzipreader",
+		"minizip",
+	}
+
+	return containsAny(code, zipPatterns)
+}
+
+func shouldAnalyzeRubyLdapiCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	ldapLibrary := []string{
+		"net/ldap",
+		"net::ldap",
+		"ldap.search",
+		"ldap.bind",
+		"ldap.open",
+	}
+
+	return containsAny(code, ldapLibrary)
+}
+
+func shouldAnalyzeRubyCodeiCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	codeExecAPIs := []string{
+		"eval(",
+		"instance_eval(",
+		"class_eval(",
+		"module_eval(",
+		"binding.eval(",
+	}
+
+	inputSources := []string{
+		"params[",
+		"params.fetch",
+		"request.params",
+		"cookies[",
+	}
+
+	hasCodeExec := containsAny(code, codeExecAPIs)
+	hasInput := containsAny(code, inputSources)
+
+	return hasCodeExec && hasInput
+}
+
+func shouldAnalyzeRubyLoginjectionCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	logSinks := []string{
+		"logger.",
+		"rails.logger",
+		"log.info",
+		"log.warn",
+		"log.error",
+		"log.debug",
+		"puts ",
+		"print ",
+	}
+
+	inputSources := []string{
+		"params[",
+		"params.fetch",
+		"request.params",
+		"cookies[",
+		"session[",
+	}
+
+	hasSink := containsAny(code, logSinks)
+	hasInput := containsAny(code, inputSources)
+
+	return hasSink && hasInput
+}
+
+func shouldAnalyzeRubyIntegeroverflowCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	// Ruby integers are arbitrary precision, so overflow is rare.
+	// Check for explicit conversions from external input or C extensions.
+	patterns := []string{
+		".to_i",
+		".to_f",
+		".to_r",
+		"integer(",
+		"float(",
+		"bigdecimal",
+		"fiddle",
+		"ffi",
+	}
+
+	inputSources := []string{
+		"params[",
+		"params.fetch",
+		"request.params",
+		"cookies[",
+	}
+
+	hasConversion := containsAny(code, patterns)
+	hasInput := containsAny(code, inputSources)
+
+	return hasConversion && hasInput
+}
+
+func shouldAnalyzeRubySensitiveinfodisclosureCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	sensitivePatterns := []string{
+		"password",
+		"passwd",
+		"secret",
+		"api_key",
+		"apikey",
+		"token",
+		"private_key",
+		"credit_card",
+		"ssn",
+		"social_security",
+	}
+
+	outputSinks := []string{
+		"render(",
+		"render json:",
+		"response.body",
+		"to_json",
+		"as_json",
+		"logger.",
+		"puts ",
+	}
+
+	hasSensitive := containsAny(code, sensitivePatterns)
+	hasSink := containsAny(code, outputSinks)
+
+	return hasSensitive && hasSink
+}
+
+func shouldAnalyzeRubyErrorinfoleakCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	errorPatterns := []string{
+		"rescue ",
+		"rescue=>",
+		"exception",
+		"standarderror",
+		"runtimeerror",
+		"backtrace",
+		".message",
+	}
+
+	outputSinks := []string{
+		"render(",
+		"render json:",
+		"response.body",
+		"to_json",
+		"logger.",
+	}
+
+	hasError := containsAny(code, errorPatterns)
+	hasSink := containsAny(code, outputSinks)
+
+	return hasError && hasSink
+}
+
+func shouldAnalyzeRubyAccesscontrolCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	routePatterns := []string{
+		"def show",
+		"def edit",
+		"def update",
+		"def destroy",
+		"get '",
+		"post '",
+		"put '",
+		"delete '",
+		"resources :",
+	}
+
+	idAccessPatterns := []string{
+		"params[:id]",
+		"params['id']",
+		"find(",
+		"find_by(",
+		"where(id:",
+		"where(id =",
+	}
+
+	hasRoute := containsAny(code, routePatterns)
+	hasIdAccess := containsAny(code, idAccessPatterns)
+
+	return hasRoute && hasIdAccess
+}
+
+func shouldAnalyzeRubyBrokencryptoCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	weakCryptoPatterns := []string{
+		"openssl::cipher::des",
+		"openssl::cipher::rc4",
+		"openssl::cipher::rc2",
+		"openssl::cipher::bf",
+		"openssl::digest::md5",
+		"openssl::digest::sha1",
+		"cipher.new('des",
+		"cipher.new('rc4",
+		"cipher.new('rc2",
+		"cipher.new('bf",
+	}
+
+	return containsAny(code, weakCryptoPatterns)
+}
+
+func shouldAnalyzeRubyWeakhashCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	weakHashPatterns := []string{
+		"digest::md5",
+		"openssl::digest::md5",
+		"digest::sha1",
+		"openssl::digest::sha1",
+		"md5.hexdigest",
+		"md5.digest",
+		"sha1.hexdigest",
+		"sha1.digest",
+	}
+
+	return containsAny(code, weakHashPatterns)
+}
+
+func shouldAnalyzeRubyWeakrandomnessCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	weakRandomSources := []string{
+		"rand(",
+		"random.rand",
+		"kernel.rand",
+		"srand(",
+	}
+
+	securityContext := []string{
+		"token",
+		"password",
+		"session",
+		"secret",
+		"otp",
+		"verification",
+		"csrf",
+		"nonce",
+		"api_key",
+		"apikey",
+		"cookie",
+		"auth",
+		"login",
+		"credential",
+	}
+
+	hasWeakRandom := containsAny(code, weakRandomSources)
+	hasSecurityContext := containsAny(code, securityContext)
+
+	return hasWeakRandom && hasSecurityContext
+}
+
+func shouldAnalyzeRubyDeserializationCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	deserializationSinks := []string{
+		"marshal.load(",
+		"marshal.restore(",
+		"yaml.load(",
+		"yaml.unsafe_load(",
+		"oj.load(",
+		"json.load(",
+		"psych.load(",
+	}
+
+	safePatterns := []string{
+		"yaml.safe_load",
+		"yaml.safe_load_file",
+	}
+
+	hasSink := containsAny(code, deserializationSinks)
+	hasSafe := containsAny(code, safePatterns)
+
+	return hasSink && !hasSafe
+}
+
+func shouldAnalyzeRubyTrustboundaryCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	sessionStorage := []string{
+		"session[",
+		"session.store",
+		"session[:user",
+		"session[:current",
+	}
+
+	inputSources := []string{
+		"params[",
+		"params.fetch",
+		"request.params",
+		"cookies[",
+		"request.headers",
+	}
+
+	hasSession := containsAny(code, sessionStorage)
+	hasInput := containsAny(code, inputSources)
+
+	return hasSession && hasInput
+}
+
+func shouldAnalyzeRubyOpenredirectCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	redirectSinks := []string{
+		"redirect_to(",
+		"redirect(",
+		"response.redirect",
+	}
+
+	inputSources := []string{
+		"params[",
+		"params.fetch",
+		"request.params",
+		"request.referer",
+		"cookies[",
+	}
+
+	hasSink := containsAny(code, redirectSinks)
+	hasInput := containsAny(code, inputSources)
+
+	return hasSink && hasInput
+}
+
+func shouldAnalyzeRubyInsecurecookieCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	cookieSinks := []string{
+		"cookies[",
+		"cookies.signed[",
+		"cookies.encrypted[",
+		"response.set_cookie",
+		"rack::response",
+		"actiondispatch::cookies",
+	}
+
+	return containsAny(code, cookieSinks)
+}
+
+func shouldAnalyzeRubyXpathiCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	xpathAPIs := []string{
+		"nokogiri",
+		"rexml",
+		"libxml",
+		".xpath(",
+		".search(",
+		"xpath(",
+	}
+
+	return containsAny(code, xpathAPIs)
+}
+
+func shouldAnalyzeRubyImproperoutputhandlingCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	outputSinks := []string{
+		"render(",
+		"render json:",
+		"response.body",
+		"response.write(",
+		"send_data(",
+		"to_json",
+	}
+
+	inputSources := []string{
+		"params[",
+		"params.fetch",
+		"request.params",
+		"cookies[",
+	}
+
+	hasSink := containsAny(code, outputSinks)
+	hasInput := containsAny(code, inputSources)
+
+	return hasSink && hasInput
+}
+
+func shouldAnalyzeRubyExcessiveagencyCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	aiPatterns := []string{
+		"openai",
+		"anthropic",
+		"langchain",
+		"llm",
+		"chatgpt",
+		"gpt-4",
+		"tool_call",
+		"function_call",
+		"langchain::agent",
+	}
+
+	return containsAny(code, aiPatterns)
+}
+
+func shouldAnalyzeRubySystempromptleakageCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	systemPromptPatterns := []string{
+		"system_prompt",
+		"system prompt",
+		"systemprompt",
+		"role: 'system'",
+		"role: \"system\"",
+	}
+
+	aiPatterns := []string{
+		"openai",
+		"anthropic",
+		"langchain",
+		"llm",
+	}
+
+	hasSystemPrompt := containsAny(code, systemPromptPatterns)
+	hasAI := containsAny(code, aiPatterns)
+
+	return hasSystemPrompt || hasAI
+}
+
+func shouldAnalyzeRubyUnboundedconsumptionCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	aiLibrary := []string{
+		"openai",
+		"anthropic",
+		"langchain",
+		"llm",
+	}
+
+	resourcePatterns := []string{
+		"max_tokens",
+		"max_length",
+		"temperature",
+	}
+
+	return containsAny(code, aiLibrary) && containsAny(code, resourcePatterns)
+}
+
+func shouldAnalyzeRubyVectorembeddingweaknessesCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	vectorPatterns := []string{
+		"embedding",
+		"vector",
+		"pgvector",
+		"pinecone",
+		"weaviate",
+		"chroma",
+		"faiss",
+		"similarity_search",
+		"cosine_similarity",
+	}
+
+	return containsAny(code, vectorPatterns)
+}
+
+func shouldAnalyzeRubyDatamodelpoisoningCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	trainingPatterns := []string{
+		"training_data",
+		"fine_tune",
+		"finetune",
+		"dataset",
+		"corpus",
+		"llm",
+		"model.train",
+	}
+
+	return containsAny(code, trainingPatterns)
+}
+
+func shouldAnalyzeRubyMisinformationCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	misinfoPatterns := []string{
+		"llm",
+		"openai",
+		"anthropic",
+		"langchain",
+		"chat_completion",
+		"completions.create",
+		"messages.create",
+	}
+
+	return containsAny(code, misinfoPatterns)
+}
+
+func shouldAnalyzeRubyPromptinjectionCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+
+	promptSinks := []string{
+		"openai",
+		"anthropic",
+		"langchain",
+		"llm",
+		"chat(",
+		"completion(",
+		"generate(",
+		"messages:",
+		"prompt:",
+	}
+
+	inputSources := []string{
+		"params[",
+		"params.fetch",
+		"request.params",
+		"cookies[",
+		"session[",
+		"user_input",
+		"user_message",
+	}
+
+	hasSink := containsAny(code, promptSinks)
+	hasInput := containsAny(code, inputSources)
+
+	return hasSink && hasInput
 }
 
 // ShouldAnalyze does a very early, cheap filter to decide if a file is worth

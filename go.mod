@@ -18,6 +18,7 @@ require (
 	github.com/tree-sitter/tree-sitter-javascript v0.23.1
 	github.com/tree-sitter/tree-sitter-php v0.24.2
 	github.com/tree-sitter/tree-sitter-python v0.23.6
+	github.com/tree-sitter/tree-sitter-ruby v0.23.1
 	github.com/tree-sitter/tree-sitter-typescript v0.23.2
 	go.uber.org/zap v1.27.0
 	google.golang.org/api v0.186.0
