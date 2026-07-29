@@ -2671,7 +2671,7 @@ func shouldAnalyzeRubyDeserializationCtx(ctx *model.DetectionContext) bool {
 
 	safePatterns := []string{
 		"yaml.safe_load",
-		"yaml.load_file",
+		"yaml.safe_load_file",
 	}
 
 	hasSink := containsAny(code, deserializationSinks)
