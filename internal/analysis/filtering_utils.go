@@ -101,6 +101,10 @@ var rubyTestPathPatterns = []string{
 	"**/*_test.rb",
 }
 
+var rustTestPathPatterns = []string{
+	"**/tests.rs",
+}
+
 var DefaultIgnoredGlobs = []string{
 	"**/node_modules/**/*",
 	"**/jspm_packages/**/*",
@@ -204,6 +208,11 @@ func IsGeneratedFileFromContent(fullContent []byte, path string, language model.
 
 	case model.PHP:
 		return strings.Contains(content, GeneratedByMarker)
+
+	case model.Rust:
+		return strings.Contains(content, GeneratedByMarker) ||
+			strings.Contains(content, ProtoBufHeader) ||
+			strings.Contains(content, ThriftHeader)
 
 	default:
 		return isGeneratedFileSuffix(path)
@@ -311,6 +320,11 @@ func IsGeneratedFileByContent(content []byte, path string, language model.Langua
 	case model.PHP:
 		return strings.Contains(header, GeneratedByMarker)
 
+	case model.Rust:
+		return strings.Contains(header, GeneratedByMarker) ||
+			strings.Contains(header, ProtoBufHeader) ||
+			strings.Contains(header, ThriftHeader)
+
 	default:
 		return false
 	}
@@ -379,6 +393,10 @@ func hasTestLikePath(path string, language model.Language) bool {
 		// Ruby: default folders + RSpec/Minitest naming
 		return matchesAnyGlob(path, slices.Concat(defaultTestPaths, defaultTestFilenames, rubyTestPathPatterns))
 
+	case model.Rust:
+		// Rust: default folders (covers the "tests/" integration test dir) + tests.rs module convention
+		return matchesAnyGlob(path, slices.Concat(defaultTestPaths, defaultTestFilenames, rustTestPathPatterns))
+
 	default:
 		// For other languages we don't classify here
 		return false
@@ -401,6 +419,8 @@ func hasTestLikeImport(language model.Language, code, path string) bool {
 		return phpHasTestLikeImport(code)
 	case model.Ruby:
 		return rubyHasTestLikeImport(code)
+	case model.Rust:
+		return rustHasTestLikeImport(code)
 	default:
 		return false
 	}
@@ -652,6 +672,43 @@ func rubyHasTestLikeImport(code string) bool {
 		}
 		for _, lib := range rubyTestLibs {
 			if strings.Contains(line, lib) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// ----- Rust import detection -----
+func rustHasTestLikeImport(code string) bool {
+	// Rust marks test code with #[test]/#[cfg(test)] attributes far more often than
+	// via a distinct import; check both attributes and common test-crate `use` paths.
+	rustTestCratePrefixes := []string{
+		"mockall",
+		"rstest",
+		"proptest",
+		"wiremock",
+		"assert_matches",
+		"pretty_assertions",
+		"test_case",
+		"insta",
+	}
+
+	scanner := bufio.NewScanner(strings.NewReader(code))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+
+		if strings.HasPrefix(line, "#[test]") || strings.HasPrefix(line, "#[cfg(test)]") {
+			return true
+		}
+
+		if !strings.HasPrefix(line, "use ") {
+			continue
+		}
+		rest := strings.TrimSpace(strings.TrimPrefix(line, "use"))
+		crate := strings.SplitN(rest, "::", 2)[0]
+		for _, prefix := range rustTestCratePrefixes {
+			if crate == prefix {
 				return true
 			}
 		}

@@ -65,7 +65,7 @@ func TestInferLanguagesFromGlobs(t *testing.T) {
 		},
 		{
 			name:  "unknown extension returns empty",
-			globs: []string{"**/*.rs"},
+			globs: []string{"**/*.ex"},
 			want:  []model.Language{},
 		},
 		{

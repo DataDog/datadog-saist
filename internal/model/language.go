@@ -18,6 +18,7 @@ const (
 	Kotlin
 	PHP
 	Ruby
+	Rust
 )
 
 func (l Language) String() string {
@@ -40,6 +41,8 @@ func (l Language) String() string {
 		return "PHP"
 	case Ruby:
 		return "Ruby"
+	case Rust:
+		return "Rust"
 	default:
 		return "LanguageUnknown"
 	}
@@ -67,6 +70,8 @@ func GetLanguage(filePath string) Language {
 		return PHP
 	case ".rb":
 		return Ruby
+	case ".rs":
+		return Rust
 	default:
 		return LanguageUnknown
 	}
@@ -88,5 +93,6 @@ func GetAllLanguages() []Language {
 		Kotlin,
 		PHP,
 		Ruby,
+		Rust,
 	}
 }
