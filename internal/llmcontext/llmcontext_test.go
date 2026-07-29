@@ -12,6 +12,7 @@ import (
 	treesitterjavascript "github.com/tree-sitter/tree-sitter-javascript/bindings/go"
 	treesitterphp "github.com/tree-sitter/tree-sitter-php/bindings/go"
 	treesitterpython "github.com/tree-sitter/tree-sitter-python/bindings/go"
+	treesitterruby "github.com/tree-sitter/tree-sitter-ruby/bindings/go"
 	treesittertypescript "github.com/tree-sitter/tree-sitter-typescript/bindings/go"
 )
 
@@ -725,6 +726,73 @@ class FooTest {
 	assert.NotContains(t, names, "setUp")
 	assert.NotContains(t, names, "tearDown")
 	assert.Contains(t, names, "actualCode")
+}
+
+func TestGetContextFromFileRuby(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+
+	err := os.WriteFile(
+		filepath.Join(tmpDir, "server.rb"),
+		[]byte(`class Server
+  def handle_request(req)
+    process_input(req.body)
+  end
+end
+
+def process_input(data)
+  data
+end
+`),
+		0644,
+	)
+	assert.NoError(t, err)
+
+	llmContext, err := GetContextFromFile(tmpDir, "server.rb")
+	assert.NoError(t, err)
+	assert.Equal(t, model.Ruby, llmContext.Language)
+
+	names := make([]string, len(llmContext.Tags))
+	for i, tag := range llmContext.Tags {
+		names[i] = tag.Name
+	}
+	assert.Contains(t, names, "Server")
+	assert.Contains(t, names, "handle_request")
+	assert.Contains(t, names, "process_input")
+}
+
+func TestRubyGetTags_SkipsTestSetupTeardown(t *testing.T) {
+	t.Parallel()
+	code := `class MyTest
+  def setup; end
+  def teardown; end
+  def test_something; end
+end
+`
+	parser := treesitter.NewParser()
+	defer parser.Close()
+	parser.SetLanguage(treesitter.NewLanguage(treesitterruby.Language()))
+
+	tree := parser.Parse([]byte(code), nil)
+	defer tree.Close()
+
+	data := GetFunctionData{
+		root:     tree.RootNode(),
+		path:     "my_test.rb",
+		code:     []byte(code),
+		language: model.Ruby,
+	}
+
+	tags, err := RubyGetTags(data)
+	assert.NoError(t, err)
+
+	names := make([]string, len(tags))
+	for i, tag := range tags {
+		names[i] = tag.Name
+	}
+	assert.NotContains(t, names, "setup")
+	assert.NotContains(t, names, "teardown")
+	assert.Contains(t, names, "test_something")
 }
 
 // Common stuff
