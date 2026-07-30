@@ -419,8 +419,6 @@ func hasTestLikeImport(language model.Language, code, path string) bool {
 		return phpHasTestLikeImport(code)
 	case model.Ruby:
 		return rubyHasTestLikeImport(code)
-	case model.Rust:
-		return rustHasTestLikeImport(code)
 	default:
 		return false
 	}
@@ -672,43 +670,6 @@ func rubyHasTestLikeImport(code string) bool {
 		}
 		for _, lib := range rubyTestLibs {
 			if strings.Contains(line, lib) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// ----- Rust import detection -----
-func rustHasTestLikeImport(code string) bool {
-	// Rust marks test code with #[test]/#[cfg(test)] attributes far more often than
-	// via a distinct import; check both attributes and common test-crate `use` paths.
-	rustTestCratePrefixes := []string{
-		"mockall",
-		"rstest",
-		"proptest",
-		"wiremock",
-		"assert_matches",
-		"pretty_assertions",
-		"test_case",
-		"insta",
-	}
-
-	scanner := bufio.NewScanner(strings.NewReader(code))
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-
-		if strings.HasPrefix(line, "#[test]") || strings.HasPrefix(line, "#[cfg(test)]") {
-			return true
-		}
-
-		if !strings.HasPrefix(line, "use ") {
-			continue
-		}
-		rest := strings.TrimSpace(strings.TrimPrefix(line, "use"))
-		crate := strings.SplitN(rest, "::", 2)[0]
-		for _, prefix := range rustTestCratePrefixes {
-			if crate == prefix {
 				return true
 			}
 		}
