@@ -37,6 +37,8 @@ func languageKeyFromModel(lang model.Language) string {
 		return "php"
 	case model.Ruby:
 		return "ruby"
+	case model.Rust:
+		return "rust"
 	default:
 		return ""
 	}

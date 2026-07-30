@@ -25,6 +25,8 @@ import (
 	treesitterphp "github.com/tree-sitter/tree-sitter-php/bindings/go"
 
 	treesitterruby "github.com/tree-sitter/tree-sitter-ruby/bindings/go"
+
+	treesitterrust "github.com/tree-sitter/tree-sitter-rust/bindings/go"
 )
 
 const (
@@ -77,6 +79,10 @@ var contextRetrievers = map[model.Language]ContextRetriever{
 	model.Ruby: {
 		Language:        treesitter.NewLanguage(treesitterruby.Language()),
 		FunctionGetTags: RubyGetTags,
+	},
+	model.Rust: {
+		Language:        treesitter.NewLanguage(treesitterrust.Language()),
+		FunctionGetTags: RustGetTags,
 	},
 }
 

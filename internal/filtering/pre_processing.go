@@ -48,6 +48,8 @@ func codeUsedForDetection(inputCode string, language model.Language) string {
 		return stripPHPComments(inputCode)
 	case model.Ruby:
 		return stripRubyComments(inputCode)
+	case model.Rust:
+		return stripRustComments(inputCode)
 	default:
 		return inputCode
 	}
@@ -157,6 +159,13 @@ func stripPHPComments(code string) string {
 		out = append(out, line)
 	}
 	return strings.Join(out, "\n")
+}
+
+func stripRustComments(code string) string {
+	// Rust uses C-style comments (including /// and //! doc comments); skip empty and bare "*" lines.
+	return stripCStyleComments(code, func(trimmed string) bool {
+		return trimmed == "" || trimmed == "*"
+	})
 }
 
 func stripCSharpComments(code string) string {
