@@ -879,40 +879,6 @@ fn greet(name: &str) -> String {
 	assert.Contains(t, names, "new")
 }
 
-func TestRustGetTags_FilteredFunctions(t *testing.T) {
-	t.Parallel()
-	code := `mod tests {
-    fn setUp() {}
-    fn tearDown() {}
-    fn actual_code() {}
-}
-`
-	parser := treesitter.NewParser()
-	defer parser.Close()
-	parser.SetLanguage(treesitter.NewLanguage(treesitterrust.Language()))
-
-	tree := parser.Parse([]byte(code), nil)
-	defer tree.Close()
-
-	data := GetFunctionData{
-		root:     tree.RootNode(),
-		path:     "tests.rs",
-		code:     []byte(code),
-		language: model.Rust,
-	}
-
-	tags, err := RustGetTags(data)
-	assert.NoError(t, err)
-
-	names := make([]string, len(tags))
-	for i, tag := range tags {
-		names[i] = tag.Name
-	}
-	assert.NotContains(t, names, "setUp")
-	assert.NotContains(t, names, "tearDown")
-	assert.Contains(t, names, "actual_code")
-}
-
 // Common stuff
 
 func TestGetContextInvalidLanguage(t *testing.T) {

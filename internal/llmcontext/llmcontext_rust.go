@@ -8,15 +8,11 @@ import (
 	treesitterrust "github.com/tree-sitter/tree-sitter-rust/bindings/go"
 )
 
-var RustFunctionsToNotRegister = map[string]struct{}{
-	"setUp":    {},
-	"tearDown": {},
-}
-
 //go:embed tree-sitter-tags/rust.scm
 var rustTagsQuery []byte
 
 func RustGetTags(data GetFunctionData) ([]model.Tag, error) {
 	language := treesitter.NewLanguage(treesitterrust.Language())
-	return getTagsFromQuery(language, rustTagsQuery, RustFunctionsToNotRegister, data)
+	// Rust has no xUnit-style setUp/tearDown naming convention to filter by name.
+	return getTagsFromQuery(language, rustTagsQuery, nil, data)
 }
