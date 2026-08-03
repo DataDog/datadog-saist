@@ -33,6 +33,9 @@ func main() {
 	var jwtToken string
 	var useLocalPrompts bool
 	var skipIndexing bool
+	var agentic bool
+	var agenticMaxIterations int
+	var agenticMaxToolCalls int
 
 	startTimestamp := time.Now()
 
@@ -60,6 +63,9 @@ func main() {
 		"Use local markdown files for rule content instead of API content")
 	flag.BoolVar(&skipIndexing, "skip-indexing", false,
 		"Disable cross-file context indexing (reduces memory usage; related files will not be included in prompts)")
+	flag.BoolVar(&agentic, "agentic", false, "Enable tool-using detection and validation agents")
+	flag.IntVar(&agenticMaxIterations, "agentic-max-iterations", 6, "Maximum tool turns per agent")
+	flag.IntVar(&agenticMaxToolCalls, "agentic-max-tool-calls", 16, "Maximum tool calls per agent")
 	flag.Parse()
 
 	if directory == "" {
@@ -111,7 +117,7 @@ func main() {
 
 	result, err := analysis.RunAnalysis(context.Background(), directory, detectionModelStr, validationModelStr,
 		output, debug, openaiBaseURL, requestTimeoutSec, fileConcurrency, writePrompts, isAIGateway,
-		aiGuardEnabled, apiKey, jwtToken, 2, "test-repo", useLocalPrompts, skipIndexing)
+		aiGuardEnabled, apiKey, jwtToken, 2, "test-repo", useLocalPrompts, skipIndexing, agentic, agenticMaxIterations, agenticMaxToolCalls)
 
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "error calling RunAnalysis: %s", err)

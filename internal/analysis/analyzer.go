@@ -208,14 +208,18 @@ func filterScanDataForDatadogDriver(filesAndRules map[string][]string, scans []m
 func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOptions,
 	aiContext *model.AiContextProject) ([]model.FileResult, error) {
 	agent, err := agents.NewDetectionAgent(ctx, &agents.AgentOption{
-		DetectionModel:    opts.DetectionModel,
-		ValidationModel:   opts.ValidationModel,
-		OpenAiBaseUrl:     opts.OpenAIBaseURL,
-		RequestTimeoutSec: opts.RequestTimeoutSec,
-		IsAIGateway:       opts.IsAIGateway,
-		AIGuardEnabled:    opts.AIGuardEnabled,
-		OrgID:             opts.OrgID,
-		DebugEnabled:      opts.Debug,
+		DetectionModel:       opts.DetectionModel,
+		ValidationModel:      opts.ValidationModel,
+		OpenAiBaseUrl:        opts.OpenAIBaseURL,
+		RequestTimeoutSec:    opts.RequestTimeoutSec,
+		IsAIGateway:          opts.IsAIGateway,
+		AIGuardEnabled:       opts.AIGuardEnabled,
+		OrgID:                opts.OrgID,
+		DebugEnabled:         opts.Debug,
+		Agentic:              opts.Agentic,
+		AgenticMaxIterations: opts.AgenticMaxIterations,
+		AgenticMaxToolCalls:  opts.AgenticMaxToolCalls,
+		RepositoryRoot:       opts.Directory,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create detection agent for models detection=%s, validation=%s (timeout: %ds, AI gateway: %t): %w",

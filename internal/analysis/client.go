@@ -27,7 +27,7 @@ type Violation = model.Violation
 
 func configure(ctx context.Context, directory string, detectionModelStr, validationModelStr string,
 	debug bool, baseURL string, requestTimeoutSec, fileConcurrency int, writePrompts, isAIGateway, aiGuardEnabled bool,
-	apiKey string, jwtToken string, orgID int64, repositoryID string, useLocalPrompts bool, skipIndexing bool) (model.AnalysisOptions, error) {
+	apiKey string, jwtToken string, orgID int64, repositoryID string, useLocalPrompts bool, skipIndexing, agentic bool, agenticMaxIterations, agenticMaxToolCalls int) (model.AnalysisOptions, error) {
 	var rules []modelApi.AiPrompt
 	if useLocalPrompts {
 		var err error
@@ -93,21 +93,24 @@ func configure(ctx context.Context, directory string, detectionModelStr, validat
 	}
 
 	return model.AnalysisOptions{
-		Directory:         directory,
-		DetectionModel:    detectionModel,
-		ValidationModel:   validationModel,
-		Debug:             debug,
-		OpenAIBaseURL:     baseURL,
-		RequestTimeoutSec: requestTimeoutSec,
-		FileConcurrency:   fileConcurrency,
-		WritePrompts:      writePrompts,
-		Rules:             rules,
-		IsAIGateway:       isAIGateway,
-		AIGuardEnabled:    aiGuardEnabled,
-		OrgID:             orgID,
-		RepositoryID:      repositoryID,
-		SkipIndexing:      skipIndexing,
-		DatadogDriver:     driverConfig,
+		Directory:            directory,
+		DetectionModel:       detectionModel,
+		ValidationModel:      validationModel,
+		Debug:                debug,
+		OpenAIBaseURL:        baseURL,
+		RequestTimeoutSec:    requestTimeoutSec,
+		FileConcurrency:      fileConcurrency,
+		WritePrompts:         writePrompts,
+		Rules:                rules,
+		IsAIGateway:          isAIGateway,
+		AIGuardEnabled:       aiGuardEnabled,
+		OrgID:                orgID,
+		RepositoryID:         repositoryID,
+		SkipIndexing:         skipIndexing,
+		Agentic:              agentic,
+		AgenticMaxIterations: agenticMaxIterations,
+		AgenticMaxToolCalls:  agenticMaxToolCalls,
+		DatadogDriver:        driverConfig,
 	}, nil
 }
 
@@ -139,12 +142,12 @@ func setAPIKey(modelValue model.Model, baseURL, apiKey string) {
 func RunAnalysis(ctx context.Context, directory string, detectionModelStr, validationModelStr, output string,
 	debug bool, baseURL string, requestTimeoutSec, fileConcurrency int, writePrompts, isAIGateway,
 	aiGuardEnabled bool, apiKey string, jwtToken string, orgID int64, repositoryID string,
-	useLocalPrompts bool, skipIndexing bool) (AnalysisSummary, error) {
+	useLocalPrompts bool, skipIndexing, agentic bool, agenticMaxIterations, agenticMaxToolCalls int) (AnalysisSummary, error) {
 	logger := log.NewDefaultLogger()
 	ctx = ContextWithShimmedLogger(ctx, logger)
 
 	opts, err := configure(ctx, directory, detectionModelStr, validationModelStr, debug, baseURL, requestTimeoutSec,
-		fileConcurrency, writePrompts, isAIGateway, aiGuardEnabled, apiKey, jwtToken, orgID, repositoryID, useLocalPrompts, skipIndexing)
+		fileConcurrency, writePrompts, isAIGateway, aiGuardEnabled, apiKey, jwtToken, orgID, repositoryID, useLocalPrompts, skipIndexing, agentic, agenticMaxIterations, agenticMaxToolCalls)
 	if err != nil {
 		return AnalysisSummary{}, err
 	}
