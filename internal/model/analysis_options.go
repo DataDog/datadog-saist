@@ -8,21 +8,24 @@ import (
 
 // AnalysisOptions contains all configuration options for the analysis (internal use only)
 type AnalysisOptions struct {
-	Directory         string
-	DetectionModel    Model
-	ValidationModel   Model
-	Debug             bool
-	OpenAIBaseURL     string
-	RequestTimeoutSec int
-	FileConcurrency   int
-	WritePrompts      bool
-	IsAIGateway       bool
-	AIGuardEnabled    bool
-	Rules             []api.AiPrompt
-	OrgID             int64
-	RepositoryID      string
-	SkipIndexing      bool
-	DatadogDriver     *DatadogDriverConfig
+	Directory            string
+	DetectionModel       Model
+	ValidationModel      Model
+	Debug                bool
+	OpenAIBaseURL        string
+	RequestTimeoutSec    int
+	FileConcurrency      int
+	WritePrompts         bool
+	IsAIGateway          bool
+	AIGuardEnabled       bool
+	Rules                []api.AiPrompt
+	OrgID                int64
+	RepositoryID         string
+	SkipIndexing         bool
+	Agentic              bool
+	AgenticMaxIterations int
+	AgenticMaxToolCalls  int
+	DatadogDriver        *DatadogDriverConfig
 	// Output is the SARIF output path. Used for the final report write and for
 	// periodic partial-result checkpointing during the scan phase.
 	Output string
@@ -44,6 +47,7 @@ func (opts *AnalysisOptions) Display() {
 	fmt.Printf("Organization ID:     %d\n", opts.OrgID)
 	fmt.Printf("Repository ID:       %s\n", opts.RepositoryID)
 	fmt.Printf("Skip Indexing:       %t\n", opts.SkipIndexing)
+	fmt.Printf("Agentic:             %t\n", opts.Agentic)
 	fmt.Printf("Number of Rules:     %d\n", len(opts.Rules))
 	fmt.Println("========================")
 }

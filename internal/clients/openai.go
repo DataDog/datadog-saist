@@ -14,6 +14,7 @@ import (
 	"github.com/DataDog/datadog-saist/internal/log"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
+	"github.com/openai/openai-go/v3/shared"
 )
 
 type OpenAIClient struct {
@@ -188,6 +189,65 @@ func (c *OpenAIClient) GenerateContent(ctx context.Context, systemPrompt, userPr
 		InputTokens:  inputTokens,
 		OutputTokens: outputTokens,
 	}, nil
+}
+
+// GenerateWithTools runs one OpenAI-compatible tool calling turn.
+func (c *OpenAIClient) GenerateWithTools(ctx context.Context, messages []Message, tools []ToolDefinition,
+	options *GenerateOptions) (*ToolGenerateResponse, error) {
+	params := openai.ChatCompletionNewParams{Messages: toOpenAIMessages(messages), Model: c.model,
+		Temperature: openai.Float(options.Temperature), MaxCompletionTokens: openai.Int(int64(options.MaxTokens))}
+	if len(tools) == 0 {
+		params.ResponseFormat = openai.ChatCompletionNewParamsResponseFormatUnion{OfJSONSchema: &openai.ResponseFormatJSONSchemaParam{
+			JSONSchema: openai.ResponseFormatJSONSchemaJSONSchemaParam{Name: options.Schema.Name,
+				Description: openai.String(options.Schema.Description), Schema: options.Schema.JsonSchema, Strict: openai.Bool(true)}}}
+	} else {
+		for _, tool := range tools {
+			params.Tools = append(params.Tools, openai.ChatCompletionFunctionTool(shared.FunctionDefinitionParam{
+				Name: tool.Name, Description: openai.String(tool.Description), Parameters: shared.FunctionParameters(tool.Parameters)}))
+		}
+	}
+	completion, err := c.client.Chat.Completions.New(ctx, params)
+	if err != nil {
+		var apiErr *openai.Error
+		if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusTooManyRequests {
+			return nil, fmt.Errorf("%w: %v", ErrRateLimited, err)
+		}
+		return nil, err
+	}
+	if len(completion.Choices) == 0 {
+		return nil, fmt.Errorf("no response choices returned from OpenAI")
+	}
+	choice := completion.Choices[0]
+	result := &ToolGenerateResponse{Content: choice.Message.Content, InputTokens: int32(completion.Usage.PromptTokens), OutputTokens: int32(completion.Usage.CompletionTokens)}
+	for _, call := range choice.Message.ToolCalls {
+		if call.Function.Name != "" {
+			result.ToolCalls = append(result.ToolCalls, ToolCall{ID: call.ID, Name: call.Function.Name, Arguments: call.Function.Arguments})
+		}
+	}
+	return result, nil
+}
+
+func toOpenAIMessages(messages []Message) []openai.ChatCompletionMessageParamUnion {
+	result := make([]openai.ChatCompletionMessageParamUnion, 0, len(messages))
+	for _, message := range messages {
+		switch message.Role {
+		case "system":
+			result = append(result, openai.SystemMessage(message.Content))
+		case "tool":
+			result = append(result, openai.ToolMessage(message.Content, message.ToolCallID))
+		case "assistant":
+			assistant := openai.AssistantMessage(message.Content)
+			for _, call := range message.ToolCalls {
+				assistant.OfAssistant.ToolCalls = append(assistant.OfAssistant.ToolCalls,
+					openai.ChatCompletionMessageToolCallUnionParam{OfFunction: &openai.ChatCompletionMessageFunctionToolCallParam{ID: call.ID,
+						Function: openai.ChatCompletionMessageFunctionToolCallFunctionParam{Name: call.Name, Arguments: call.Arguments}}})
+			}
+			result = append(result, assistant)
+		default:
+			result = append(result, openai.UserMessage(message.Content))
+		}
+	}
+	return result
 }
 
 func openAIPromptCacheKey(modelName string, orgID int64, systemPrompt, userPrompt string) string {
