@@ -101,15 +101,17 @@ func NewDetectionAgent(ctx context.Context, agentOption *AgentOption) (*Detectio
 			agentOption.OrgID,
 			agentOption.DetectionModel.IsCustom(),
 		)
-		verificationClient, err = clients.NewOpenAIClient(
-			ctx,
-			agentOption.ValidationModel.ToAPIModelWithFormat(agentOption.IsAIGateway),
-			agentOption.OpenAiBaseUrl,
-			agentOption.IsAIGateway,
-			agentOption.AIGuardEnabled,
-			agentOption.OrgID,
-			agentOption.ValidationModel.IsCustom(),
-		)
+		if !agentOption.Agentic {
+			verificationClient, err = clients.NewOpenAIClient(
+				ctx,
+				agentOption.ValidationModel.ToAPIModelWithFormat(agentOption.IsAIGateway),
+				agentOption.OpenAiBaseUrl,
+				agentOption.IsAIGateway,
+				agentOption.AIGuardEnabled,
+				agentOption.OrgID,
+				agentOption.ValidationModel.IsCustom(),
+			)
+		}
 	} else {
 		// No base URL - use provider-specific clients based on model detection
 		if agentOption.DetectionModel.RawAPIModel != "" {
@@ -137,24 +139,26 @@ func NewDetectionAgent(ctx context.Context, agentOption *AgentOption) (*Detectio
 			return nil, model.ErrUnsupportedModel
 		}
 
-		// Create verification client based on validation model provider
-		switch {
-		case agentOption.ValidationModel.IsOpenAI():
-			verificationClient, err = clients.NewOpenAIClient(
-				ctx,
-				agentOption.ValidationModel.ToAPIModelWithFormat(false),
-				"",
-				agentOption.IsAIGateway,
-				agentOption.AIGuardEnabled,
-				agentOption.OrgID,
-				agentOption.ValidationModel.IsCustom(),
-			)
-		case agentOption.ValidationModel.IsGoogle():
-			verificationClient, err = clients.NewGeminiClient(ctx, agentOption.ValidationModel.ToAPIModelWithFormat(false))
-		case agentOption.ValidationModel.IsAnthropic():
-			verificationClient, err = clients.NewAnthropicClient(ctx, agentOption.ValidationModel.ToAPIModelWithFormat(false))
-		default:
-			return nil, model.ErrUnsupportedModel
+		if !agentOption.Agentic {
+			// Create verification client based on validation model provider
+			switch {
+			case agentOption.ValidationModel.IsOpenAI():
+				verificationClient, err = clients.NewOpenAIClient(
+					ctx,
+					agentOption.ValidationModel.ToAPIModelWithFormat(false),
+					"",
+					agentOption.IsAIGateway,
+					agentOption.AIGuardEnabled,
+					agentOption.OrgID,
+					agentOption.ValidationModel.IsCustom(),
+				)
+			case agentOption.ValidationModel.IsGoogle():
+				verificationClient, err = clients.NewGeminiClient(ctx, agentOption.ValidationModel.ToAPIModelWithFormat(false))
+			case agentOption.ValidationModel.IsAnthropic():
+				verificationClient, err = clients.NewAnthropicClient(ctx, agentOption.ValidationModel.ToAPIModelWithFormat(false))
+			default:
+				return nil, model.ErrUnsupportedModel
+			}
 		}
 	}
 
@@ -450,7 +454,7 @@ func (agent *DetectionAgent) basicDetection(ctx context.Context, scanData *model
 		log.FromContext(ctx).Info(fmt.Sprintf("querying llm for rule:%s and %s", scanData.Rule.ID, scanData.RelativeFilePath))
 	}
 	var response *clients.GenerateResponse
-	var detectorTrajectory string
+	agenticFinalDecision := agent.agentOption.Agentic
 	var err error
 	if agent.agentOption.Agentic {
 		run, agenticErr := agent.runAgentic(contextWithDeadline, agent.llmClient, "detection", scanData.SystemPrompt, scanData.UserPrompt, options)
@@ -461,7 +465,6 @@ func (agent *DetectionAgent) basicDetection(ctx context.Context, scanData *model
 			fallbackCancel()
 		} else {
 			response = &clients.GenerateResponse{Content: run.Content, InputTokens: run.InputTokens, OutputTokens: run.OutputTokens}
-			detectorTrajectory = run.trajectory()
 		}
 	} else {
 		response, err = agent.llmClient.GenerateContent(contextWithDeadline, scanData.SystemPrompt, scanData.UserPrompt, options)
@@ -508,6 +511,33 @@ func (agent *DetectionAgent) basicDetection(ctx context.Context, scanData *model
 			Info(fmt.Sprintf("[%s] Found %d violations in %s",
 				scanData.Rule.ID, len(result.Violations), scanData.RelativeFilePath))
 	}
+	if agenticFinalDecision {
+		for _, violation := range result.Violations {
+			located := violation
+			if stableLocation, ok := physicalLineLocation(scanData.FileContent.Text, violation.StartLine); ok {
+				located.StartLine = stableLocation.StartLine
+				located.StartColumn = stableLocation.StartColumn
+				located.EndLine = stableLocation.EndLine
+				located.EndColumn = stableLocation.EndColumn
+			}
+			violations = append(violations, model.Violation{
+				StartLine:   located.StartLine,
+				StartColumn: located.StartColumn,
+				EndLine:     located.EndLine,
+				EndColumn:   located.EndColumn,
+				Path:        scanData.RelativeFilePath,
+				Rule:        scanData.Rule.ID,
+				Message:     violation.Reason,
+				Cwe:         scanData.Rule.Cwe,
+			})
+		}
+		return &DetectionResult{
+			Violations:   violations,
+			InputTokens:  inputTokens,
+			OutputTokens: outputTokens,
+			Path:         scanData.RelativeFilePath,
+		}, nil
+	}
 
 	// Verify violations in parallel since they are independent
 	// Use a semaphore to limit concurrent verification calls
@@ -535,7 +565,7 @@ func (agent *DetectionAgent) basicDetection(ctx context.Context, scanData *model
 			}, nil
 		}
 		wg.Add(1)
-		go func(violation model.LLMResultViolation, trajectory string) {
+		go func(violation model.LLMResultViolation) {
 			defer wg.Done()
 			defer func() { <-sem }()
 
@@ -544,7 +574,7 @@ func (agent *DetectionAgent) basicDetection(ctx context.Context, scanData *model
 			}
 
 			// Verify violation using higher fidelity model
-			vResult, err := agent.verifyViolationWithTrajectory(ctx, scanData, violation, trajectory)
+			vResult, err := agent.VerifyViolation(ctx, scanData, violation)
 			if err != nil {
 				if agent.agentOption.DebugEnabled {
 					log.FromContext(ctx).
@@ -593,7 +623,7 @@ func (agent *DetectionAgent) basicDetection(ctx context.Context, scanData *model
 				log.FromContext(ctx).Debug(fmt.Sprintf("found unconfirmed false positive: %s for %s",
 					scanData.RelativeFilePath, scanData.Rule.ID))
 			}
-		}(r, detectorTrajectory)
+		}(r)
 	}
 	wg.Wait()
 
@@ -685,26 +715,10 @@ func (agent *DetectionAgent) verifyViolationWithTrajectory(ctx context.Context, 
 	}
 
 	ctx = clients.WithAIGatewayTags(ctx, withCallType(scanData.Tags, "verification"))
-	iterations, _ := agent.agenticBudgets()
 	phaseTimeout := time.Second * time.Duration(agent.agentOption.RequestTimeoutSec)
-	if agent.agentOption.Agentic {
-		phaseTimeout *= time.Duration(iterations + 1)
-	}
 	verificationCtx, cancel := context.WithTimeout(ctx, phaseTimeout)
 	defer cancel()
-	var response *clients.GenerateResponse
-	var err error
-	if agent.agentOption.Agentic {
-		run, agenticErr := agent.runAgentic(verificationCtx, agent.verificationLLMClient, "validation", VerificationSystemPrompt, userPrompt, options)
-		if agenticErr != nil {
-			logger.Warnf("agentic validation fallback for %s:%d: %v", scanData.RelativeFilePath, violation.StartLine, agenticErr)
-			response, err = agent.verificationGenerateContent(ctx, scanData, violation.StartLine, VerificationSystemPrompt, userPrompt, options)
-		} else {
-			response = &clients.GenerateResponse{Content: run.Content, InputTokens: run.InputTokens, OutputTokens: run.OutputTokens}
-		}
-	} else {
-		response, err = agent.verificationGenerateContent(verificationCtx, scanData, violation.StartLine, VerificationSystemPrompt, userPrompt, options)
-	}
+	response, err := agent.verificationGenerateContent(verificationCtx, scanData, violation.StartLine, VerificationSystemPrompt, userPrompt, options)
 	if err != nil {
 		return nil, err
 	}

@@ -3,7 +3,6 @@ package agents
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/DataDog/datadog-saist/internal/agenttools"
 	"github.com/DataDog/datadog-saist/internal/clients"
@@ -34,7 +33,7 @@ func (agent *DetectionAgent) runAgentic(ctx context.Context, client clients.LLMC
 		return nil, fmt.Errorf("agentic sandbox is unavailable")
 	}
 	iterations, calls := agent.agenticBudgets()
-	system += "\n\nYou are operating as an agentic " + phase + " phase. Before reaching a conclusion, you MUST call at least one read-only repository tool. Use search_code, read_file, or list_directory to inspect evidence that is not fully established by the supplied file. Do not provide the final JSON result until a tool result has been returned."
+	system += "\n\nYou are the final decision maker for this security analysis. Before reaching a conclusion, you MUST call at least one read-only repository tool. Use search_code, read_file, or list_directory to inspect evidence that is not fully established by the supplied file. Return a violation only when the repository evidence confirms that it matches the requested rule. For data-flow findings, identify a concrete source, sink, dataflow, and any applicable sanitization. Do not report uncertain findings. Each reported location must identify the concrete sink line. Do not provide the final JSON result until a tool result has been returned."
 	run := &agenticRun{Messages: []clients.Message{{Role: "system", Content: system}, {Role: "user", Content: user}}}
 	for turn := 0; turn < iterations; turn++ {
 		response, err := toolClient.GenerateWithTools(ctx, run.Messages, agenttools.Definitions(), options)
@@ -97,24 +96,4 @@ func trajectorySize(messages []clients.Message) int {
 		}
 	}
 	return total
-}
-
-func (run *agenticRun) trajectory() string {
-	var builder strings.Builder
-	for _, message := range run.Messages {
-		builder.WriteString("[" + message.Role + "]\n")
-		builder.WriteString(message.Content)
-		builder.WriteString("\n")
-		for _, call := range message.ToolCalls {
-			builder.WriteString("tool " + call.Name + " " + call.Arguments + "\n")
-		}
-		if builder.Len() >= maxTrajectoryChars {
-			break
-		}
-	}
-	value := builder.String()
-	if len(value) > maxTrajectoryChars {
-		return value[len(value)-maxTrajectoryChars:]
-	}
-	return value
 }

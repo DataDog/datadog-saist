@@ -45,7 +45,7 @@ func main() {
 	flag.StringVar(&detectionModelStr, "detection-model", "",
 		fmt.Sprintf("Model to use for detection (required). Available: %s", availableModels))
 	flag.StringVar(&validationModelStr, "validation-model", "",
-		fmt.Sprintf("Model to use for validation (required). Available: %s", availableModels))
+		fmt.Sprintf("Model to use for non-agentic validation. Available: %s", availableModels))
 	flag.BoolVar(&debug, "debug", false, "Enable debug mode for verbose output")
 	flag.StringVar(&openaiBaseURL, "openai-base-url", "", "Custom OpenAI base URL (optional)")
 	flag.StringVar(&apiKey, "api-key", "",
@@ -63,9 +63,9 @@ func main() {
 		"Use local markdown files for rule content instead of API content")
 	flag.BoolVar(&skipIndexing, "skip-indexing", false,
 		"Disable cross-file context indexing (reduces memory usage; related files will not be included in prompts)")
-	flag.BoolVar(&agentic, "agentic", false, "Enable tool-using detection and validation agents")
-	flag.IntVar(&agenticMaxIterations, "agentic-max-iterations", 6, "Maximum tool turns per agent")
-	flag.IntVar(&agenticMaxToolCalls, "agentic-max-tool-calls", 16, "Maximum tool calls per agent")
+	flag.BoolVar(&agentic, "agentic", false, "Enable a tool-using final-decision agent")
+	flag.IntVar(&agenticMaxIterations, "agentic-max-iterations", 6, "Maximum tool turns for the agent")
+	flag.IntVar(&agenticMaxToolCalls, "agentic-max-tool-calls", 16, "Maximum tool calls for the agent")
 	flag.Parse()
 
 	if directory == "" {
@@ -86,7 +86,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if validationModelStr == "" {
+	if !agentic && validationModelStr == "" {
 		fmt.Fprintf(os.Stderr, "Error: --validation-model flag is required\n")
 		flag.Usage()
 		os.Exit(1)
@@ -98,10 +98,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	validationModel, err := model.GetModelOrPassthrough(validationModelStr, isAIGateway)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\nAvailable models: %s\n", err, availableModels)
-		os.Exit(1)
+	var validationModel model.Model
+	if !agentic {
+		validationModel, err = model.GetModelOrPassthrough(validationModelStr, isAIGateway)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\nAvailable models: %s\n", err, availableModels)
+			os.Exit(1)
+		}
 	}
 
 	// Validate that custom models have baseURL
@@ -110,7 +113,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if validationModel.RawAPIModel != "" && openaiBaseURL == "" {
+	if !agentic && validationModel.RawAPIModel != "" && openaiBaseURL == "" {
 		fmt.Fprintf(os.Stderr, "Error: custom models require --openai-base-url to be specified\n")
 		os.Exit(1)
 	}
