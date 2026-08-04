@@ -86,7 +86,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if !agentic && validationModelStr == "" {
+	if validationModelStr == "" {
 		fmt.Fprintf(os.Stderr, "Error: --validation-model flag is required\n")
 		flag.Usage()
 		os.Exit(1)
@@ -98,13 +98,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	var validationModel model.Model
-	if !agentic {
-		validationModel, err = model.GetModelOrPassthrough(validationModelStr, isAIGateway)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\nAvailable models: %s\n", err, availableModels)
-			os.Exit(1)
-		}
+	validationModel, err := model.GetModelOrPassthrough(validationModelStr, isAIGateway)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\nAvailable models: %s\n", err, availableModels)
+		os.Exit(1)
 	}
 
 	// Validate that custom models have baseURL
@@ -113,7 +110,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if !agentic && validationModel.RawAPIModel != "" && openaiBaseURL == "" {
+	if validationModel.RawAPIModel != "" && openaiBaseURL == "" {
 		fmt.Fprintf(os.Stderr, "Error: custom models require --openai-base-url to be specified\n")
 		os.Exit(1)
 	}

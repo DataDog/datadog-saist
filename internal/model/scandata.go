@@ -13,7 +13,8 @@ type FileContent struct {
 
 // ScanData contains all the information needed to execute a scan.
 type ScanData struct {
-	Model Model
+	Model          Model
+	RepositoryRoot string
 
 	UserPrompt   string
 	SystemPrompt string

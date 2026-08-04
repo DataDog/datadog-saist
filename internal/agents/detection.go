@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DataDog/datadog-saist/internal/agenttools"
 	"github.com/DataDog/datadog-saist/internal/clients"
 	"github.com/DataDog/datadog-saist/internal/log"
 	"github.com/DataDog/datadog-saist/internal/model"
@@ -30,7 +29,7 @@ type DetectionAgent struct {
 	// Prevents retrying fallback when it also returns 429 (verification can be called for many violations)
 	verificationFallbackAttempted bool
 	verificationFallbackMu        sync.Mutex
-	sandbox                       *agenttools.Sandbox
+	bitsRunner                    BitsRunner
 }
 
 type AgentOption struct {
@@ -101,17 +100,15 @@ func NewDetectionAgent(ctx context.Context, agentOption *AgentOption) (*Detectio
 			agentOption.OrgID,
 			agentOption.DetectionModel.IsCustom(),
 		)
-		if !agentOption.Agentic {
-			verificationClient, err = clients.NewOpenAIClient(
-				ctx,
-				agentOption.ValidationModel.ToAPIModelWithFormat(agentOption.IsAIGateway),
-				agentOption.OpenAiBaseUrl,
-				agentOption.IsAIGateway,
-				agentOption.AIGuardEnabled,
-				agentOption.OrgID,
-				agentOption.ValidationModel.IsCustom(),
-			)
-		}
+		verificationClient, err = clients.NewOpenAIClient(
+			ctx,
+			agentOption.ValidationModel.ToAPIModelWithFormat(agentOption.IsAIGateway),
+			agentOption.OpenAiBaseUrl,
+			agentOption.IsAIGateway,
+			agentOption.AIGuardEnabled,
+			agentOption.OrgID,
+			agentOption.ValidationModel.IsCustom(),
+		)
 	} else {
 		// No base URL - use provider-specific clients based on model detection
 		if agentOption.DetectionModel.RawAPIModel != "" {
@@ -139,27 +136,26 @@ func NewDetectionAgent(ctx context.Context, agentOption *AgentOption) (*Detectio
 			return nil, model.ErrUnsupportedModel
 		}
 
-		if !agentOption.Agentic {
-			// Create verification client based on validation model provider
-			switch {
-			case agentOption.ValidationModel.IsOpenAI():
-				verificationClient, err = clients.NewOpenAIClient(
-					ctx,
-					agentOption.ValidationModel.ToAPIModelWithFormat(false),
-					"",
-					agentOption.IsAIGateway,
-					agentOption.AIGuardEnabled,
-					agentOption.OrgID,
-					agentOption.ValidationModel.IsCustom(),
-				)
-			case agentOption.ValidationModel.IsGoogle():
-				verificationClient, err = clients.NewGeminiClient(ctx, agentOption.ValidationModel.ToAPIModelWithFormat(false))
-			case agentOption.ValidationModel.IsAnthropic():
-				verificationClient, err = clients.NewAnthropicClient(ctx, agentOption.ValidationModel.ToAPIModelWithFormat(false))
-			default:
-				return nil, model.ErrUnsupportedModel
-			}
+		// Create verification client based on validation model provider
+		switch {
+		case agentOption.ValidationModel.IsOpenAI():
+			verificationClient, err = clients.NewOpenAIClient(
+				ctx,
+				agentOption.ValidationModel.ToAPIModelWithFormat(false),
+				"",
+				agentOption.IsAIGateway,
+				agentOption.AIGuardEnabled,
+				agentOption.OrgID,
+				agentOption.ValidationModel.IsCustom(),
+			)
+		case agentOption.ValidationModel.IsGoogle():
+			verificationClient, err = clients.NewGeminiClient(ctx, agentOption.ValidationModel.ToAPIModelWithFormat(false))
+		case agentOption.ValidationModel.IsAnthropic():
+			verificationClient, err = clients.NewAnthropicClient(ctx, agentOption.ValidationModel.ToAPIModelWithFormat(false))
+		default:
+			return nil, model.ErrUnsupportedModel
 		}
+
 	}
 
 	if err != nil {
@@ -170,13 +166,7 @@ func NewDetectionAgent(ctx context.Context, agentOption *AgentOption) (*Detectio
 		llmClient:             client,
 		verificationLLMClient: verificationClient,
 		agentOption:           agentOption,
-	}
-	if agentOption.Agentic {
-		sandbox, sandboxErr := agenttools.NewSandbox(agentOption.RepositoryRoot)
-		if sandboxErr != nil {
-			return nil, fmt.Errorf("create agentic sandbox: %w", sandboxErr)
-		}
-		agent.sandbox = sandbox
+		bitsRunner:            NewBitsRunner(""),
 	}
 	return agent, nil
 }
@@ -454,17 +444,18 @@ func (agent *DetectionAgent) basicDetection(ctx context.Context, scanData *model
 		log.FromContext(ctx).Info(fmt.Sprintf("querying llm for rule:%s and %s", scanData.Rule.ID, scanData.RelativeFilePath))
 	}
 	var response *clients.GenerateResponse
-	agenticFinalDecision := agent.agentOption.Agentic
+	agenticFinalDecision := false
 	var err error
 	if agent.agentOption.Agentic {
-		run, agenticErr := agent.runAgentic(contextWithDeadline, agent.llmClient, "detection", scanData.SystemPrompt, scanData.UserPrompt, options)
-		if agenticErr != nil {
-			log.FromContext(ctx).Warnf("agentic detection fallback for %s: %v", scanData.RelativeFilePath, agenticErr)
+		content, bitsErr := agent.bitsRunner.Run(contextWithDeadline, scanData)
+		if bitsErr != nil {
+			log.FromContext(ctx).Warnf("bits detection fallback for %s: %v", scanData.RelativeFilePath, bitsErr)
 			fallbackCtx, fallbackCancel := context.WithTimeout(ctx, time.Second*time.Duration(timeout))
 			response, err = agent.llmClient.GenerateContent(fallbackCtx, scanData.SystemPrompt, scanData.UserPrompt, options)
 			fallbackCancel()
 		} else {
-			response = &clients.GenerateResponse{Content: run.Content, InputTokens: run.InputTokens, OutputTokens: run.OutputTokens}
+			response = &clients.GenerateResponse{Content: content}
+			agenticFinalDecision = true
 		}
 	} else {
 		response, err = agent.llmClient.GenerateContent(contextWithDeadline, scanData.SystemPrompt, scanData.UserPrompt, options)

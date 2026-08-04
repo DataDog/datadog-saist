@@ -231,6 +231,7 @@ func (rp *RuleProcessor) BuildScanDataForResult(ctx context.Context, result *Pro
 
 		scanData := model.ScanData{
 			Model:            rp.opts.DetectionModel,
+			RepositoryRoot:   rp.opts.Directory,
 			UserPrompt:       userPrompt,
 			SystemPrompt:     systemPrompt,
 			EngineVersion:    model.EngineVersion,

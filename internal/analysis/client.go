@@ -66,21 +66,16 @@ func configure(ctx context.Context, directory string, detectionModelStr, validat
 			detectionModelStr, availableModels)
 	}
 
-	var validationModel model.Model
-	if !agentic {
-		validationModel, err = model.GetModelOrPassthrough(validationModelStr, isAIGateway)
-		if err != nil {
-			availableModels := strings.Join(model.GetAllModelStrings(), ", ")
-			return model.AnalysisOptions{}, fmt.Errorf("invalid validation model '%s'. Available models: %s",
-				validationModelStr, availableModels)
-		}
+	validationModel, err := model.GetModelOrPassthrough(validationModelStr, isAIGateway)
+	if err != nil {
+		availableModels := strings.Join(model.GetAllModelStrings(), ", ")
+		return model.AnalysisOptions{}, fmt.Errorf("invalid validation model '%s'. Available models: %s",
+			validationModelStr, availableModels)
 	}
 
 	// Set API key for the selected models' providers (from function parameters, not env vars)
 	setAPIKey(detectionModel, baseURL, apiKey)
-	if !agentic {
-		setAPIKey(validationModel, baseURL, apiKey)
-	}
+	setAPIKey(validationModel, baseURL, apiKey)
 
 	// Load Datadog driver configuration if enabled
 	var driverConfig *model.DatadogDriverConfig
