@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/DataDog/datadog-saist/internal/model"
+	"github.com/stretchr/testify/assert"
 )
 
 // helper: create a temp file with given content and (optional) name suffix.
@@ -211,4 +212,14 @@ func TestIsGeneratedFile_FileNotFound(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error for non-existent file")
 	}
+}
+
+func TestIsTestFileByPathKotlinScript(t *testing.T) {
+	assert.True(t, IsTestFileByPath("src/test/kotlin/FeatureTest.kts", model.Kotlin))
+	assert.False(t, IsTestFileByPath("src/main/kotlin/Feature.kts", model.Kotlin))
+}
+
+func TestIsTestFileByPathSwift(t *testing.T) {
+	assert.True(t, IsTestFileByPath("Tests/AppTests/FeatureTests.swift", model.Swift))
+	assert.False(t, IsTestFileByPath("Sources/App/Feature.swift", model.Swift))
 }

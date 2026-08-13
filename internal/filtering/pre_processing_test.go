@@ -211,6 +211,56 @@ func TestShouldAnalyze_NoKeywordsAnalyzesEverything(t *testing.T) {
 	assert.True(t, result, "Expected ShouldAnalyze to return true when no keywords are defined (analyze everything)")
 }
 
+func TestShouldAnalyzeSwiftSqli(t *testing.T) {
+	ctx := model.DetectionContext{
+		Language: model.Swift,
+		Rule:     api.AiPrompt{ID: "datadog/swift-sqli"},
+		Code:     "let query = \"SELECT * FROM users WHERE id = \\(id)\"\ntry database.execute(sql: query)",
+	}
+
+	assert.True(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+}
+
+func TestShouldAnalyzeSwiftCmdi(t *testing.T) {
+	ctx := model.DetectionContext{
+		Language: model.Swift,
+		Rule:     api.AiPrompt{ID: "datadog/swift-cmdi"},
+		Code:     "let task = Process()\ntask.launchPath = \"/bin/sh\"\ntask.launch()",
+	}
+
+	assert.True(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+}
+
+func TestShouldAnalyzeSwiftXss(t *testing.T) {
+	ctx := model.DetectionContext{
+		Language: model.Swift,
+		Rule:     api.AiPrompt{ID: "datadog/swift-xss"},
+		Code:     "let name = try req.query.get(String.self, at: \"name\")\nreturn Response(body: .init(string: \"<p>\\(name)</p>\"))",
+	}
+
+	assert.True(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+}
+
+func TestShouldAnalyzeSwiftXpathi(t *testing.T) {
+	ctx := model.DetectionContext{
+		Language: model.Swift,
+		Rule:     api.AiPrompt{ID: "datadog/swift-xpathi"},
+		Code:     "let nodes = try document.nodes(forXPath: query)",
+	}
+
+	assert.True(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+}
+
+func TestShouldNotAnalyzeSwiftCommentOnly(t *testing.T) {
+	ctx := model.DetectionContext{
+		Language: model.Swift,
+		Rule:     api.AiPrompt{ID: "datadog/swift-cmdi"},
+		Code:     "// Process().launch()",
+	}
+
+	assert.False(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+}
+
 // ============================================================
 // C# Tests
 // ============================================================

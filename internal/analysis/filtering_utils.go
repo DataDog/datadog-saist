@@ -83,9 +83,13 @@ var typescriptTestPathPatterns = []string{
 
 var kotlinTestPathPatterns = []string{
 	"**/*Test.kt",
+	"**/*Test.kts",
 	"**/*Tests.kt",
+	"**/*Tests.kts",
 	"**/*Spec.kt",
+	"**/*Spec.kts",
 	"**/*IT.kt",
+	"**/*IT.kts",
 }
 
 var phpTestPathPatterns = []string{

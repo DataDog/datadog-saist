@@ -29,6 +29,17 @@ func TestGetLanguagePythonFiles(t *testing.T) {
 	assert.Equal(t, Python, GetLanguage("script.PY3"))
 }
 
+func TestGetLanguageKotlinFiles(t *testing.T) {
+	assert.Equal(t, Kotlin, GetLanguage("App.kt"))
+	assert.Equal(t, Kotlin, GetLanguage("build.gradle.kts"))
+	assert.Equal(t, Kotlin, GetLanguage("src/main/kotlin/App.KT"))
+}
+
+func TestGetLanguageSwiftFiles(t *testing.T) {
+	assert.Equal(t, Swift, GetLanguage("App.swift"))
+	assert.Equal(t, Swift, GetLanguage("Sources/App.SWIFT"))
+}
+
 func TestGetLanguageUnknownFiles(t *testing.T) {
 	assert.Equal(t, LanguageUnknown, GetLanguage("README"))
 	assert.Equal(t, LanguageUnknown, GetLanguage("document.txt"))
@@ -47,6 +58,14 @@ func TestLanguageStringGo(t *testing.T) {
 
 func TestLanguageStringPython(t *testing.T) {
 	assert.Equal(t, "Python", Python.String())
+}
+
+func TestLanguageStringKotlin(t *testing.T) {
+	assert.Equal(t, "Kotlin", Kotlin.String())
+}
+
+func TestLanguageStringSwift(t *testing.T) {
+	assert.Equal(t, "Swift", Swift.String())
 }
 
 func TestLanguageStringUnknown(t *testing.T) {

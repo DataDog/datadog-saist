@@ -207,18 +207,21 @@ var ruleFilters = map[string]ruleFilterFunc{
 	"datadog/go-sqli":     shouldAnalyzeGoSqliCtx,
 	"datadog/java-sqli":   shouldAnalyzeJavaSqliCtx,
 	"datadog/csharp-sqli": shouldAnalyzeCSharpSqliCtx,
+	"datadog/swift-sqli":  shouldAnalyzeSwiftSqliCtx,
 
 	// Command Injection
 	"datadog/java-cmdi":   shouldAnalyzeJavaCmdiCtx,
 	"datadog/go-cmdi":     shouldAnalyzeGoCmdiCtx,
 	"datadog/python-cmdi": shouldAnalyzePythonCmdiCtx,
 	"datadog/csharp-cmdi": shouldAnalyzeCSharpCmdiCtx,
+	"datadog/swift-cmdi":  shouldAnalyzeSwiftCmdiCtx,
 
 	// XSS
 	"datadog/java-xss":   shouldAnalyzeJavaXssCtx,
 	"datadog/go-xss":     shouldAnalyzeGoXssCtx,
 	"datadog/python-xss": shouldAnalyzePythonXssCtx,
 	"datadog/csharp-xss": shouldAnalyzeCSharpXssCtx,
+	"datadog/swift-xss":  shouldAnalyzeSwiftXssCtx,
 
 	// Deserialization
 	"datadog/java-deserialization":   shouldAnalyzeJavaDeserializationCtx,
@@ -255,6 +258,7 @@ var ruleFilters = map[string]ruleFilterFunc{
 	"datadog/go-xpathi":     shouldAnalyzeGoXpathiCtx,
 	"datadog/python-xpathi": shouldAnalyzePythonXpathiCtx,
 	"datadog/csharp-xpathi": shouldAnalyzeCSharpXpathiCtx,
+	"datadog/swift-xpathi":  shouldAnalyzeSwiftXpathiCtx,
 
 	// Weak Hash
 	"datadog/java-weakhash":   shouldAnalyzeJavaWeakhashCtx,
@@ -285,6 +289,38 @@ var ruleFilters = map[string]ruleFilterFunc{
 	"datadog/go-weakrandomness":     shouldAnalyzeGoWeakrandomnessCtx,
 	"datadog/python-weakrandomness": shouldAnalyzePythonWeakrandomnessCtx,
 	"datadog/csharp-weakrandomness": shouldAnalyzeCSharpWeakrandomnessCtx,
+}
+
+func shouldAnalyzeSwiftSqliCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	databasePatterns := []string{
+		"sqlite", "postgres", "mysql", "grdb", "fluent", "fmdb",
+		"execute(", "query(", "rawsql", "sqlquery", "sqlrequest",
+	}
+	sqlWords := []string{"select", "update", "insert", "delete", "from", "where"}
+	return containsAny(code, databasePatterns) && containsAnyWord(code, sqlWords)
+}
+
+func shouldAnalyzeSwiftCmdiCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	return containsAny(code, []string{
+		"process()", "process.launch", "task.launch", "launchpath",
+		"executableurl", "nstask", "/bin/sh", "/bin/bash",
+	})
+}
+
+func shouldAnalyzeSwiftXssCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	inputPatterns := []string{"req.query", "req.parameters", "req.content", "request.query", "request.parameters"}
+	outputPatterns := []string{"render(", "html", "response.body", "response.write", "body:"}
+	return containsAny(code, inputPatterns) && containsAny(code, outputPatterns)
+}
+
+func shouldAnalyzeSwiftXpathiCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	return containsAny(code, []string{
+		"xpath", "nodes(forxpath:", "aexml", "swxmlhash", "kissxml", "gdataxml",
+	})
 }
 
 // shouldAnalyzePythonSqliCtx checks for Python SQL injection patterns.
