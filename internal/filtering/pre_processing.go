@@ -25,6 +25,25 @@ var (
 
 	// Token splitter for word-ish matching.
 	reTokenSplit = regexp.MustCompile(`[^a-z0-9_]+`)
+
+	// Keep Phoenix request-source matching scoped to controller-style function heads,
+	// while allowing standard formatter-introduced newlines and indentation.
+	reElixirPhoenixActionParameters = regexp.MustCompile(
+		`(?s)\bdefp?\s+[a-z_][a-z0-9_!?]*\s*(?:\(\s*)?` +
+			`(?:_?conn|%plug\.conn\{.*?\}\s*=\s*_?conn)\s*,\s*(?:%\{\s*"|params\b)`,
+	)
+	reElixirLiveViewEventParameters = regexp.MustCompile(
+		`(?s)\bdefp?\s+handle_event\s*(?:\(\s*)?` +
+			`(?:"[^"]*"|[a-z_][a-z0-9_!?]*)\s*,\s*(?:%\{\s*"|params\b)`,
+	)
+
+	// These safe fast paths are intentionally narrow. If the expression is more
+	// complex, the filter fails open and lets the rule evaluate it.
+	reElixirSingleSafeDeserialization = regexp.MustCompile(`(?s)(?::erlang\.)?binary_to_term\s*\([^()]*(?:,\s*\[\s*:safe\s*\])\s*\)`)
+	reElixirPinnedHuggingFaceLoad     = regexp.MustCompile(
+		`(?s)bumblebee\.load_(?:model|featurizer)\s*\(\s*\{:hf,\s*"[^"]+"` +
+			`\s*,\s*revision:\s*"[0-9a-f]{40}"\s*\}`,
+	)
 )
 
 // codeUsedForDetection strips comments / docstrings etc. before keyword matching.
@@ -50,6 +69,8 @@ func codeUsedForDetection(inputCode string, language model.Language) string {
 		return stripRubyComments(inputCode)
 	case model.Rust:
 		return stripRustComments(inputCode)
+	case model.Elixir:
+		return stripElixirComments(inputCode)
 	default:
 		return inputCode
 	}
@@ -199,6 +220,132 @@ func stripRubyComments(code string) string {
 	return strings.Join(out, "\n")
 }
 
+// stripElixirComments is a small lexer whose branches mirror Elixir's literal states.
+// Keeping the state transitions together makes it easier to verify that # is only
+// treated as a comment outside strings, heredocs, and sigils.
+//
+//nolint:gocyclo
+func stripElixirComments(code string) string {
+	lines := strings.Split(code, "\n")
+	out := make([]string, 0, len(lines))
+	var quote byte
+	var tripleQuote byte
+	var sigilOpen byte
+	var sigilClose byte
+	var sigilTriple bool
+	sigilDepth := 0
+	escaped := false
+	for _, line := range lines {
+		commentAt := -1
+		for i := 0; i < len(line); i++ {
+			ch := line[i]
+			if tripleQuote != 0 {
+				if ch == tripleQuote && i+2 < len(line) && line[i+1] == ch && line[i+2] == ch {
+					tripleQuote = 0
+					i += 2
+				}
+				continue
+			}
+			if sigilClose != 0 {
+				if sigilTriple {
+					if ch == sigilClose && i+2 < len(line) && line[i+1] == ch && line[i+2] == ch {
+						sigilOpen, sigilClose, sigilTriple, sigilDepth = 0, 0, false, 0
+						i += 2
+					}
+					continue
+				}
+				if escaped {
+					escaped = false
+					continue
+				}
+				if ch == '\\' {
+					escaped = true
+					continue
+				}
+				if sigilOpen != sigilClose && ch == sigilOpen {
+					sigilDepth++
+					continue
+				}
+				if ch == sigilClose {
+					sigilDepth--
+					if sigilDepth == 0 {
+						sigilOpen, sigilClose = 0, 0
+					}
+				}
+				continue
+			}
+			if escaped {
+				escaped = false
+				continue
+			}
+			if quote != 0 && ch == '\\' {
+				escaped = true
+				continue
+			}
+			if quote != 0 {
+				if ch == quote {
+					quote = 0
+				}
+				continue
+			}
+			if ch == '\'' || ch == '"' {
+				if i+2 < len(line) && line[i+1] == ch && line[i+2] == ch {
+					tripleQuote = ch
+					i += 2
+				} else {
+					quote = ch
+				}
+				continue
+			}
+			if ch == '~' && i+2 < len(line) && isASCIILetter(line[i+1]) {
+				if closingDelimiter, ok := elixirSigilDelimiter(line[i+2]); ok {
+					sigilOpen, sigilClose, sigilDepth = line[i+2], closingDelimiter, 1
+					if (sigilOpen == '\'' || sigilOpen == '"') && i+4 < len(line) && line[i+3] == sigilOpen && line[i+4] == sigilOpen {
+						sigilTriple = true
+						i += 4
+					} else {
+						i += 2
+					}
+					continue
+				}
+			}
+			if ch == '#' {
+				commentAt = i
+				break
+			}
+		}
+		if commentAt >= 0 {
+			line = line[:commentAt]
+		}
+		if strings.TrimSpace(line) != "" {
+			out = append(out, line)
+		}
+	}
+	return strings.Join(out, "\n")
+}
+
+func isASCIILetter(ch byte) bool {
+	return ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z'
+}
+
+func elixirSigilDelimiter(open byte) (byte, bool) {
+	switch open {
+	case '(':
+		return ')', true
+	case '[':
+		return ']', true
+	case '{':
+		return '}', true
+	case '<':
+		return '>', true
+	default:
+		if isASCIILetter(open) || open >= '0' && open <= '9' || open == '_' || open == ' ' || open == '\t' {
+			return 0, false
+		}
+		return open, true
+	}
+}
+
 func containsAny(code string, keywords []string) bool {
 	for _, kw := range keywords {
 		if strings.Contains(code, kw) {
@@ -341,6 +488,37 @@ var ruleFilters = map[string]ruleFilterFunc{
 	"datadog/ruby-datamodelpoisoning":        shouldAnalyzeRubyDatamodelpoisoningCtx,
 	"datadog/ruby-misinformation":            shouldAnalyzeRubyMisinformationCtx,
 	"datadog/ruby-promptinjection":           shouldAnalyzeRubyPromptinjectionCtx,
+
+	// Elixir
+	"datadog/elixir-sqli":                      shouldAnalyzeElixirSqliCtx,
+	"datadog/elixir-cmdi":                      shouldAnalyzeElixirCmdiCtx,
+	"datadog/elixir-xss":                       shouldAnalyzeElixirXssCtx,
+	"datadog/elixir-pathtraversal":             shouldAnalyzeElixirPathtraversalCtx,
+	"datadog/elixir-zipslip":                   shouldAnalyzeElixirZipslipCtx,
+	"datadog/elixir-ldapi":                     shouldAnalyzeElixirLdapiCtx,
+	"datadog/elixir-codei":                     shouldAnalyzeElixirCodeiCtx,
+	"datadog/elixir-loginjection":              shouldAnalyzeElixirLoginjectionCtx,
+	"datadog/elixir-integeroverflow":           shouldAnalyzeElixirIntegeroverflowCtx,
+	"datadog/elixir-sensitiveinfodisclosure":   shouldAnalyzeElixirSensitiveinfodisclosureCtx,
+	"datadog/elixir-errorinfoleak":             shouldAnalyzeElixirErrorinfoleakCtx,
+	"datadog/elixir-accesscontrol":             shouldAnalyzeElixirAccesscontrolCtx,
+	"datadog/elixir-brokencrypto":              shouldAnalyzeElixirBrokencryptoCtx,
+	"datadog/elixir-weakhash":                  shouldAnalyzeElixirWeakhashCtx,
+	"datadog/elixir-weakrandomness":            shouldAnalyzeElixirWeakrandomnessCtx,
+	"datadog/elixir-deserialization":           shouldAnalyzeElixirDeserializationCtx,
+	"datadog/elixir-trustboundary":             shouldAnalyzeElixirTrustboundaryCtx,
+	"datadog/elixir-openredirect":              shouldAnalyzeElixirOpenredirectCtx,
+	"datadog/elixir-insecurecookie":            shouldAnalyzeElixirInsecurecookieCtx,
+	"datadog/elixir-xpathi":                    shouldAnalyzeElixirXpathiCtx,
+	"datadog/elixir-improperoutputhandling":    shouldAnalyzeElixirImproperoutputhandlingCtx,
+	"datadog/elixir-excessiveagency":           shouldAnalyzeElixirExcessiveagencyCtx,
+	"datadog/elixir-systempromptleakage":       shouldAnalyzeElixirSystempromptleakageCtx,
+	"datadog/elixir-unboundedconsumption":      shouldAnalyzeElixirUnboundedconsumptionCtx,
+	"datadog/elixir-vectorembeddingweaknesses": shouldAnalyzeElixirVectorembeddingweaknessesCtx,
+	"datadog/elixir-datamodelpoisoning":        shouldAnalyzeElixirDatamodelpoisoningCtx,
+	"datadog/elixir-misinformation":            shouldAnalyzeElixirMisinformationCtx,
+	"datadog/elixir-promptinjection":           shouldAnalyzeElixirPromptinjectionCtx,
+	"datadog/elixir-supplychain":               shouldAnalyzeElixirSupplychainCtx,
 }
 
 // shouldAnalyzePythonSqliCtx checks for Python SQL injection patterns.
@@ -2922,6 +3100,237 @@ func shouldAnalyzeRubyPromptinjectionCtx(ctx *model.DetectionContext) bool {
 	hasInput := containsAny(code, inputSources)
 
 	return hasSink && hasInput
+}
+
+// ============================================================
+// Elixir Rules
+// ============================================================
+
+func shouldAnalyzeElixirSqliCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	dbHints := []string{"ecto.adapters.sql", "repo.query", "sql.query", "postgrex", "myxql", "tds", "ecto.repo"}
+	sqlWords := []string{"select", "update", "insert", "delete", "from", "where"}
+	return containsAny(code, dbHints) && (containsAnyWord(code, sqlWords) || hasElixirRequestInput(code))
+}
+
+func shouldAnalyzeElixirCmdiCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	commandSinks := []string{"system.cmd(", ":os.cmd(", "port.open(", "muontrap.cmd(", "porcelain.shell("}
+	return containsAny(code, commandSinks)
+}
+
+func shouldAnalyzeElixirXssCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	unsafeOutput := []string{"phoenix.html.raw(", "{:safe,", "html(conn,", "send_resp(", "put_resp_content_type("}
+	return containsAny(code, unsafeOutput) && hasElixirRequestInput(code)
+}
+
+func shouldAnalyzeElixirPathtraversalCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	fileSinks := []string{
+		"file.read(", "file.read!(", "file.write(", "file.write!(", "file.open(", "file.open!(",
+		"file.rm(", "file.rm!(", "file.cp(", "file.cp!(", "send_file(", "send_download(", "path.join(",
+	}
+	return containsAny(code, fileSinks) && hasElixirRequestInput(code)
+}
+
+func shouldAnalyzeElixirZipslipCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	archiveSinks := []string{":zip.extract", ":erl_tar.extract", "unzip(", "extract("}
+	return containsAny(code, archiveSinks)
+}
+
+func shouldAnalyzeElixirLdapiCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	ldapHints := []string{":eldap", "eldap.search", "eldap.simple_bind", "ldapex", "ldap."}
+	filterHints := []string{"filter", "base", "dn", "search"}
+	return containsAny(code, ldapHints) && containsAny(code, filterHints)
+}
+
+func shouldAnalyzeElixirCodeiCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	codeSinks := []string{"code.eval_string(", "code.eval_quoted(", "eex.eval_string(", ":erl_eval.expr", "module.create("}
+	return containsAny(code, codeSinks) && hasElixirRequestInput(code)
+}
+
+func shouldAnalyzeElixirLoginjectionCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	logSinks := []string{"logger.debug(", "logger.info(", "logger.warning(", "logger.warn(", "logger.error(", ":logger."}
+	return containsAny(code, logSinks) && hasElixirRequestInput(code)
+}
+
+func shouldAnalyzeElixirIntegeroverflowCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	fixedWidthOperations := []string{"signed-integer", "unsigned-integer", "size(", "integer-size(", "nif", "rustler", "port.command("}
+	externalInput := []string{"binary.decode_", "string.to_integer("}
+	return containsAny(code, fixedWidthOperations) && (hasElixirRequestInput(code) || containsAny(code, externalInput))
+}
+
+func shouldAnalyzeElixirSensitiveinfodisclosureCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	sensitiveData := []string{"password", "secret", "api_key", "apikey", "token", "private_key", "credit_card", "ssn"}
+	disclosureSinks := []string{
+		"langchain", "reqllm", "ex_openai", "openai", "anthropic",
+		"json(conn,", "text(conn,", "html(conn,", "send_resp(", "render(conn,", "put_resp_body(",
+		"logger.", "inspect(",
+	}
+	return containsAny(code, sensitiveData) && containsAny(code, disclosureSinks)
+}
+
+func shouldAnalyzeElixirErrorinfoleakCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	errorData := []string{"exception.message(", "exception.format(", "__stacktrace__", "stacktrace", "inspect(error", "inspect(exception"}
+	responseSinks := []string{"json(conn,", "send_resp(", "render(conn,", "put_resp_body("}
+	return containsAny(code, errorData) && containsAny(code, responseSinks)
+}
+
+func shouldAnalyzeElixirAccesscontrolCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	requestIDs := []string{"params[\"id\"]", "params[:id]", "conn.params", "path_params"}
+	resourceAccess := []string{"repo.get(", "repo.get!(", "repo.one(", "repo.update(", "repo.delete(", "from("}
+	return containsAny(code, resourceAccess) && (containsAny(code, requestIDs) || hasElixirRequestInput(code))
+}
+
+func shouldAnalyzeElixirBrokencryptoCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	weakCrypto := []string{":des_", ":rc4", ":blowfish_", ":aes_ecb", "_ecb"}
+	return containsAny(code, weakCrypto)
+}
+
+func shouldAnalyzeElixirWeakhashCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	weakHashes := []string{":md5,", ":md5)", ":sha,", ":sha)", ":erlang.md5(", "md5("}
+	return containsAny(code, weakHashes)
+}
+
+func shouldAnalyzeElixirWeakrandomnessCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	weakRandom := []string{":rand.", "enum.random(", "enum.take_random(", "system.unique_integer("}
+	securityContext := []string{"token", "password", "session", "secret", "otp", "nonce", "api_key", "cookie", "auth", "credential"}
+	return containsAny(code, weakRandom) && containsAny(code, securityContext)
+}
+
+func shouldAnalyzeElixirDeserializationCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	unsafeSinks := []string{":erlang.binary_to_term", "binary_to_term("}
+	if !containsAny(code, unsafeSinks) {
+		return false
+	}
+	if strings.Count(code, "binary_to_term(") == 1 && reElixirSingleSafeDeserialization.MatchString(code) {
+		return false
+	}
+	return true
+}
+
+func shouldAnalyzeElixirTrustboundaryCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	trustedStorage := []string{"put_session(", "configure_session(", "assign(conn,", "guardian.encode_and_sign("}
+	return containsAny(code, trustedStorage) && hasElixirRequestInput(code)
+}
+
+func shouldAnalyzeElixirOpenredirectCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	redirectSinks := []string{"redirect(conn,", "external:", "redirect(to:", "redirect(external:"}
+	requestInput := []string{"referer"}
+	return containsAny(code, redirectSinks) && (hasElixirRequestInput(code) || containsAny(code, requestInput))
+}
+
+func shouldAnalyzeElixirInsecurecookieCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	cookieSinks := []string{"put_resp_cookie(", "delete_resp_cookie(", "plug.session", "store: :cookie", "put_session("}
+	return containsAny(code, cookieSinks)
+}
+
+func shouldAnalyzeElixirXpathiCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	xpathLibraries := []string{"sweet_xml", "sweetxml", "sigil_x", "xpath(", ":xmerl_xpath.string("}
+	return containsAny(code, xpathLibraries)
+}
+
+func shouldAnalyzeElixirImproperoutputhandlingCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	aiOutput := []string{"langchain", "reqllm", "ex_openai", "openai", "chat_completion", "llm"}
+	dangerousSinks := []string{"system.cmd(", ":os.cmd(", "code.eval_string(", "phoenix.html.raw(", "repo.query(", "file.write("}
+	return containsAny(code, aiOutput) && containsAny(code, dangerousSinks)
+}
+
+func shouldAnalyzeElixirExcessiveagencyCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	aiLibraries := []string{"langchain", "reqllm", "ex_openai", "openai", "anthropic"}
+	toolPatterns := []string{"function_call", "tool_call", "tools:", "function:", "execute(", "mcp"}
+	return containsAny(code, aiLibraries) && containsAny(code, toolPatterns)
+}
+
+func shouldAnalyzeElixirSystempromptleakageCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	systemPrompt := []string{"system_prompt", "system prompt", "role: :system", "role: \"system\"", "type: :system"}
+	outputSinks := []string{"json(conn,", "send_resp(", "render(conn,", "logger.", "inspect("}
+	return containsAny(code, systemPrompt) && containsAny(code, outputSinks)
+}
+
+func shouldAnalyzeElixirUnboundedconsumptionCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	aiLibraries := []string{"langchain", "reqllm", "ex_openai", "openai", "anthropic"}
+	requestOrLoop := []string{"chat_completion", "completion", "generate", "stream", "while", "enum.reduce", "task.async_stream"}
+	return containsAny(code, aiLibraries) && containsAny(code, requestOrLoop)
+}
+
+func shouldAnalyzeElixirVectorembeddingweaknessesCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	vectorStores := []string{"pgvector", "vector", "qdrant", "pinecone", "weaviate", "embedding", "cosine_distance", "l2_distance"}
+	searchPatterns := []string{"similarity", "nearest", "search", "query", "distance", "embedding"}
+	return containsAny(code, vectorStores) && containsAny(code, searchPatterns)
+}
+
+func shouldAnalyzeElixirDatamodelpoisoningCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	modelLibraries := []string{"bumblebee", "nx", "axon", "ortex", "huggingface", "safetensors"}
+	dataOperations := []string{"dataset", "training", "fine_tun", "load_model", "load_featurizer", "from_pretrained"}
+	return containsAny(code, modelLibraries) && containsAny(code, dataOperations)
+}
+
+func shouldAnalyzeElixirMisinformationCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	aiLibraries := []string{"langchain", "reqllm", "ex_openai", "openai", "anthropic"}
+	highImpactOutput := []string{"medical", "diagnosis", "financial", "legal", "decision", "recommendation", "answer", "response"}
+	return containsAny(code, aiLibraries) && containsAny(code, highImpactOutput)
+}
+
+func shouldAnalyzeElixirPromptinjectionCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	promptSinks := []string{"langchain", "reqllm", "ex_openai", "openai", "anthropic", "messages:", "prompt:"}
+	requestInput := []string{"user_input", "user_message", "document"}
+	return containsAny(code, promptSinks) && (hasElixirRequestInput(code) || containsAny(code, requestInput))
+}
+
+func shouldAnalyzeElixirSupplychainCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	networkDownloads := []string{"req.get(", "req.request(", "finch.request(", "httpoison.get(", ":httpc.request(", "download("}
+	modelLoaders := []string{"bumblebee.load_model(", "bumblebee.load_featurizer(", "ortex", "axon.deserialize(", "nx.deserialize("}
+	remoteRepositories := []string{"{:hf,"}
+	hasNetworkDownload := containsAny(code, networkDownloads)
+	if !hasNetworkDownload && countElixirModelLoaders(code) == 1 && reElixirPinnedHuggingFaceLoad.MatchString(code) {
+		return false
+	}
+	return containsAny(code, modelLoaders) && (hasNetworkDownload || containsAny(code, remoteRepositories))
+}
+
+func hasElixirRequestInput(code string) bool {
+	directInput := []string{"conn.params", "params[", "body_params", "query_params", "get_req_header("}
+	return containsAny(code, directInput) ||
+		reElixirPhoenixActionParameters.MatchString(code) ||
+		reElixirLiveViewEventParameters.MatchString(code)
+}
+
+func countElixirModelLoaders(code string) int {
+	count := strings.Count(code, "bumblebee.load_model(")
+	count += strings.Count(code, "bumblebee.load_featurizer(")
+	count += strings.Count(code, "axon.deserialize(")
+	count += strings.Count(code, "nx.deserialize(")
+	if strings.Contains(code, "ortex") {
+		count++
+	}
+	return count
 }
 
 // ShouldAnalyze does a very early, cheap filter to decide if a file is worth

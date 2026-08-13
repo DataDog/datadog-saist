@@ -37,6 +37,11 @@ func TestGetLanguageUnknownFiles(t *testing.T) {
 	assert.Equal(t, LanguageUnknown, GetLanguage(".gitignore"))
 }
 
+func TestGetLanguageElixirFiles(t *testing.T) {
+	assert.Equal(t, Elixir, GetLanguage("lib/example.ex"))
+	assert.Equal(t, Elixir, GetLanguage("config/runtime.exs"))
+}
+
 func TestLanguageStringJava(t *testing.T) {
 	assert.Equal(t, "Java", Java.String())
 }
@@ -51,4 +56,8 @@ func TestLanguageStringPython(t *testing.T) {
 
 func TestLanguageStringUnknown(t *testing.T) {
 	assert.Equal(t, "LanguageUnknown", LanguageUnknown.String())
+}
+
+func TestLanguageStringElixir(t *testing.T) {
+	assert.Equal(t, "Elixir", Elixir.String())
 }

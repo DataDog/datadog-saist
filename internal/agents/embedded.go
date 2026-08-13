@@ -25,6 +25,7 @@ var languageGlobs = map[string][]string{
 	"php":        {"**/*.php", "**/*.phtml", "**/*.php3", "**/*.php4", "**/*.php5"},
 	"ruby":       {"**/*.rb"},
 	"rust":       {"**/*.rs"},
+	"elixir":     {"**/*.ex", "**/*.exs"},
 }
 
 // LoadLocalRules returns one api.AiPrompt per embedded *.md file in this

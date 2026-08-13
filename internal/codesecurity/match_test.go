@@ -48,3 +48,18 @@ func main() { db.Query("SELECT " + x) }`), 0o600))
 	m2 := MatchFilesToRules(files, rules)
 	assert.Empty(t, m2["handler.go"])
 }
+
+func TestMatchFilesToRules_ElixirKeywordFilters(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "handler.ex")
+	require.NoError(t, os.WriteFile(p, []byte("def run(sql), do: Repo.query(sql)"), 0o600))
+
+	rules := []api.AiPrompt{{
+		ID:                 "datadog/elixir-sqli",
+		Globs:              []string{"**/*.ex"},
+		FileSearchKeywords: []string{"repo.query"},
+	}}
+	files := []SourceFile{{RelPath: "handler.ex", AbsPath: p, Lang: model.Elixir}}
+	matched := MatchFilesToRules(files, rules)
+	assert.Contains(t, matched["handler.ex"], "datadog/elixir-sqli")
+}

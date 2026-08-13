@@ -19,6 +19,7 @@ const (
 	PHP
 	Ruby
 	Rust
+	Elixir
 )
 
 func (l Language) String() string {
@@ -43,6 +44,8 @@ func (l Language) String() string {
 		return "Ruby"
 	case Rust:
 		return "Rust"
+	case Elixir:
+		return "Elixir"
 	default:
 		return "LanguageUnknown"
 	}
@@ -72,6 +75,8 @@ func GetLanguage(filePath string) Language {
 		return Ruby
 	case ".rs":
 		return Rust
+	case ".ex", ".exs":
+		return Elixir
 	default:
 		return LanguageUnknown
 	}
@@ -94,5 +99,6 @@ func GetAllLanguages() []Language {
 		PHP,
 		Ruby,
 		Rust,
+		Elixir,
 	}
 }

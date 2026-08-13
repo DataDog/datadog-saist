@@ -27,6 +27,8 @@ import (
 	treesitterruby "github.com/tree-sitter/tree-sitter-ruby/bindings/go"
 
 	treesitterrust "github.com/tree-sitter/tree-sitter-rust/bindings/go"
+
+	treesitterelixir "github.com/tree-sitter/tree-sitter-elixir/bindings/go"
 )
 
 const (
@@ -84,6 +86,10 @@ var contextRetrievers = map[model.Language]ContextRetriever{
 		Language:        treesitter.NewLanguage(treesitterrust.Language()),
 		FunctionGetTags: RustGetTags,
 	},
+	model.Elixir: {
+		Language:        treesitter.NewLanguage(treesitterelixir.Language()),
+		FunctionGetTags: ElixirGetTags,
+	},
 }
 
 // getTagsFromQuery runs a tree-sitter query over data.root and converts the matched captures into tags
@@ -103,7 +109,8 @@ func getTagsFromQuery(
 
 	queryCursor := treesitter.NewQueryCursor()
 	defer queryCursor.Close()
-	matches := queryCursor.Matches(query, data.root, nil)
+	// Query predicates such as #any-of? need source text to resolve captures.
+	matches := queryCursor.Matches(query, data.root, data.code)
 	captureNames := query.CaptureNames()
 	for {
 		match := matches.Next()

@@ -13,6 +13,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/tree-sitter-grammars/tree-sitter-kotlin v1.1.0
 	github.com/tree-sitter/go-tree-sitter v0.25.0
+	github.com/tree-sitter/tree-sitter-elixir v0.3.5
 	github.com/tree-sitter/tree-sitter-go v0.23.4
 	github.com/tree-sitter/tree-sitter-java v0.23.5
 	github.com/tree-sitter/tree-sitter-javascript v0.23.1
@@ -25,6 +26,8 @@ require (
 	google.golang.org/api v0.186.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.74.7-rc.5
 )
+
+replace github.com/tree-sitter/tree-sitter-elixir => github.com/elixir-lang/tree-sitter-elixir v0.3.5
 
 require (
 	github.com/bahlo/generic-list-go v0.2.0 // indirect

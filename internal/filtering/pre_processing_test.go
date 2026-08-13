@@ -211,6 +211,195 @@ func TestShouldAnalyze_NoKeywordsAnalyzesEverything(t *testing.T) {
 	assert.True(t, result, "Expected ShouldAnalyze to return true when no keywords are defined (analyze everything)")
 }
 
+func TestStripElixirCommentsPreservesInterpolation(t *testing.T) {
+	code := "value = \"token ##{id}\" # token in a comment\nRepo.query(\"select * from users\")"
+	stripped := StripCodeForDetection(code, model.Elixir)
+	assert.Contains(t, stripped, "\"token ##{id}\"")
+	assert.NotContains(t, stripped, "token in a comment")
+	assert.Contains(t, stripped, "repo.query")
+}
+
+func TestStripElixirCommentsPreservesSigilsAndHeredocs(t *testing.T) {
+	code := "pattern = ~r/#admin/; Code.eval_string(conn.params[\"code\"])\ntext = \"\"\"\n# content\n\"\"\"\n# Code.eval_string(comment)"
+	stripped := StripCodeForDetection(code, model.Elixir)
+
+	assert.Contains(t, stripped, "~r/#admin/")
+	assert.Contains(t, stripped, "code.eval_string(conn.params")
+	assert.Contains(t, stripped, "# content")
+	assert.NotContains(t, stripped, "code.eval_string(comment)")
+}
+
+func TestShouldAnalyze_ElixirCriticalFilterRegressions(t *testing.T) {
+	tests := []struct {
+		name string
+		rule string
+		code string
+		want bool
+	}{
+		{
+			name: "multiline pattern-matched Phoenix parameters",
+			rule: "datadog/elixir-codei",
+			code: "def run(\n  conn,\n  %{\"code\" => code}\n), do: Code.eval_string(code)",
+			want: true,
+		},
+		{
+			name: "nested struct-matched Phoenix connection",
+			rule: "datadog/elixir-codei",
+			code: `def run(%Plug.Conn{assigns: %{current_user: user}} = conn, %{"code" => code}), do: Code.eval_string(code)`,
+			want: true,
+		},
+		{
+			name: "unrelated map is not a Phoenix parameter source",
+			rule: "datadog/elixir-codei",
+			code: `def run(payload), do: Code.eval_string(payload || %{"code" => "default"})`,
+			want: false,
+		},
+		{
+			name: "LiveView event parameters",
+			rule: "datadog/elixir-codei",
+			code: `def handle_event("run", %{"code" => code}, socket), do: {:noreply, Code.eval_string(code)}`,
+			want: true,
+		},
+		{
+			name: "unrelated three-argument function is not a LiveView source",
+			rule: "datadog/elixir-codei",
+			code: `def process("run", %{"code" => code}, state), do: Code.eval_string(code)`,
+			want: false,
+		},
+		{
+			name: "sensitive data sent to AI provider",
+			rule: "datadog/elixir-sensitiveinfodisclosure",
+			code: `ReqLLM.generate_text(model: model, prompt: "Summarize #{user.api_key}")`,
+			want: true,
+		},
+		{
+			name: "sensitive data sent in HTTP response",
+			rule: "datadog/elixir-sensitiveinfodisclosure",
+			code: `json(conn, %{token: user.token})`,
+			want: true,
+		},
+		{
+			name: "local sensitive variable sent in HTTP response",
+			rule: "datadog/elixir-sensitiveinfodisclosure",
+			code: `send_resp(conn, 200, password)`,
+			want: true,
+		},
+		{
+			name: "local sensitive variable written to log",
+			rule: "datadog/elixir-sensitiveinfodisclosure",
+			code: `Logger.info("password=#{password}")`,
+			want: true,
+		},
+		{
+			name: "Phoenix raw HTML response",
+			rule: "datadog/elixir-xss",
+			code: `def show(conn, params), do: html(conn, params["body"])`,
+			want: true,
+		},
+		{
+			name: "Ecto vector distance helper",
+			rule: "datadog/elixir-vectorembeddingweaknesses",
+			code: `Repo.all(from d in Document, order_by: l2_distance(d.embedding, ^query_vector))`,
+			want: true,
+		},
+		{
+			name: "bang filesystem read",
+			rule: "datadog/elixir-pathtraversal",
+			code: `def read(conn, params), do: File.read!(params["path"])`,
+			want: true,
+		},
+		{
+			name: "filesystem copy",
+			rule: "datadog/elixir-pathtraversal",
+			code: `def copy(conn, params), do: File.cp(params["source"], @destination)`,
+			want: true,
+		},
+		{
+			name: "system prompt returned in response",
+			rule: "datadog/elixir-systempromptleakage",
+			code: `json(conn, %{debug_prompt: system_prompt})`,
+			want: true,
+		},
+		{
+			name: "remote Bumblebee repository",
+			rule: "datadog/elixir-supplychain",
+			code: `Bumblebee.load_model({:hf, "owner/model"})`,
+			want: true,
+		},
+		{
+			name: "single pinned Bumblebee repository",
+			rule: "datadog/elixir-supplychain",
+			code: `Bumblebee.load_model({:hf, "owner/model", revision: "0123456789abcdef0123456789abcdef01234567"})`,
+			want: false,
+		},
+		{
+			name: "integrity marker does not suppress another model path",
+			rule: "datadog/elixir-supplychain",
+			code: "verified = Crypto.hash(:sha256, bytes)\nBumblebee.load_model({:hf, \"owner/other-model\", revision: revision})",
+			want: true,
+		},
+		{
+			name: "safe term conversion does not suppress unsafe conversion",
+			rule: "datadog/elixir-deserialization",
+			code: ":erlang.binary_to_term(trusted, [:safe])\n:erlang.binary_to_term(untrusted)",
+			want: true,
+		},
+		{
+			name: "single safe term conversion",
+			rule: "datadog/elixir-deserialization",
+			code: `:erlang.binary_to_term(trusted, [:safe])`,
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := model.DetectionContext{
+				Language: model.Elixir,
+				Rule:     api.AiPrompt{ID: tt.rule},
+				Code:     tt.code,
+			}
+			assert.Equal(t, tt.want, ShouldAnalyze(&ctx, log.NoopLogger()))
+		})
+	}
+}
+
+func TestShouldAnalyze_ElixirSqlInjection(t *testing.T) {
+	ctx := model.DetectionContext{
+		Language: model.Elixir,
+		Rule:     api.AiPrompt{ID: "datadog/elixir-sqli"},
+		Code:     "Repo.query(\"SELECT * FROM users WHERE id = #{id}\")",
+	}
+	assert.True(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+}
+
+func TestShouldAnalyze_ElixirSqlInjectionRequiresSql(t *testing.T) {
+	ctx := model.DetectionContext{
+		Language: model.Elixir,
+		Rule:     api.AiPrompt{ID: "datadog/elixir-sqli"},
+		Code:     "Repo.query(query, [id])",
+	}
+	assert.False(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+}
+
+func TestShouldAnalyze_ElixirSqlInjectionWithRequestQuery(t *testing.T) {
+	ctx := model.DetectionContext{
+		Language: model.Elixir,
+		Rule:     api.AiPrompt{ID: "datadog/elixir-sqli"},
+		Code:     `def run(conn, params), do: Repo.query(params["query"])`,
+	}
+	assert.True(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+}
+
+func TestShouldAnalyze_ElixirPromptInjectionRequiresInput(t *testing.T) {
+	ctx := model.DetectionContext{
+		Language: model.Elixir,
+		Rule:     api.AiPrompt{ID: "datadog/elixir-promptinjection"},
+		Code:     "ReqLLM.generate_text(model: model, prompt: system_prompt)",
+	}
+	assert.False(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+}
+
 // ============================================================
 // C# Tests
 // ============================================================
