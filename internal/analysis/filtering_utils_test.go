@@ -212,3 +212,23 @@ func TestIsGeneratedFile_FileNotFound(t *testing.T) {
 		t.Fatalf("expected error for non-existent file")
 	}
 }
+
+func TestIsGeneratedFile_Elixir(t *testing.T) {
+	path := writeTempFile(t, ".pb.ex", "defmodule Generated.Message do\nend\n")
+	generated, err := IsGeneratedFile(path, model.Elixir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !generated {
+		t.Fatalf("expected generated Elixir protobuf file")
+	}
+}
+
+func TestIsTestFile_Elixir(t *testing.T) {
+	if !IsTestFileFromContent([]byte("use ExUnit.Case, async: true"), "lib/example.ex", model.Elixir) {
+		t.Fatalf("expected ExUnit module to be classified as a test")
+	}
+	if !IsTestFileFromContent(nil, "test/example_test.exs", model.Elixir) {
+		t.Fatalf("expected *_test.exs file to be classified as a test")
+	}
+}

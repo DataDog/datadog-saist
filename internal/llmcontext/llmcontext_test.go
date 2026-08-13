@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	treesitterkotlin "github.com/tree-sitter-grammars/tree-sitter-kotlin/bindings/go"
 	treesitter "github.com/tree-sitter/go-tree-sitter"
+	treesitterelixir "github.com/tree-sitter/tree-sitter-elixir/bindings/go"
 	treesitterjavascript "github.com/tree-sitter/tree-sitter-javascript/bindings/go"
 	treesitterphp "github.com/tree-sitter/tree-sitter-php/bindings/go"
 	treesitterpython "github.com/tree-sitter/tree-sitter-python/bindings/go"
@@ -877,6 +878,73 @@ fn greet(name: &str) -> String {
 	assert.Contains(t, names, "say_hi")
 	assert.Contains(t, names, "greet")
 	assert.Contains(t, names, "new")
+}
+
+// Elixir tests
+
+func TestGetContextFromFileElixir(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+
+	err := os.WriteFile(
+		filepath.Join(tmpDir, "server.ex"),
+		[]byte(`defmodule Server do
+  def handle_request(request) do
+    process_input(request.body)
+  end
+
+  defp process_input(data), do: data
+end
+`),
+		0644,
+	)
+	assert.NoError(t, err)
+
+	llmContext, err := GetContextFromFile(tmpDir, "server.ex")
+	assert.NoError(t, err)
+	assert.Equal(t, model.Elixir, llmContext.Language)
+
+	names := make([]string, len(llmContext.Tags))
+	for i, tag := range llmContext.Tags {
+		names[i] = tag.Name
+	}
+	assert.Contains(t, names, "Server")
+	assert.Contains(t, names, "handle_request")
+	assert.Contains(t, names, "process_input")
+}
+
+func TestElixirGetTags_SkipsTestSetup(t *testing.T) {
+	t.Parallel()
+	code := `defmodule Example do
+  def setup, do: :ok
+  def setup_all, do: :ok
+  def run, do: helper()
+end
+`
+	parser := treesitter.NewParser()
+	defer parser.Close()
+	parser.SetLanguage(treesitter.NewLanguage(treesitterelixir.Language()))
+
+	tree := parser.Parse([]byte(code), nil)
+	defer tree.Close()
+
+	data := GetFunctionData{
+		root:     tree.RootNode(),
+		path:     "example.ex",
+		code:     []byte(code),
+		language: model.Elixir,
+	}
+
+	tags, err := ElixirGetTags(data)
+	assert.NoError(t, err)
+	names := make([]string, len(tags))
+	for i, tag := range tags {
+		names[i] = tag.Name
+	}
+	assert.NotContains(t, names, "setup")
+	assert.NotContains(t, names, "setup_all")
+	assert.Contains(t, names, "run")
+	assert.Contains(t, names, "helper")
 }
 
 // Common stuff
