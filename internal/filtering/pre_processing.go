@@ -388,21 +388,18 @@ var ruleFilters = map[string]ruleFilterFunc{
 	"datadog/go-sqli":     shouldAnalyzeGoSqliCtx,
 	"datadog/java-sqli":   shouldAnalyzeJavaSqliCtx,
 	"datadog/csharp-sqli": shouldAnalyzeCSharpSqliCtx,
-	"datadog/swift-sqli":  shouldAnalyzeSwiftSqliCtx,
 
 	// Command Injection
 	"datadog/java-cmdi":   shouldAnalyzeJavaCmdiCtx,
 	"datadog/go-cmdi":     shouldAnalyzeGoCmdiCtx,
 	"datadog/python-cmdi": shouldAnalyzePythonCmdiCtx,
 	"datadog/csharp-cmdi": shouldAnalyzeCSharpCmdiCtx,
-	"datadog/swift-cmdi":  shouldAnalyzeSwiftCmdiCtx,
 
 	// XSS
 	"datadog/java-xss":   shouldAnalyzeJavaXssCtx,
 	"datadog/go-xss":     shouldAnalyzeGoXssCtx,
 	"datadog/python-xss": shouldAnalyzePythonXssCtx,
 	"datadog/csharp-xss": shouldAnalyzeCSharpXssCtx,
-	"datadog/swift-xss":  shouldAnalyzeSwiftXssCtx,
 
 	// Deserialization
 	"datadog/java-deserialization":   shouldAnalyzeJavaDeserializationCtx,
@@ -439,7 +436,6 @@ var ruleFilters = map[string]ruleFilterFunc{
 	"datadog/go-xpathi":     shouldAnalyzeGoXpathiCtx,
 	"datadog/python-xpathi": shouldAnalyzePythonXpathiCtx,
 	"datadog/csharp-xpathi": shouldAnalyzeCSharpXpathiCtx,
-	"datadog/swift-xpathi":  shouldAnalyzeSwiftXpathiCtx,
 
 	// Weak Hash
 	"datadog/java-weakhash":   shouldAnalyzeJavaWeakhashCtx,
@@ -531,6 +527,37 @@ var ruleFilters = map[string]ruleFilterFunc{
 	"datadog/elixir-misinformation":            shouldAnalyzeElixirMisinformationCtx,
 	"datadog/elixir-promptinjection":           shouldAnalyzeElixirPromptinjectionCtx,
 	"datadog/elixir-supplychain":               shouldAnalyzeElixirSupplychainCtx,
+
+	// Swift
+	"datadog/swift-sqli":                      shouldAnalyzeSwiftSqliCtx,
+	"datadog/swift-cmdi":                      shouldAnalyzeSwiftCmdiCtx,
+	"datadog/swift-xss":                       shouldAnalyzeSwiftXssCtx,
+	"datadog/swift-pathtraversal":             shouldAnalyzeSwiftPathtraversalCtx,
+	"datadog/swift-zipslip":                   shouldAnalyzeSwiftZipslipCtx,
+	"datadog/swift-ldapi":                     shouldAnalyzeSwiftLdapiCtx,
+	"datadog/swift-codei":                     shouldAnalyzeSwiftCodeiCtx,
+	"datadog/swift-loginjection":              shouldAnalyzeSwiftLoginjectionCtx,
+	"datadog/swift-integeroverflow":           shouldAnalyzeSwiftIntegeroverflowCtx,
+	"datadog/swift-sensitiveinfodisclosure":   shouldAnalyzeSwiftSensitiveinfodisclosureCtx,
+	"datadog/swift-errorinfoleak":             shouldAnalyzeSwiftErrorinfoleakCtx,
+	"datadog/swift-accesscontrol":             shouldAnalyzeSwiftAccesscontrolCtx,
+	"datadog/swift-brokencrypto":              shouldAnalyzeSwiftBrokencryptoCtx,
+	"datadog/swift-weakhash":                  shouldAnalyzeSwiftWeakhashCtx,
+	"datadog/swift-weakrandomness":            shouldAnalyzeSwiftWeakrandomnessCtx,
+	"datadog/swift-deserialization":           shouldAnalyzeSwiftDeserializationCtx,
+	"datadog/swift-trustboundary":             shouldAnalyzeSwiftTrustboundaryCtx,
+	"datadog/swift-openredirect":              shouldAnalyzeSwiftOpenredirectCtx,
+	"datadog/swift-insecurecookie":            shouldAnalyzeSwiftInsecurecookieCtx,
+	"datadog/swift-xpathi":                    shouldAnalyzeSwiftXpathiCtx,
+	"datadog/swift-improperoutputhandling":    shouldAnalyzeSwiftImproperoutputhandlingCtx,
+	"datadog/swift-excessiveagency":           shouldAnalyzeSwiftExcessiveagencyCtx,
+	"datadog/swift-systempromptleakage":       shouldAnalyzeSwiftSystempromptleakageCtx,
+	"datadog/swift-unboundedconsumption":      shouldAnalyzeSwiftUnboundedconsumptionCtx,
+	"datadog/swift-vectorembeddingweaknesses": shouldAnalyzeSwiftVectorembeddingweaknessesCtx,
+	"datadog/swift-datamodelpoisoning":        shouldAnalyzeSwiftDatamodelpoisoningCtx,
+	"datadog/swift-misinformation":            shouldAnalyzeSwiftMisinformationCtx,
+	"datadog/swift-promptinjection":           shouldAnalyzeSwiftPromptinjectionCtx,
+	"datadog/swift-supplychain":               shouldAnalyzeSwiftSupplychainCtx,
 }
 
 func shouldAnalyzeSwiftSqliCtx(ctx *model.DetectionContext) bool {
@@ -563,6 +590,169 @@ func shouldAnalyzeSwiftXpathiCtx(ctx *model.DetectionContext) bool {
 	return containsAny(code, []string{
 		"xpath", "nodes(forxpath:", "aexml", "swxmlhash", "kissxml", "gdataxml",
 	})
+}
+
+func shouldAnalyzeSwiftPathtraversalCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	fileSinks := []string{"filemanager.default", "string(contentsoffile:", "data(contentsof:", "write(to:", "copyitem(at:", "removeitem(at:", "appendingpathcomponent("}
+	return containsAny(code, fileSinks) && hasSwiftRequestInput(code)
+}
+
+func shouldAnalyzeSwiftZipslipCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	return containsAny(code, []string{"zipfoundation", "archive(", ".extract(", "ssziparchive", "ziparchive"})
+}
+
+func shouldAnalyzeSwiftLdapiCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	return containsAny(code, []string{"ldapconnection", "ldapsearchrequest", "ldapsearch", "swiftldap", "ldap."}) &&
+		containsAny(code, []string{"filter", "base", "dn", "search"})
+}
+
+func shouldAnalyzeSwiftCodeiCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	codeSinks := []string{"nsexpression", "evaluatescript(", "evaluatejavascript(", "jscontext", "javascriptcore"}
+	return containsAny(code, codeSinks) && hasSwiftRequestInput(code)
+}
+
+func shouldAnalyzeSwiftLoginjectionCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	return containsAny(code, []string{"logger.", "os_log(", "nslog(", "print("}) && hasSwiftRequestInput(code)
+}
+
+func shouldAnalyzeSwiftIntegeroverflowCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	fixedWidthOperations := []string{"int8(", "int16(", "int32(", "uint8(", "uint16(", "uint32(", "truncatingifneeded", "addingreportingoverflow", "multipliedreportingoverflow"}
+	return containsAny(code, fixedWidthOperations) && hasSwiftRequestInput(code)
+}
+
+func shouldAnalyzeSwiftSensitiveinfodisclosureCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	sensitiveData := []string{"password", "secret", "api_key", "apikey", "token", "private_key", "credit_card", "ssn"}
+	return containsAny(code, sensitiveData) && (hasSwiftResponseSink(code) || hasSwiftAIClient(code) || containsAny(code, []string{"logger.", "os_log(", "print("}))
+}
+
+func shouldAnalyzeSwiftErrorinfoleakCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	errorData := []string{"localizeddescription", "debugdescription", "callstacksymbols", "stacktrace", "error as ns"}
+	return containsAny(code, errorData) && hasSwiftResponseSink(code)
+}
+
+func shouldAnalyzeSwiftAccesscontrolCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	resourceAccess := []string{"find(", "findbyid", "query.filter", "database.query", "fluent", "model.find", "fetchrequest"}
+	return containsAny(code, resourceAccess) && hasSwiftRequestInput(code)
+}
+
+func shouldAnalyzeSwiftBrokencryptoCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	return containsAny(code, []string{"kccalgorithmdes", "kccalgorithm3des", "kccalgorithmrc4", "des.", "rc4", "ecb", "ciphermode.ecb"})
+}
+
+func shouldAnalyzeSwiftWeakhashCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	return containsAny(code, []string{"insecure.md5", "insecure.sha1", "cc_md5", "cc_sha1", "md5("})
+}
+
+func shouldAnalyzeSwiftWeakrandomnessCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	weakRandom := []string{"arc4random", "int.random", "uint.random", "random()"}
+	securityContext := []string{"token", "password", "session", "secret", "otp", "nonce", "api_key", "cookie", "auth", "credential"}
+	return containsAny(code, weakRandom) && containsAny(code, securityContext)
+}
+
+func shouldAnalyzeSwiftDeserializationCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	return containsAny(code, []string{"nskeyedunarchiver.unarchive", "unarchiveobject(with", "unarchivetoplevelobject(with"})
+}
+
+func shouldAnalyzeSwiftTrustboundaryCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	trustedStorage := []string{"session.", "usersdefaults", "keychain", "jwt", "setvalue("}
+	return containsAny(code, trustedStorage) && hasSwiftRequestInput(code)
+}
+
+func shouldAnalyzeSwiftOpenredirectCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	redirectSinks := []string{"redirect(to:", "response.redirect", "httpresponse.redirect", "location:"}
+	return containsAny(code, redirectSinks) && hasSwiftRequestInput(code)
+}
+
+func shouldAnalyzeSwiftInsecurecookieCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	return containsAny(code, []string{"setcookie", "httpcookie", "cookie:", "samesite", "httponly", "secure:"})
+}
+
+func shouldAnalyzeSwiftImproperoutputhandlingCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	dangerousSinks := []string{"process()", "evaluatejavascript(", "nsexpression", "write(to:", "database.execute", "query("}
+	return hasSwiftAIClient(code) && containsAny(code, dangerousSinks)
+}
+
+func shouldAnalyzeSwiftExcessiveagencyCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	toolPatterns := []string{"functioncall", "toolcall", "tools:", "function:", "execute(", "mcp"}
+	return hasSwiftAIClient(code) && containsAny(code, toolPatterns)
+}
+
+func shouldAnalyzeSwiftSystempromptleakageCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	systemPrompt := []string{"systemprompt", "system prompt", "role: .system", "role: \"system\""}
+	return containsAny(code, systemPrompt) && (hasSwiftResponseSink(code) || containsAny(code, []string{"logger.", "os_log(", "print("}))
+}
+
+func shouldAnalyzeSwiftUnboundedconsumptionCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	requestOrLoop := []string{"chatcompletion", "completion", "generate", "stream", "while true", "for await"}
+	return hasSwiftAIClient(code) && containsAny(code, requestOrLoop)
+}
+
+func shouldAnalyzeSwiftVectorembeddingweaknessesCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	vectorStores := []string{"pinecone", "qdrant", "weaviate", "pgvector", "embedding", "vector", "cosinesimilarity"}
+	searchPatterns := []string{"similarity", "nearest", "search", "query", "distance", "embedding"}
+	return containsAny(code, vectorStores) && containsAny(code, searchPatterns)
+}
+
+func shouldAnalyzeSwiftDatamodelpoisoningCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	modelLibraries := []string{"coreml", "mlmodel", "huggingface", "safetensors", "tensorflow", "onnx"}
+	dataOperations := []string{"dataset", "training", "fine_tun", "loadmodel", "frompretrained", "compilemodel"}
+	return containsAny(code, modelLibraries) && containsAny(code, dataOperations)
+}
+
+func shouldAnalyzeSwiftMisinformationCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	highImpactOutput := []string{"medical", "diagnosis", "financial", "legal", "decision", "recommendation", "answer", "response"}
+	return hasSwiftAIClient(code) && containsAny(code, highImpactOutput)
+}
+
+func shouldAnalyzeSwiftPromptinjectionCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	requestInput := []string{"userinput", "usermessage", "document", "prompt:"}
+	return hasSwiftAIClient(code) && (hasSwiftRequestInput(code) || containsAny(code, requestInput))
+}
+
+func shouldAnalyzeSwiftSupplychainCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	networkDownloads := []string{"urlsession", "data(for:", "data(from:", "downloadtask", "download("}
+	return hasSwiftModelLoader(code) && containsAny(code, networkDownloads)
+}
+
+func hasSwiftRequestInput(code string) bool {
+	return containsAny(code, []string{"req.query", "req.parameters", "req.content", "request.query", "request.parameters", "request.body", "url.queryitems"})
+}
+
+func hasSwiftResponseSink(code string) bool {
+	return containsAny(code, []string{"response(", "response.body", "response.write", "body:", "render(", "return .ok"})
+}
+
+func hasSwiftAIClient(code string) bool {
+	return containsAny(code, []string{"openai", "anthropic", "langchain", "llm", "chatcompletion", "generativeai"})
+}
+
+func hasSwiftModelLoader(code string) bool {
+	return containsAny(code, []string{"mlmodel", "coreml", "huggingface", "safetensors", "tensorflow", "onnx", "loadmodel", "frompretrained"})
 }
 
 // shouldAnalyzePythonSqliCtx checks for Python SQL injection patterns.

@@ -593,3 +593,41 @@ func TestShouldNotAnalyzeSwiftCommentOnly(t *testing.T) {
 	}
 	assert.False(t, ShouldAnalyze(&ctx, log.NoopLogger()))
 }
+
+func TestShouldAnalyzeSwiftExtendedRules(t *testing.T) {
+	assertSwiftRuleMatches := func(ruleID, code string) {
+		t.Helper()
+		ctx := model.DetectionContext{
+			Language: model.Swift,
+			Rule:     api.AiPrompt{ID: ruleID},
+			Code:     code,
+		}
+		assert.True(t, ShouldAnalyze(&ctx, log.NoopLogger()), ruleID)
+	}
+
+	assertSwiftRuleMatches("datadog/swift-pathtraversal", "let path = req.parameters.get(String.self, at: \"file\")\ntry FileManager.default.removeItem(at: URL(fileURLWithPath: path))")
+	assertSwiftRuleMatches("datadog/swift-zipslip", "let archive = try Archive(url: fileURL, accessMode: .read)\ntry archive.extract(entry, to: destinationURL)")
+	assertSwiftRuleMatches("datadog/swift-ldapi", "let request = LDAPSearchRequest(base: dn, filter: filter)\nconnection.search(request)")
+	assertSwiftRuleMatches("datadog/swift-codei", "let source = try req.content.decode(String.self)\ncontext.evaluateScript(source)")
+	assertSwiftRuleMatches("datadog/swift-loginjection", "let message = try req.query.get(String.self, at: \"message\")\nlogger.info(\"\\(message)\")")
+	assertSwiftRuleMatches("datadog/swift-integeroverflow", "let count = try req.query.get(Int.self, at: \"count\")\nlet small = Int8(count)")
+	assertSwiftRuleMatches("datadog/swift-sensitiveinfodisclosure", "let token = config.apiKey\nreturn Response(body: .init(string: token))")
+	assertSwiftRuleMatches("datadog/swift-errorinfoleak", "let message = error.localizedDescription\nreturn Response(body: .init(string: message))")
+	assertSwiftRuleMatches("datadog/swift-accesscontrol", "let id = try req.parameters.get(String.self, at: \"id\")\nlet user = try User.find(id, on: req.db)")
+	assertSwiftRuleMatches("datadog/swift-brokencrypto", "let cipher = kCCAlgorithmDES\nlet mode = CipherMode.ECB")
+	assertSwiftRuleMatches("datadog/swift-weakhash", "let digest = Insecure.MD5.hash(data: data)")
+	assertSwiftRuleMatches("datadog/swift-weakrandomness", "let token = Int.random(in: 0...1000)")
+	assertSwiftRuleMatches("datadog/swift-deserialization", "let value = NSKeyedUnarchiver.unarchiveObject(with: data)")
+	assertSwiftRuleMatches("datadog/swift-trustboundary", "let value = try req.content.decode(String.self)\nsession.setValue(value, forKey: \"role\")")
+	assertSwiftRuleMatches("datadog/swift-openredirect", "let target = try req.query.get(String.self, at: \"next\")\nreturn redirect(to: target)")
+	assertSwiftRuleMatches("datadog/swift-insecurecookie", "response.setCookie(HTTPCookie(properties: properties)!)")
+	assertSwiftRuleMatches("datadog/swift-improperoutputhandling", "let answer = try openAI.chatCompletion(prompt)\ntry answer.write(to: fileURL)")
+	assertSwiftRuleMatches("datadog/swift-excessiveagency", "let response = try OpenAI.chatCompletion(tools: tools)\ntry execute(response.functionCall)")
+	assertSwiftRuleMatches("datadog/swift-systempromptleakage", "let systemPrompt = \"internal instructions\"\nreturn Response(body: .init(string: systemPrompt))")
+	assertSwiftRuleMatches("datadog/swift-unboundedconsumption", "for await token in openAI.stream(prompt) { print(token) }")
+	assertSwiftRuleMatches("datadog/swift-vectorembeddingweaknesses", "let embedding = try pinecone.query(vector: vector, topK: 10)")
+	assertSwiftRuleMatches("datadog/swift-datamodelpoisoning", "let model = try MLModel.loadModel(at: url)\nlet dataset = trainingData")
+	assertSwiftRuleMatches("datadog/swift-misinformation", "let answer = try OpenAI.chatCompletion(prompt)\nreturn medicalRecommendation(answer)")
+	assertSwiftRuleMatches("datadog/swift-promptinjection", "let userInput = try req.content.decode(String.self)\nlet answer = try OpenAI.chatCompletion(prompt: userInput)")
+	assertSwiftRuleMatches("datadog/swift-supplychain", "let model = try MLModel.loadModel(at: url)\nlet data = try await URLSession.shared.data(from: modelURL)")
+}

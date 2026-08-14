@@ -406,7 +406,6 @@ core,golang.org/x/net/http2,BSD-3-Clause,Copyright 2009 The Go Authors
 core,golang.org/x/net/http2/hpack,BSD-3-Clause,Copyright 2009 The Go Authors
 core,golang.org/x/net/idna,BSD-3-Clause,Copyright 2009 The Go Authors
 core,golang.org/x/net/internal/httpcommon,BSD-3-Clause,Copyright 2009 The Go Authors
-core,golang.org/x/net/internal/httpsfv,BSD-3-Clause,Copyright 2009 The Go Authors
 core,golang.org/x/net/internal/timeseries,BSD-3-Clause,Copyright 2009 The Go Authors
 core,golang.org/x/net/trace,BSD-3-Clause,Copyright 2009 The Go Authors
 core,golang.org/x/oauth2,BSD-3-Clause,Copyright 2009 The Go Authors
