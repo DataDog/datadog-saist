@@ -41,6 +41,8 @@ func languageKeyFromModel(lang model.Language) string {
 		return "rust"
 	case model.Elixir:
 		return "elixir"
+	case model.Swift:
+		return "swift"
 	default:
 		return ""
 	}

@@ -557,3 +557,39 @@ func TestShouldAnalyze_CSharpBrokenCrypto(t *testing.T) {
 	result := ShouldAnalyze(&ctx, log.NoopLogger())
 	assert.True(t, result, "Expected ShouldAnalyze to return true for C# broken crypto pattern")
 }
+
+func TestShouldAnalyzeSwiftSqli(t *testing.T) {
+	ctx := model.DetectionContext{
+		Language: model.Swift,
+		Rule:     api.AiPrompt{ID: "datadog/swift-sqli"},
+		Code:     "let query = \"SELECT * FROM users WHERE id = \\(id)\"\ntry database.execute(sql: query)",
+	}
+	assert.True(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+}
+
+func TestShouldAnalyzeSwiftCmdi(t *testing.T) {
+	ctx := model.DetectionContext{
+		Language: model.Swift,
+		Rule:     api.AiPrompt{ID: "datadog/swift-cmdi"},
+		Code:     "let task = Process()\ntask.launchPath = \"/bin/sh\"\ntask.launch()",
+	}
+	assert.True(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+}
+
+func TestShouldAnalyzeSwiftXss(t *testing.T) {
+	ctx := model.DetectionContext{
+		Language: model.Swift,
+		Rule:     api.AiPrompt{ID: "datadog/swift-xss"},
+		Code:     "let name = try req.query.get(String.self, at: \"name\")\nreturn Response(body: .init(string: \"<p>\\(name)</p>\"))",
+	}
+	assert.True(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+}
+
+func TestShouldNotAnalyzeSwiftCommentOnly(t *testing.T) {
+	ctx := model.DetectionContext{
+		Language: model.Swift,
+		Rule:     api.AiPrompt{ID: "datadog/swift-cmdi"},
+		Code:     "// Process().launch()",
+	}
+	assert.False(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+}

@@ -20,6 +20,7 @@ const (
 	Ruby
 	Rust
 	Elixir
+	Swift
 )
 
 func (l Language) String() string {
@@ -46,6 +47,8 @@ func (l Language) String() string {
 		return "Rust"
 	case Elixir:
 		return "Elixir"
+	case Swift:
+		return "Swift"
 	default:
 		return "LanguageUnknown"
 	}
@@ -77,6 +80,8 @@ func GetLanguage(filePath string) Language {
 		return Rust
 	case ".ex", ".exs":
 		return Elixir
+	case ".swift":
+		return Swift
 	default:
 		return LanguageUnknown
 	}
@@ -100,5 +105,6 @@ func GetAllLanguages() []Language {
 		Ruby,
 		Rust,
 		Elixir,
+		Swift,
 	}
 }

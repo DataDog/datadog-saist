@@ -29,6 +29,8 @@ import (
 	treesitterrust "github.com/tree-sitter/tree-sitter-rust/bindings/go"
 
 	treesitterelixir "github.com/tree-sitter/tree-sitter-elixir/bindings/go"
+
+	treesitterswift "github.com/alex-pinkus/tree-sitter-swift/bindings/go"
 )
 
 const (
@@ -89,6 +91,10 @@ var contextRetrievers = map[model.Language]ContextRetriever{
 	model.Elixir: {
 		Language:        treesitter.NewLanguage(treesitterelixir.Language()),
 		FunctionGetTags: ElixirGetTags,
+	},
+	model.Swift: {
+		Language:        treesitter.NewLanguage(treesitterswift.Language()),
+		FunctionGetTags: SwiftGetTags,
 	},
 }
 
