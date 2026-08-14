@@ -198,34 +198,28 @@ func stripSwiftComments(code string) string {
 	inString := false
 
 	for i := 0; i < len(code); {
-		switch {
-		case inString:
-			result.WriteByte(code[i])
-			if code[i] == '\\' && i+1 < len(code) {
-				result.WriteByte(code[i+1])
-				i += 2
-				continue
-			}
-			if code[i] == '"' {
-				inString = false
-			}
-			i++
-		case blockDepth == 0 && code[i] == '"':
+		if inString {
+			i, inString = copySwiftStringByte(code, i, &result)
+			continue
+		}
+		if startsSwiftString(code, i, blockDepth) {
 			inString = true
 			result.WriteByte(code[i])
 			i++
-		case i+1 < len(code) && code[i:i+2] == "/*":
+			continue
+		}
+		if startsSwiftBlockComment(code, i) {
 			blockDepth++
 			i += 2
-		case blockDepth > 0 && i+1 < len(code) && code[i:i+2] == "*/":
+			continue
+		}
+		if endsSwiftBlockComment(code, i, blockDepth) {
 			blockDepth--
 			i += 2
-		default:
-			if blockDepth == 0 || code[i] == '\n' {
-				result.WriteByte(code[i])
-			}
-			i++
+			continue
 		}
+		writeSwiftNonCommentByte(&result, code[i], blockDepth)
+		i++
 	}
 
 	lines := strings.Split(result.String(), "\n")
@@ -236,6 +230,33 @@ func stripSwiftComments(code string) string {
 		}
 	}
 	return strings.Join(filtered, "\n")
+}
+
+func copySwiftStringByte(code string, index int, result *strings.Builder) (int, bool) {
+	result.WriteByte(code[index])
+	if code[index] == '\\' && index+1 < len(code) {
+		result.WriteByte(code[index+1])
+		return index + 2, true
+	}
+	return index + 1, code[index] != '"'
+}
+
+func startsSwiftString(code string, index, blockDepth int) bool {
+	return blockDepth == 0 && code[index] == '"'
+}
+
+func startsSwiftBlockComment(code string, index int) bool {
+	return index+1 < len(code) && code[index:index+2] == "/*"
+}
+
+func endsSwiftBlockComment(code string, index, blockDepth int) bool {
+	return blockDepth > 0 && index+1 < len(code) && code[index:index+2] == "*/"
+}
+
+func writeSwiftNonCommentByte(result *strings.Builder, character byte, blockDepth int) {
+	if blockDepth == 0 || character == '\n' {
+		result.WriteByte(character)
+	}
 }
 
 func stripCSharpComments(code string) string {
@@ -614,8 +635,8 @@ func shouldAnalyzeSwiftSqliCtx(ctx *model.DetectionContext) bool {
 func shouldAnalyzeSwiftCmdiCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
 	return containsAny(code, []string{
-		"process()", "process.launch", "task.launch", "launchpath",
-		"executableurl", "nstask", "/bin/sh", "/bin/bash",
+		"process()", "process.run(", "process.launch", "task.launch", "launchedprocess(",
+		"launchpath", "executableurl", "nstask", "/bin/sh", "/bin/bash",
 	})
 }
 
@@ -635,7 +656,10 @@ func shouldAnalyzeSwiftXpathiCtx(ctx *model.DetectionContext) bool {
 
 func shouldAnalyzeSwiftPathtraversalCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
-	fileSinks := []string{"filemanager.default", "string(contentsoffile:", "data(contentsof:", "write(to:", "copyitem(at:", "removeitem(at:", "appendingpathcomponent("}
+	fileSinks := []string{
+		"filemanager.default", "filehandle(forreadingfrom:", "filehandle(forwritingto:", "string(contentsoffile:", "data(contentsof:", "contents(atpath:", "createfile(atpath:",
+		"write(to:", "copyitem(at:", "moveitem(at:", "removeitem(at:", "appendingpathcomponent(", "fileurlwithpath(",
+	}
 	return containsAny(code, fileSinks) && hasSwiftRequestInput(code)
 }
 
@@ -652,7 +676,7 @@ func shouldAnalyzeSwiftLdapiCtx(ctx *model.DetectionContext) bool {
 
 func shouldAnalyzeSwiftCodeiCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
-	codeSinks := []string{"nsexpression", "evaluatescript(", "evaluatejavascript(", "jscontext", "javascriptcore"}
+	codeSinks := []string{"nsexpression", "evaluatescript(", "evaluatejavascript(", "jscontext", "javascriptcore", "nsapplescript", "dlopen("}
 	return containsAny(code, codeSinks) && hasSwiftRequestInput(code)
 }
 
@@ -663,14 +687,19 @@ func shouldAnalyzeSwiftLoginjectionCtx(ctx *model.DetectionContext) bool {
 
 func shouldAnalyzeSwiftIntegeroverflowCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
-	fixedWidthOperations := []string{"int8(", "int16(", "int32(", "uint8(", "uint16(", "uint32(", "truncatingifneeded", "addingreportingoverflow", "multipliedreportingoverflow"}
+	fixedWidthOperations := []string{
+		"int8(", "int16(", "int32(", "uint8(", "uint16(", "uint32(",
+		"truncatingifneeded", "addingreportingoverflow", "multipliedreportingoverflow",
+	}
 	return containsAny(code, fixedWidthOperations) && hasSwiftRequestInput(code)
 }
 
 func shouldAnalyzeSwiftSensitiveinfodisclosureCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
 	sensitiveData := []string{"password", "secret", "api_key", "apikey", "token", "private_key", "credit_card", "ssn"}
-	return containsAny(code, sensitiveData) && (hasSwiftResponseSink(code) || hasSwiftAIClient(code) || containsAny(code, []string{"logger.", "os_log(", "print("}))
+	disclosureSinks := []string{"logger.", "os_log(", "print("}
+	return containsAny(code, sensitiveData) &&
+		(hasSwiftResponseSink(code) || hasSwiftAIClient(code) || containsAny(code, disclosureSinks))
 }
 
 func shouldAnalyzeSwiftErrorinfoleakCtx(ctx *model.DetectionContext) bool {
@@ -687,12 +716,12 @@ func shouldAnalyzeSwiftAccesscontrolCtx(ctx *model.DetectionContext) bool {
 
 func shouldAnalyzeSwiftBrokencryptoCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
-	return containsAny(code, []string{"kccalgorithmdes", "kccalgorithm3des", "kccalgorithmrc4", "des.", "rc4", "ecb", "ciphermode.ecb"})
+	return containsAny(code, []string{"kccalgorithmdes", "kccalgorithm3des", "kccalgorithmrc2", "kccalgorithmrc4", "kccalgorithmblowfish", "kccalgorithmcast", "des.", "rc2", "rc4", "blowfish", "cast", "ecb", "ciphermode.ecb"})
 }
 
 func shouldAnalyzeSwiftWeakhashCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
-	return containsAny(code, []string{"insecure.md5", "insecure.sha1", "cc_md5", "cc_sha1", "md5("})
+	return containsAny(code, []string{"insecure.md5", "insecure.sha1", "cc_md5", "cc_sha1", "kccalgorithmsha1", "md5("})
 }
 
 func shouldAnalyzeSwiftWeakrandomnessCtx(ctx *model.DetectionContext) bool {
@@ -704,7 +733,7 @@ func shouldAnalyzeSwiftWeakrandomnessCtx(ctx *model.DetectionContext) bool {
 
 func shouldAnalyzeSwiftDeserializationCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
-	return containsAny(code, []string{"nskeyedunarchiver.unarchive", "unarchiveobject(with", "unarchivetoplevelobject(with"})
+	return containsAny(code, []string{"nskeyedunarchiver.unarchive", "nskeyedunarchiver(", "unarchiveobject(with", "unarchivetoplevelobject(with", "decodeobject("})
 }
 
 func shouldAnalyzeSwiftTrustboundaryCtx(ctx *model.DetectionContext) bool {
@@ -721,7 +750,7 @@ func shouldAnalyzeSwiftOpenredirectCtx(ctx *model.DetectionContext) bool {
 
 func shouldAnalyzeSwiftInsecurecookieCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
-	return containsAny(code, []string{"setcookie", "httpcookie", "cookie:", "samesite", "httponly", "secure:"})
+	return containsAny(code, []string{"setcookie", "httpcookie", "cookie(", "cookie:", "response.cookies", ".setcookie", ".httponly", ".samesite", ".secure"})
 }
 
 func shouldAnalyzeSwiftImproperoutputhandlingCtx(ctx *model.DetectionContext) bool {
@@ -776,11 +805,15 @@ func shouldAnalyzeSwiftPromptinjectionCtx(ctx *model.DetectionContext) bool {
 
 func shouldAnalyzeSwiftSupplychainCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
-	return containsAny(code, []string{".package(", "binarytarget(", "from:", "revision:", "branch:", "checksum:"})
+	return containsAny(code, []string{".package(", "binarytarget(", "from:", "exact:", "revision:", "branch:", "checksum:"})
 }
 
 func hasSwiftRequestInput(code string) bool {
-	return containsAny(code, []string{"req.query", "req.parameters", "req.content", "request.query", "request.parameters", "request.body", "url.queryitems"})
+	requestInput := []string{
+		"req.query", "req.parameters", "req.content", "request.query", "request.parameters",
+		"request.body", "url.queryitems",
+	}
+	return containsAny(code, requestInput)
 }
 
 func hasSwiftResponseSink(code string) bool {

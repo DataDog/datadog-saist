@@ -607,6 +607,57 @@ let task = Process()`)
 	assert.NotContains(t, stripped, "nested comment")
 }
 
+func TestShouldAnalyzeSwiftAdditionalAPIs(t *testing.T) {
+	tests := []struct {
+		ruleID string
+		code   string
+	}{
+		{
+			ruleID: "datadog/swift-cmdi",
+			code:   "try Process.run(URL(fileURLWithPath: command), arguments: [userInput])",
+		},
+		{
+			ruleID: "datadog/swift-pathtraversal",
+			code:   "let path = try req.query.get(String.self, at: \"path\")\nlet handle = try FileHandle(forReadingFrom: URL(fileURLWithPath: path))",
+		},
+		{
+			ruleID: "datadog/swift-codei",
+			code:   "let library = try req.content.decode(String.self)\n_ = dlopen(library, RTLD_NOW)",
+		},
+		{
+			ruleID: "datadog/swift-brokencrypto",
+			code:   "let algorithm = kCCAlgorithmRC2",
+		},
+		{
+			ruleID: "datadog/swift-weakhash",
+			code:   "let algorithm = kCCAlgorithmSHA1",
+		},
+		{
+			ruleID: "datadog/swift-deserialization",
+			code:   "let unarchiver = try NSKeyedUnarchiver(forReadingFrom: data)\nlet object = unarchiver.decodeObject(forKey: \"value\")",
+		},
+		{
+			ruleID: "datadog/swift-insecurecookie",
+			code:   "response.cookies[\"session\"] = Cookie(value: token, isSecure: false)",
+		},
+		{
+			ruleID: "datadog/swift-supplychain",
+			code:   "let package = .package(url: \"https://example.com/package.git\", exact: \"1.0.0\")",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.ruleID, func(t *testing.T) {
+			ctx := model.DetectionContext{
+				Language: model.Swift,
+				Rule:     api.AiPrompt{ID: tt.ruleID},
+				Code:     tt.code,
+			}
+			assert.True(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+		})
+	}
+}
+
 func TestShouldAnalyzeSwiftExtendedRules(t *testing.T) {
 	assertSwiftRuleMatches := func(ruleID, code string) {
 		t.Helper()
