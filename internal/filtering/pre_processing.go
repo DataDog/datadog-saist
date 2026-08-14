@@ -192,9 +192,50 @@ func stripRustComments(code string) string {
 }
 
 func stripSwiftComments(code string) string {
-	return stripCStyleComments(code, func(trimmed string) bool {
-		return trimmed == "" || trimmed == "*"
-	})
+	var result strings.Builder
+	result.Grow(len(code))
+	blockDepth := 0
+	inString := false
+
+	for i := 0; i < len(code); {
+		switch {
+		case inString:
+			result.WriteByte(code[i])
+			if code[i] == '\\' && i+1 < len(code) {
+				result.WriteByte(code[i+1])
+				i += 2
+				continue
+			}
+			if code[i] == '"' {
+				inString = false
+			}
+			i++
+		case blockDepth == 0 && code[i] == '"':
+			inString = true
+			result.WriteByte(code[i])
+			i++
+		case i+1 < len(code) && code[i:i+2] == "/*":
+			blockDepth++
+			i += 2
+		case blockDepth > 0 && i+1 < len(code) && code[i:i+2] == "*/":
+			blockDepth--
+			i += 2
+		default:
+			if blockDepth == 0 || code[i] == '\n' {
+				result.WriteByte(code[i])
+			}
+			i++
+		}
+	}
+
+	lines := strings.Split(result.String(), "\n")
+	filtered := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if !strings.HasPrefix(strings.TrimSpace(line), "//") {
+			filtered = append(filtered, line)
+		}
+	}
+	return strings.Join(filtered, "\n")
 }
 
 func stripCSharpComments(code string) string {
@@ -716,9 +757,9 @@ func shouldAnalyzeSwiftVectorembeddingweaknessesCtx(ctx *model.DetectionContext)
 
 func shouldAnalyzeSwiftDatamodelpoisoningCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
-	modelLibraries := []string{"coreml", "mlmodel", "huggingface", "safetensors", "tensorflow", "onnx"}
-	dataOperations := []string{"dataset", "training", "fine_tun", "loadmodel", "frompretrained", "compilemodel"}
-	return containsAny(code, modelLibraries) && containsAny(code, dataOperations)
+	vectorStores := []string{"pinecone", "qdrant", "weaviate", "pgvector", "embedding", "vector"}
+	ingestionOperations := []string{"upsert", "insert", "add", "index", "document", "collection"}
+	return containsAny(code, vectorStores) && containsAny(code, ingestionOperations)
 }
 
 func shouldAnalyzeSwiftMisinformationCtx(ctx *model.DetectionContext) bool {
@@ -735,8 +776,7 @@ func shouldAnalyzeSwiftPromptinjectionCtx(ctx *model.DetectionContext) bool {
 
 func shouldAnalyzeSwiftSupplychainCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
-	networkDownloads := []string{"urlsession", "data(for:", "data(from:", "downloadtask", "download("}
-	return hasSwiftModelLoader(code) && containsAny(code, networkDownloads)
+	return containsAny(code, []string{".package(", "binarytarget(", "from:", "revision:", "branch:", "checksum:"})
 }
 
 func hasSwiftRequestInput(code string) bool {
@@ -749,10 +789,6 @@ func hasSwiftResponseSink(code string) bool {
 
 func hasSwiftAIClient(code string) bool {
 	return containsAny(code, []string{"openai", "anthropic", "langchain", "llm", "chatcompletion", "generativeai"})
-}
-
-func hasSwiftModelLoader(code string) bool {
-	return containsAny(code, []string{"mlmodel", "coreml", "huggingface", "safetensors", "tensorflow", "onnx", "loadmodel", "frompretrained"})
 }
 
 // shouldAnalyzePythonSqliCtx checks for Python SQL injection patterns.

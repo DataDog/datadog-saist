@@ -594,6 +594,19 @@ func TestShouldNotAnalyzeSwiftCommentOnly(t *testing.T) {
 	assert.False(t, ShouldAnalyze(&ctx, log.NoopLogger()))
 }
 
+func TestStripSwiftCommentsPreservesStringLiteralsAndHandlesNesting(t *testing.T) {
+	stripped := stripSwiftComments(`let endpoint = "https://example.com/*not-a-comment*/"
+/* outer comment
+   /* nested comment */
+*/
+let task = Process()`)
+
+	assert.Contains(t, stripped, `https://example.com/*not-a-comment*/`)
+	assert.Contains(t, stripped, "let task = Process()")
+	assert.NotContains(t, stripped, "outer comment")
+	assert.NotContains(t, stripped, "nested comment")
+}
+
 func TestShouldAnalyzeSwiftExtendedRules(t *testing.T) {
 	assertSwiftRuleMatches := func(ruleID, code string) {
 		t.Helper()
@@ -626,8 +639,8 @@ func TestShouldAnalyzeSwiftExtendedRules(t *testing.T) {
 	assertSwiftRuleMatches("datadog/swift-systempromptleakage", "let systemPrompt = \"internal instructions\"\nreturn Response(body: .init(string: systemPrompt))")
 	assertSwiftRuleMatches("datadog/swift-unboundedconsumption", "for await token in openAI.stream(prompt) { print(token) }")
 	assertSwiftRuleMatches("datadog/swift-vectorembeddingweaknesses", "let embedding = try pinecone.query(vector: vector, topK: 10)")
-	assertSwiftRuleMatches("datadog/swift-datamodelpoisoning", "let model = try MLModel.loadModel(at: url)\nlet dataset = trainingData")
+	assertSwiftRuleMatches("datadog/swift-datamodelpoisoning", "try pinecone.upsert(vectors: embeddings)")
 	assertSwiftRuleMatches("datadog/swift-misinformation", "let answer = try OpenAI.chatCompletion(prompt)\nreturn medicalRecommendation(answer)")
 	assertSwiftRuleMatches("datadog/swift-promptinjection", "let userInput = try req.content.decode(String.self)\nlet answer = try OpenAI.chatCompletion(prompt: userInput)")
-	assertSwiftRuleMatches("datadog/swift-supplychain", "let model = try MLModel.loadModel(at: url)\nlet data = try await URLSession.shared.data(from: modelURL)")
+	assertSwiftRuleMatches("datadog/swift-supplychain", "let package = .package(url: \"https://example.com/package.git\", from: \"1.0.0\")")
 }
