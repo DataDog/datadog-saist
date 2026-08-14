@@ -657,8 +657,10 @@ func shouldAnalyzeSwiftXpathiCtx(ctx *model.DetectionContext) bool {
 func shouldAnalyzeSwiftPathtraversalCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
 	fileSinks := []string{
-		"filemanager.default", "filehandle(forreadingfrom:", "filehandle(forwritingto:", "string(contentsoffile:", "data(contentsof:", "contents(atpath:", "createfile(atpath:",
-		"write(to:", "copyitem(at:", "moveitem(at:", "removeitem(at:", "appendingpathcomponent(", "fileurlwithpath(",
+		"filemanager.default", "filehandle(forreadingfrom:", "filehandle(forwritingto:",
+		"string(contentsoffile:", "data(contentsof:", "contents(atpath:", "createfile(atpath:",
+		"write(to:", "copyitem(at:", "moveitem(at:", "removeitem(at:",
+		"appendingpathcomponent(", "fileurlwithpath(",
 	}
 	return containsAny(code, fileSinks) && hasSwiftRequestInput(code)
 }
@@ -716,7 +718,12 @@ func shouldAnalyzeSwiftAccesscontrolCtx(ctx *model.DetectionContext) bool {
 
 func shouldAnalyzeSwiftBrokencryptoCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
-	return containsAny(code, []string{"kccalgorithmdes", "kccalgorithm3des", "kccalgorithmrc2", "kccalgorithmrc4", "kccalgorithmblowfish", "kccalgorithmcast", "des.", "rc2", "rc4", "blowfish", "cast", "ecb", "ciphermode.ecb"})
+	weakCrypto := []string{
+		"kccalgorithmdes", "kccalgorithm3des", "kccalgorithmrc2", "kccalgorithmrc4",
+		"kccalgorithmblowfish", "kccalgorithmcast", "des.", "rc2", "rc4", "blowfish",
+		"cast", "ecb", "ciphermode.ecb",
+	}
+	return containsAny(code, weakCrypto)
 }
 
 func shouldAnalyzeSwiftWeakhashCtx(ctx *model.DetectionContext) bool {
@@ -733,7 +740,11 @@ func shouldAnalyzeSwiftWeakrandomnessCtx(ctx *model.DetectionContext) bool {
 
 func shouldAnalyzeSwiftDeserializationCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
-	return containsAny(code, []string{"nskeyedunarchiver.unarchive", "nskeyedunarchiver(", "unarchiveobject(with", "unarchivetoplevelobject(with", "decodeobject("})
+	deserializationSinks := []string{
+		"nskeyedunarchiver.unarchive", "nskeyedunarchiver(", "unarchiveobject(with",
+		"unarchivetoplevelobject(with", "decodeobject(",
+	}
+	return containsAny(code, deserializationSinks)
 }
 
 func shouldAnalyzeSwiftTrustboundaryCtx(ctx *model.DetectionContext) bool {
@@ -750,7 +761,11 @@ func shouldAnalyzeSwiftOpenredirectCtx(ctx *model.DetectionContext) bool {
 
 func shouldAnalyzeSwiftInsecurecookieCtx(ctx *model.DetectionContext) bool {
 	code := getStrippedCode(ctx)
-	return containsAny(code, []string{"setcookie", "httpcookie", "cookie(", "cookie:", "response.cookies", ".setcookie", ".httponly", ".samesite", ".secure"})
+	cookieSinks := []string{
+		"setcookie", "httpcookie", "cookie(", "cookie:", "response.cookies", ".setcookie",
+		".httponly", ".samesite", ".secure",
+	}
+	return containsAny(code, cookieSinks)
 }
 
 func shouldAnalyzeSwiftImproperoutputhandlingCtx(ctx *model.DetectionContext) bool {
