@@ -114,7 +114,7 @@ func (fd *FileDiscoverer) collectCandidates(ctx context.Context, base string) ([
 			if de.IsDir() {
 				switch name {
 				case ".git", "bazel-out", "bazel-bin", "bazel-testlogs", ".cache",
-					"node_modules", ".next", "vendor", "__pycache__", ".yarn":
+					"node_modules", ".next", "vendor", "__pycache__", ".yarn", ".dart_tool", ".pub-cache":
 					return filepath.SkipDir
 				}
 				return nil
@@ -138,7 +138,8 @@ func (fd *FileDiscoverer) collectCandidates(ctx context.Context, base string) ([
 			// Skip obviously generated files by name (no I/O needed)
 			if strings.HasSuffix(rel, ".pb.go") ||
 				strings.HasSuffix(rel, "_pb2.py") ||
-				strings.HasSuffix(rel, ".generated.go") {
+				strings.HasSuffix(rel, ".generated.go") ||
+				isDartGeneratedFileSuffix(rel) {
 				return nil
 			}
 

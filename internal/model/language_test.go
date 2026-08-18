@@ -40,6 +40,11 @@ func TestGetLanguageSwiftFiles(t *testing.T) {
 	assert.Equal(t, Swift, GetLanguage("Sources/App.SWIFT"))
 }
 
+func TestGetLanguageDartFiles(t *testing.T) {
+	assert.Equal(t, Dart, GetLanguage("lib/app.dart"))
+	assert.Equal(t, Dart, GetLanguage("lib/App.DART"))
+}
+
 func TestGetLanguageUnknownFiles(t *testing.T) {
 	assert.Equal(t, LanguageUnknown, GetLanguage("README"))
 	assert.Equal(t, LanguageUnknown, GetLanguage("document.txt"))
@@ -71,6 +76,10 @@ func TestLanguageStringKotlin(t *testing.T) {
 
 func TestLanguageStringSwift(t *testing.T) {
 	assert.Equal(t, "Swift", Swift.String())
+}
+
+func TestLanguageStringDart(t *testing.T) {
+	assert.Equal(t, "Dart", Dart.String())
 }
 
 func TestLanguageStringUnknown(t *testing.T) {

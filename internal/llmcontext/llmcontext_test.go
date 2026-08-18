@@ -3,9 +3,11 @@ package llmcontext
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/DataDog/datadog-saist/internal/model"
+	treesitterdart "github.com/UserNobody14/tree-sitter-dart/bindings/go"
 	treesitterswift "github.com/alex-pinkus/tree-sitter-swift/bindings/go"
 	"github.com/stretchr/testify/assert"
 	treesitterkotlin "github.com/tree-sitter-grammars/tree-sitter-kotlin/bindings/go"
@@ -1011,6 +1013,50 @@ func greet(name: String) -> String {
 	assert.Contains(t, names, "Salutation")
 	assert.Contains(t, names, "sayHi")
 	assert.Contains(t, names, "greet")
+}
+
+func TestDartGetTagsDefinitions(t *testing.T) {
+	t.Parallel()
+	code := []byte(`class Greeter {
+  Greeter.named();
+  String greet(String name) => 'hello $name';
+}
+
+dynamic main() {
+  Greeter().greet('world');
+  helper();
+  final loaded = loadValue();
+  final optional = client?.loadOptional();
+  final greeter = Greeter.named();
+  return sanitize(loaded);
+}
+`)
+	parser := treesitter.NewParser()
+	defer parser.Close()
+	assert.NoError(t, parser.SetLanguage(treesitter.NewLanguage(treesitterdart.Language())))
+	tree := parser.Parse(code, nil)
+	defer tree.Close()
+
+	tags, err := DartGetTags(GetFunctionData{
+		root: tree.RootNode(), path: "app.dart", code: code, language: model.Dart,
+	})
+	assert.NoError(t, err)
+	names := make([]string, len(tags))
+	for i, tag := range tags {
+		names[i] = tag.Name
+	}
+	assert.Contains(t, names, "Greeter")
+	assert.Contains(t, names, "greet")
+	assert.Contains(t, names, "main")
+	assert.Contains(t, names, "greet")
+	assert.Contains(t, names, "helper")
+	assert.Contains(t, names, "loadValue")
+	assert.Contains(t, names, "loadOptional")
+	assert.Contains(t, names, "sanitize")
+	assert.Contains(t, names, "named")
+	assert.True(t, slices.ContainsFunc(tags, func(tag model.Tag) bool {
+		return tag.Name == "named" && tag.Type == model.TagDefinition
+	}))
 }
 
 // Common stuff

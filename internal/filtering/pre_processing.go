@@ -62,6 +62,8 @@ func codeUsedForDetection(inputCode string, language model.Language) string {
 		return stripElixirComments(inputCode)
 	case model.Swift:
 		return stripSwiftComments(inputCode)
+	case model.Dart:
+		return stripDartComments(inputCode)
 	default:
 		return inputCode
 	}
@@ -84,13 +86,15 @@ func getStrippedCode(ctx *model.DetectionContext) string {
 
 type cStyleStringDelimiter struct {
 	value   string
+	closing string
 	escapes bool
 }
 
 type cStyleCommentOptions struct {
-	hashLineComments    bool
-	stringDelimiters    []cStyleStringDelimiter
-	nestedBlockComments bool
+	hashLineComments           bool
+	stringDelimiters           []cStyleStringDelimiter
+	nestedBlockComments        bool
+	failOpenUnterminatedString bool
 }
 
 // stripCStyleComments removes comments while preserving comment delimiters in
@@ -102,7 +106,14 @@ func stripCStyleComments(code string, options cStyleCommentOptions) string {
 
 	for i := 0; i < len(code); {
 		if delimiter, ok := matchingStringDelimiter(code[i:], options.stringDelimiters); ok {
-			i = copyStringLiteral(&result, code, i, delimiter)
+			var terminated bool
+			i, terminated = copyStringLiteral(&result, code, i, delimiter)
+			if !terminated {
+				if options.failOpenUnterminatedString {
+					return code
+				}
+				return result.String()
+			}
 			continue
 		}
 
@@ -131,7 +142,11 @@ func stripCStyleComments(code string, options cStyleCommentOptions) string {
 	return result.String()
 }
 
-func copyStringLiteral(result *strings.Builder, code string, start int, delimiter cStyleStringDelimiter) int {
+func copyStringLiteral(result *strings.Builder, code string, start int, delimiter cStyleStringDelimiter) (int, bool) {
+	closing := delimiter.closing
+	if closing == "" {
+		closing = delimiter.value
+	}
 	result.WriteString(delimiter.value)
 	for i := start + len(delimiter.value); i < len(code); {
 		if delimiter.escapes && code[i] == '\\' && i+1 < len(code) {
@@ -139,14 +154,14 @@ func copyStringLiteral(result *strings.Builder, code string, start int, delimite
 			i += 2
 			continue
 		}
-		if strings.HasPrefix(code[i:], delimiter.value) {
-			result.WriteString(delimiter.value)
-			return i + len(delimiter.value)
+		if strings.HasPrefix(code[i:], closing) {
+			result.WriteString(closing)
+			return i + len(closing), true
 		}
 		result.WriteByte(code[i])
 		i++
 	}
-	return len(code)
+	return len(code), false
 }
 
 func lineCommentLength(code string, hashLineComments bool) int {
@@ -291,6 +306,27 @@ func stripSwiftComments(code string) string {
 		}
 	}
 	return strings.Join(filtered, "\n")
+}
+
+func stripDartComments(code string) string {
+	return stripCStyleComments(code, cStyleCommentOptions{
+		stringDelimiters: []cStyleStringDelimiter{
+			{value: `r"""`, closing: `"""`},
+			{value: `R"""`, closing: `"""`},
+			{value: `r'''`, closing: `'''`},
+			{value: `R'''`, closing: `'''`},
+			{value: `"""`, escapes: true},
+			{value: `'''`, escapes: true},
+			{value: `r"`, closing: `"`},
+			{value: `R"`, closing: `"`},
+			{value: `r'`, closing: `'`},
+			{value: `R'`, closing: `'`},
+			{value: `"`, escapes: true},
+			{value: `'`, escapes: true},
+		},
+		nestedBlockComments:        true,
+		failOpenUnterminatedString: true,
+	})
 }
 
 func copySwiftStringByte(code string, index int, result *strings.Builder) (int, bool) {
@@ -680,6 +716,36 @@ var ruleFilters = map[string]ruleFilterFunc{
 	"datadog/swift-misinformation":            shouldAnalyzeSwiftMisinformationCtx,
 	"datadog/swift-promptinjection":           shouldAnalyzeSwiftPromptinjectionCtx,
 	"datadog/swift-supplychain":               shouldAnalyzeSwiftSupplychainCtx,
+
+	// Dart
+	"datadog/dart-sqli":                      shouldAnalyzeDartSqliCtx,
+	"datadog/dart-cmdi":                      shouldAnalyzeDartCmdiCtx,
+	"datadog/dart-xss":                       shouldAnalyzeDartXssCtx,
+	"datadog/dart-pathtraversal":             shouldAnalyzeDartPathtraversalCtx,
+	"datadog/dart-zipslip":                   shouldAnalyzeDartZipslipCtx,
+	"datadog/dart-ldapi":                     shouldAnalyzeDartLdapiCtx,
+	"datadog/dart-codei":                     shouldAnalyzeDartCodeiCtx,
+	"datadog/dart-loginjection":              shouldAnalyzeDartLoginjectionCtx,
+	"datadog/dart-integeroverflow":           shouldAnalyzeDartIntegeroverflowCtx,
+	"datadog/dart-sensitiveinfodisclosure":   shouldAnalyzeDartSensitiveinfodisclosureCtx,
+	"datadog/dart-errorinfoleak":             shouldAnalyzeDartErrorinfoleakCtx,
+	"datadog/dart-accesscontrol":             shouldAnalyzeDartAccesscontrolCtx,
+	"datadog/dart-brokencrypto":              shouldAnalyzeDartBrokencryptoCtx,
+	"datadog/dart-weakhash":                  shouldAnalyzeDartWeakhashCtx,
+	"datadog/dart-weakrandomness":            shouldAnalyzeDartWeakrandomnessCtx,
+	"datadog/dart-trustboundary":             shouldAnalyzeDartTrustboundaryCtx,
+	"datadog/dart-openredirect":              shouldAnalyzeDartOpenredirectCtx,
+	"datadog/dart-insecurecookie":            shouldAnalyzeDartInsecurecookieCtx,
+	"datadog/dart-xpathi":                    shouldAnalyzeDartXpathiCtx,
+	"datadog/dart-improperoutputhandling":    shouldAnalyzeDartImproperoutputhandlingCtx,
+	"datadog/dart-excessiveagency":           shouldAnalyzeDartExcessiveagencyCtx,
+	"datadog/dart-systempromptleakage":       shouldAnalyzeDartSystempromptleakageCtx,
+	"datadog/dart-unboundedconsumption":      shouldAnalyzeDartUnboundedconsumptionCtx,
+	"datadog/dart-vectorembeddingweaknesses": shouldAnalyzeDartVectorembeddingweaknessesCtx,
+	"datadog/dart-datamodelpoisoning":        shouldAnalyzeDartDatamodelpoisoningCtx,
+	"datadog/dart-misinformation":            shouldAnalyzeDartMisinformationCtx,
+	"datadog/dart-promptinjection":           shouldAnalyzeDartPromptinjectionCtx,
+	"datadog/dart-supplychain":               shouldAnalyzeDartSupplychainCtx,
 }
 
 func shouldAnalyzeSwiftSqliCtx(ctx *model.DetectionContext) bool {
@@ -3709,6 +3775,239 @@ func countElixirModelLoaders(code string) int {
 		count++
 	}
 	return count
+}
+
+func shouldAnalyzeDartSqliCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	rawSQL := []string{"rawquery(", "rawinsert(", "rawupdate(", "rawdelete(", "customselect(", "customstatement("}
+	if containsAny(code, rawSQL) {
+		return true
+	}
+	return strings.Contains(code, "connection.execute(") &&
+		containsAnyWord(code, []string{"select", "update", "insert", "delete", "from", "where"})
+}
+
+func shouldAnalyzeDartCmdiCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	process := []string{"process.run(", "process.start(", "process.runsync(", "package:process_run"}
+	return containsAny(code, process) && (hasDartExternalInput(code) || containsAny(code, []string{"runinshell: true", "executable"}))
+}
+
+func shouldAnalyzeDartXssCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	sinks := []string{"setinnerhtml(", ".innerhtml =", "nodetreesanitizer.trusted", "loadhtmlstring("}
+	return containsAny(code, sinks) && hasDartExternalInput(code)
+}
+
+func shouldAnalyzeDartPathtraversalCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	sinks := []string{"readasstring(", "readasbytes(", "writeasstring(", "openread(", "openwrite(", "sendfile(", "virtualdirectory"}
+	return containsAny(code, sinks) && hasDartExternalInput(code)
+}
+
+func shouldAnalyzeDartZipslipCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	archive := []string{"zipdecoder", "tardecoder", "archivefile"}
+	filesystem := []string{"file(", "directory(", "link("}
+	return containsAny(code, archive) && containsAny(code, filesystem)
+}
+
+func shouldAnalyzeDartLdapiCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	return containsAny(code, []string{"package:dartdap", "ldap.query(", "parsequery("}) && hasDartExternalInput(code)
+}
+
+func shouldAnalyzeDartCodeiCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	sinks := []string{"eval(", "compiler.compile(", "runtime.executelib(", "runtime().executelib(", "runjavascript("}
+	return containsAny(code, sinks) && hasDartExternalInput(code)
+}
+
+func shouldAnalyzeDartLoginjectionCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	return containsAny(code, []string{"package:logging", "logger(", "logger.", "developer.log("}) && hasDartExternalInput(code)
+}
+
+func shouldAnalyzeDartIntegeroverflowCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	fixedWidth := []string{
+		"tosigned(", "tounsigned(", "int8list", "uint8list", "int16list", "uint16list",
+		"int32list", "uint32list", "@int32", "@uint32", "dart:ffi",
+	}
+	return containsAny(code, fixedWidth) && hasDartExternalInput(code)
+}
+
+func shouldAnalyzeDartSensitiveinfodisclosureCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	sensitive := []string{"platform.environment", "dotenv.env", "fluttersecurestorage", "api_key", "apikey", "password", "secret", "token"}
+	return containsAny(code, sensitive) &&
+		(hasDartResponseSink(code) || hasDartLoggingSink(code) || (hasDartAIClient(code) && hasDartModelCall(code)))
+}
+
+func shouldAnalyzeDartErrorinfoleakCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	errorInfo := []string{"stacktrace", "exception", ".tostring()", "error"}
+	return containsAny(code, errorInfo) && hasDartResponseSink(code)
+}
+
+func shouldAnalyzeDartAccesscontrolCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	resource := []string{"findbyid(", ".doc(", ".delete(", ".update(", ".select("}
+	return containsAny(code, resource) && hasDartExternalInput(code)
+}
+
+func shouldAnalyzeDartBrokencryptoCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	return containsAny(code, []string{
+		"aesmode.ecb", "aes/ecb", "paddedblockcipher", "desengine", "rc4engine", "ecbblockcipher", "iv.fromlength(",
+		"key.fromutf8(", "key.frombase64(", "key.frombase16(", "iv.fromutf8(", "iv.frombase64(", "iv.frombase16(",
+	})
+}
+
+func shouldAnalyzeDartWeakhashCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	return containsAny(code, []string{
+		"md5.convert(", "sha1.convert(", "digest('md5')", "digest(\"md5\")",
+		"digest('sha-1')", "digest(\"sha-1\")", "md5digest", "sha1digest",
+	})
+}
+
+func shouldAnalyzeDartWeakrandomnessCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	securityUse := []string{"token", "nonce", "password", "reset", "api_key", "apikey", "session", "otp", "csrf"}
+	return containsAny(code, []string{"random().nextint(", "random().nextdouble(", "random("}) &&
+		containsAny(code, securityUse)
+}
+
+func shouldAnalyzeDartTrustboundaryCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	trustedState := []string{"httpsession", "request.session", "jwtclaim", "jsonwebtoken", "request.context"}
+	return containsAny(code, trustedState) && hasDartExternalInput(code)
+}
+
+func shouldAnalyzeDartOpenredirectCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	sinks := []string{"response.found(", "movedpermanently(", "httpresponse.redirect(", "response.redirect(", "locationheader"}
+	return containsAny(code, sinks) && hasDartExternalInput(code)
+}
+
+func shouldAnalyzeDartInsecurecookieCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	return containsAny(code, []string{"cookie(", "response.cookies.add(", "set-cookie", "httpheaders.setcookieheader"})
+}
+
+func shouldAnalyzeDartXpathiCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	return containsAny(code, []string{"package:xml/xpath.dart", ".xpath(", "xpath.source", "queryxpath(", "htmlxpath"}) &&
+		hasDartExternalInput(code)
+}
+
+func shouldAnalyzeDartImproperoutputhandlingCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	dangerousSinks := []string{
+		"process.run(", "process.start(", "rawquery(", "rawinsert(", "rawupdate(", "rawdelete(",
+		"setinnerhtml(", ".innerhtml =", "runjavascript(", "compiler.compile(", "writeasstring(",
+	}
+	return hasDartAIClient(code) && hasDartModelCall(code) && containsAny(code, dangerousSinks)
+}
+
+func shouldAnalyzeDartExcessiveagencyCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	tools := []string{
+		"functiondeclaration", "tool.fromfunction", "stringtool.fromfunction", "tool.function(",
+		"definetool(", "toolnames", "mcp_dart",
+	}
+	toolDispatch := []string{"functioncall", "functioncalls", "toolcall", "alltoolcalls", "call.name", "function.name"}
+	actions := []string{"file(", "process.run(", "process.start(", "httpclient", "rawquery(", ".delete(", ".update("}
+	return containsAny(code, tools) || (containsAny(code, toolDispatch) && containsAny(code, actions))
+}
+
+func shouldAnalyzeDartSystempromptleakageCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	hiddenContext := []string{"systeminstruction", "content.system", "chatmessage.system", "systemprompt", "systemchatmessage"}
+	return containsAny(code, hiddenContext) && (hasDartResponseSink(code) || hasDartLoggingSink(code))
+}
+
+func shouldAnalyzeDartUnboundedconsumptionCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	return hasDartAIClient(code) && hasDartModelCall(code)
+}
+
+func shouldAnalyzeDartVectorembeddingweaknessesCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	vector := []string{"langchain_chroma", "pinecone", "chromadb", "similaritysearch(", "querydocuments(", "memoryvectorstore"}
+	return containsAny(code, vector) && hasDartExternalInput(code)
+}
+
+func shouldAnalyzeDartDatamodelpoisoningCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	training := []string{
+		"finetuning", "fine_tune", "trainingfile", "trainingdata", ".jsonl", "adddataset(",
+		"files.upload(", "filepurpose.finetune",
+	}
+	return containsAny(code, training) && hasDartExternalInput(code)
+}
+
+func shouldAnalyzeDartMisinformationCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	highImpact := []string{"medical", "diagnos", "legal", "financial", "credit", "eligibility", "safety", "recommendation"}
+	consequentialUse := []string{"automatically", "decision(", "filelegalclaim(", "recommendation("}
+	return hasDartAIClient(code) &&
+		hasDartModelCall(code) &&
+		containsAny(code, highImpact) &&
+		(hasDartResponseSink(code) || containsAny(code, consequentialUse))
+}
+
+func shouldAnalyzeDartPromptinjectionCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	return hasDartAIClient(code) && hasDartModelCall(code) && hasDartExternalInput(code)
+}
+
+func shouldAnalyzeDartSupplychainCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	loaders := []string{
+		"interpreter.fromfile(", "interpreter.frombuffer(", "tflite.loadmodel(", "runtime(bytedata",
+		"runtime.ofprogram(", "flutter_eval", "dart_eval",
+	}
+	untrustedArtifact := []string{"httpclient", "http.get(", "dio.get(", "dio().get(", "download(", "uri.parse("}
+	return containsAny(code, loaders) && (containsAny(code, untrustedArtifact) || hasDartExternalInput(code))
+}
+
+func hasDartExternalInput(code string) bool {
+	return containsAny(code, []string{
+		"request.url.queryparameters", "request.uri.queryparameters", "request.url.pathsegments", "request.uri.pathsegments",
+		"request.readasstring(", "request.body(", "request.json(", "request.bytes(", "request.formdata(",
+		"request.headers", "request.params", "request.query",
+		"formdata", "texteditingcontroller", "stdin.readline", "platform.environment", "externalinput", "externalmessage", "externalquery",
+		"externaldataset", "externalcount", "externalgroup", "externalname", "externalurl", "externalpredicate", "retrieveddocument", "uploaded",
+	})
+}
+
+func hasDartLoggingSink(code string) bool {
+	return containsAny(code, []string{
+		"print(", "debugprint(", "developer.log(", "logger(", "logger.", ".log(", "log(",
+	})
+}
+
+func hasDartResponseSink(code string) bool {
+	return containsAny(code, []string{
+		"response.ok(", "response.json(", "response.internalservererror(", "httpresponse", "response.write(", "return response(",
+	})
+}
+
+func hasDartAIClient(code string) bool {
+	return containsAny(code, []string{
+		"google_generative_ai", "langchain", "openai_dart", "dart_openai", "firebase_vertexai",
+		"generativemodel(", "chatopenai", "generatecontent(",
+	})
+}
+
+func hasDartModelCall(code string) bool {
+	return containsAny(code, []string{
+		"generatecontent(", "generatecontentstream(", "chatopenai", ".responses.create(",
+		".chat.completions.create(", "openai.instance.chat.create(", "openai.instance.chat.createstream(",
+		"createchatcompletion(", "createchatcompletionstream(", ".invoke(", ".stream(",
+	})
 }
 
 // ShouldAnalyze does a very early, cheap filter to decide if a file is worth
