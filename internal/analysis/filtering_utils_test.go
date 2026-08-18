@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/DataDog/datadog-saist/internal/model"
+	"github.com/stretchr/testify/assert"
 )
 
 // helper: create a temp file with given content and (optional) name suffix.
@@ -231,4 +232,9 @@ func TestIsTestFile_Elixir(t *testing.T) {
 	if !IsTestFileFromContent(nil, "test/example_test.exs", model.Elixir) {
 		t.Fatalf("expected *_test.exs file to be classified as a test")
 	}
+}
+
+func TestIsTestFileByPathSwift(t *testing.T) {
+	assert.True(t, IsTestFileByPath("Tests/AppTests/FeatureTests.swift", model.Swift))
+	assert.False(t, IsTestFileByPath("Sources/App/Feature.swift", model.Swift))
 }

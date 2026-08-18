@@ -113,6 +113,13 @@ var elixirTestPathPatterns = []string{
 	"**/test_helper.exs",
 }
 
+var swiftTestPathPatterns = []string{
+	"**/*Tests.swift",
+	"**/*Test.swift",
+	"**/*Spec.swift",
+	"**/*UITests.swift",
+}
+
 var DefaultIgnoredGlobs = []string{
 	"**/node_modules/**/*",
 	"**/jspm_packages/**/*",
@@ -230,6 +237,11 @@ func IsGeneratedFileFromContent(fullContent []byte, path string, language model.
 			strings.Contains(content, ProtoBufHeader) ||
 			strings.Contains(content, ThriftHeader) ||
 			isGeneratedFileSuffix(path)
+
+	case model.Swift:
+		return strings.Contains(content, GeneratedByMarker) ||
+			strings.Contains(content, ProtoBufHeader) ||
+			strings.Contains(content, ThriftHeader)
 
 	default:
 		return isGeneratedFileSuffix(path)
@@ -349,6 +361,11 @@ func IsGeneratedFileByContent(content []byte, path string, language model.Langua
 			strings.Contains(header, ProtoBufHeader) ||
 			strings.Contains(header, ThriftHeader)
 
+	case model.Swift:
+		return strings.Contains(header, GeneratedByMarker) ||
+			strings.Contains(header, ProtoBufHeader) ||
+			strings.Contains(header, ThriftHeader)
+
 	default:
 		return false
 	}
@@ -424,6 +441,9 @@ func hasTestLikePath(path string, language model.Language) bool {
 	case model.Elixir:
 		return matchesAnyGlob(path, slices.Concat(defaultTestPaths, defaultTestFilenames, elixirTestPathPatterns))
 
+	case model.Swift:
+		return matchesAnyGlob(path, slices.Concat(defaultTestPaths, defaultTestFilenames, swiftTestPathPatterns))
+
 	default:
 		// For other languages we don't classify here
 		return false
@@ -448,6 +468,8 @@ func hasTestLikeImport(language model.Language, code, path string) bool {
 		return rubyHasTestLikeImport(code)
 	case model.Elixir:
 		return elixirHasTestLikeImport(code)
+	case model.Swift:
+		return swiftHasTestLikeImport(code)
 	default:
 		return false
 	}
@@ -716,6 +738,35 @@ func elixirHasTestLikeImport(code string) bool {
 
 	for _, pattern := range elixirTestPatterns {
 		if strings.Contains(code, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+func swiftHasTestLikeImport(code string) bool {
+	swiftTestModules := map[string]struct{}{
+		"XCTest": {},
+		"Quick":  {},
+		"Nimble": {},
+	}
+
+	scanner := bufio.NewScanner(strings.NewReader(code))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		line = strings.TrimPrefix(line, "@testable ")
+		if !strings.HasPrefix(line, "import ") {
+			continue
+		}
+		fields := strings.Fields(strings.TrimPrefix(line, "import"))
+		if len(fields) == 0 {
+			continue
+		}
+		module := fields[len(fields)-1]
+		if i := strings.IndexByte(module, '.'); i >= 0 {
+			module = module[:i]
+		}
+		if _, ok := swiftTestModules[module]; ok {
 			return true
 		}
 	}

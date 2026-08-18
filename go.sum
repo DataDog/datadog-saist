@@ -185,6 +185,8 @@ github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd/go.mod h1:6dJ
 github.com/modern-go/reflect2 v1.0.2/go.mod h1:yWuevngMOJpCy52FWWMvUC8ws7m/LJsjYzDa0/r8luk=
 github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee h1:W5t00kpgFdJifH4BDsTlE89Zl93FEloxaWZfGcifgq8=
 github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee/go.mod h1:yWuevngMOJpCy52FWWMvUC8ws7m/LJsjYzDa0/r8luk=
+github.com/muh-nee/tree-sitter-swift v0.0.0-20250827011620-68c9af798207 h1:OiWdW8yCErnOeEOeJi8pa8gNrkaAttxsPxGGV1o6t2k=
+github.com/muh-nee/tree-sitter-swift v0.0.0-20250827011620-68c9af798207/go.mod h1:nMZLtsEtko+0F2g09G5Tm16uRdDoczLZDE5O207ruYQ=
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/sampling v0.125.0 h1:0dOJCEtabevxxDQmxed69oMzSw+gb3ErCnFwFYZFu0M=
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/sampling v0.125.0/go.mod h1:QwzQhtxPThXMUDW1XRXNQ+l0GrI2BRsvNhX6ZuKyAds=
 github.com/open-telemetry/opentelemetry-collector-contrib/processor/probabilisticsamplerprocessor v0.125.0 h1:F68/Nbpcvo3JZpaWlRUDJtG7xs8FHBZ7A8GOMauDkyc=
