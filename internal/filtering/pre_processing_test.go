@@ -229,6 +229,49 @@ func TestStripElixirCommentsPreservesSigilsAndHeredocs(t *testing.T) {
 	assert.NotContains(t, stripped, "code.eval_string(comment)")
 }
 
+func assertDangerousCallRemainsVisible(t *testing.T, language model.Language, code string) {
+	t.Helper()
+	stripped := StripCodeForDetection(code, language)
+	assert.Contains(t, stripped, "dangerous_call", "language %s", language)
+}
+
+func TestStripCStyleCommentsPreservesBlockOpenersInStrings(t *testing.T) {
+	assertDangerousCallRemainsVisible(t, model.Go, "marker := `/*`\ndangerous_call()")
+	assertDangerousCallRemainsVisible(t, model.Java, "String marker = \"\"\"\n/*\n\"\"\";\ndangerous_call();")
+	assertDangerousCallRemainsVisible(t, model.Kotlin, "val marker = \"\"\"/*\"\"\"\ndangerous_call()")
+	assertDangerousCallRemainsVisible(t, model.JavaScript, "const marker = `/*`;\ndangerous_call();")
+	assertDangerousCallRemainsVisible(t, model.TypeScript, "const marker: string = '/*';\ndangerous_call();")
+	assertDangerousCallRemainsVisible(t, model.PHP, "<?php $marker = '/*';\ndangerous_call();")
+	assertDangerousCallRemainsVisible(t, model.CSharp, "var marker = \"/*\";\ndangerous_call();")
+	assertDangerousCallRemainsVisible(t, model.Rust, "let marker = \"escaped quote: \\\" and /*\";\ndangerous_call();")
+}
+
+func TestStripCStyleCommentsPreservesCodeAfterLineCommentOpeners(t *testing.T) {
+	assertDangerousCallRemainsVisible(t, model.Go, "// Route wildcard: /api/*\ndangerous_call()")
+	assertDangerousCallRemainsVisible(t, model.Rust, "// Route wildcard: /api/*\ndangerous_call();")
+	assertDangerousCallRemainsVisible(t, model.PHP, "# Route wildcard: /api/*\ndangerous_call();")
+}
+
+func TestStripCStyleCommentsRemovesRealComments(t *testing.T) {
+	stripped := StripCodeForDetection("/* hidden_block */\ndangerous_call() // hidden_line", model.Go)
+	assert.Contains(t, stripped, "dangerous_call")
+	assert.NotContains(t, stripped, "hidden_block")
+	assert.NotContains(t, stripped, "hidden_line")
+
+	nested := StripCodeForDetection("/* hidden_outer /* hidden_inner */ hidden_outer */\ndangerous_call();", model.Rust)
+	assert.Contains(t, nested, "dangerous_call")
+	assert.NotContains(t, nested, "hidden_outer")
+	assert.NotContains(t, nested, "hidden_inner")
+}
+
+func TestStripCStyleCommentsFailsOpenForUnterminatedBlockComment(t *testing.T) {
+	assertDangerousCallRemainsVisible(t, model.Go, "/* ambiguous content\ndangerous_call()")
+}
+
+func TestStripPHPCommentsPreservesAttributes(t *testing.T) {
+	assertDangerousCallRemainsVisible(t, model.PHP, "#[Route('/*')]\nfunction dangerous_call() {}")
+}
+
 func TestShouldAnalyze_ElixirCriticalFilterRegressions(t *testing.T) {
 	tests := []struct {
 		name string

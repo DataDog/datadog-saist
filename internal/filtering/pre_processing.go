@@ -8,18 +8,7 @@ import (
 	"github.com/DataDog/datadog-saist/internal/model"
 )
 
-// Precompiled regexes for stripping comments / docstrings.
 var (
-	reJavaBlock = regexp.MustCompile(`(?s)/\*.*?\*/`)
-	reJavaLine  = regexp.MustCompile(`//.*`)
-	// Like //.*,  this strips # inside string literals too (e.g. "#ff0000" becomes "").
-	// The false-strip rate is higher than for // because # appears in PHP strings far more
-	// often (hex colors, regex delimiters, URL fragments). Accepted tradeoff: keyword
-	// matching only needs a rough signal, not perfect fidelity.
-	rePHPHash = regexp.MustCompile(`#.*`)
-
-	reGoBlock = regexp.MustCompile(`(?s)/\*.*?\*/`)
-
 	// Simple heuristic for Python triple-quoted strings (often docstrings).
 	rePyTriple = regexp.MustCompile(`(?s)("""[\s\S]*?"""|'''[\s\S]*?''')`)
 
@@ -93,44 +82,125 @@ func getStrippedCode(ctx *model.DetectionContext) string {
 	return codeUsedForDetection(strings.ToLower(ctx.Code), ctx.Language)
 }
 
-// stripCStyleComments removes C-style block (/* ... */) and line (//) comments,
-// then drops any post-stripping lines for which skipLine(trimmed) returns true.
-// Shared between Java, JavaScript, and C# which all use the same comment syntax.
-func stripCStyleComments(code string, skipLine func(trimmed string) bool) string {
-	code = reJavaBlock.ReplaceAllString(code, "")
-	code = reJavaLine.ReplaceAllString(code, "")
+type cStyleStringDelimiter struct {
+	value   string
+	escapes bool
+}
 
-	lines := strings.Split(code, "\n")
-	out := lines[:0]
-	for _, line := range lines {
-		if skipLine(strings.TrimSpace(line)) {
+type cStyleCommentOptions struct {
+	hashLineComments    bool
+	stringDelimiters    []cStyleStringDelimiter
+	nestedBlockComments bool
+}
+
+// stripCStyleComments removes comments while preserving comment delimiters in
+// string literals. If a block comment is unterminated, it returns the original
+// code so keyword filtering cannot silently discard the rest of the file.
+func stripCStyleComments(code string, options cStyleCommentOptions) string {
+	var result strings.Builder
+	result.Grow(len(code))
+
+	for i := 0; i < len(code); {
+		if delimiter, ok := matchingStringDelimiter(code[i:], options.stringDelimiters); ok {
+			i = copyStringLiteral(&result, code, i, delimiter)
 			continue
 		}
-		out = append(out, line)
+
+		commentLength := lineCommentLength(code[i:], options.hashLineComments)
+		if commentLength > 0 {
+			i += commentLength
+			for i < len(code) && code[i] != '\n' {
+				i++
+			}
+			continue
+		}
+
+		if strings.HasPrefix(code[i:], "/*") {
+			var terminated bool
+			i, terminated = skipBlockComment(&result, code, i, options.nestedBlockComments)
+			if !terminated {
+				return code
+			}
+			continue
+		}
+
+		result.WriteByte(code[i])
+		i++
 	}
-	return strings.Join(out, "\n")
+
+	return result.String()
+}
+
+func copyStringLiteral(result *strings.Builder, code string, start int, delimiter cStyleStringDelimiter) int {
+	result.WriteString(delimiter.value)
+	for i := start + len(delimiter.value); i < len(code); {
+		if delimiter.escapes && code[i] == '\\' && i+1 < len(code) {
+			result.WriteString(code[i : i+2])
+			i += 2
+			continue
+		}
+		if strings.HasPrefix(code[i:], delimiter.value) {
+			result.WriteString(delimiter.value)
+			return i + len(delimiter.value)
+		}
+		result.WriteByte(code[i])
+		i++
+	}
+	return len(code)
+}
+
+func lineCommentLength(code string, hashLineComments bool) int {
+	if strings.HasPrefix(code, "//") {
+		return 2
+	}
+	if hashLineComments && code[0] == '#' && !strings.HasPrefix(code, "#[") {
+		return 1
+	}
+	return 0
+}
+
+func skipBlockComment(result *strings.Builder, code string, start int, nested bool) (int, bool) {
+	depth := 1
+	for i := start + 2; i < len(code); {
+		switch {
+		case nested && strings.HasPrefix(code[i:], "/*"):
+			depth++
+			i += 2
+		case strings.HasPrefix(code[i:], "*/"):
+			depth--
+			i += 2
+			if depth == 0 {
+				return i, true
+			}
+		case code[i] == '\n':
+			result.WriteByte('\n')
+			i++
+		default:
+			i++
+		}
+	}
+	return len(code), false
+}
+
+func matchingStringDelimiter(code string, delimiters []cStyleStringDelimiter) (cStyleStringDelimiter, bool) {
+	for _, delimiter := range delimiters {
+		if strings.HasPrefix(code, delimiter.value) {
+			return delimiter, true
+		}
+	}
+	return cStyleStringDelimiter{}, false
 }
 
 func stripJavaComments(code string) string {
-	// Skip empty and bare "*" lines (common in Javadoc bodies).
-	return stripCStyleComments(code, func(trimmed string) bool {
-		return trimmed == "" || trimmed == "*"
+	return stripCStyleComments(code, cStyleCommentOptions{
+		stringDelimiters: []cStyleStringDelimiter{{value: `"""`, escapes: true}, {value: `"`, escapes: true}, {value: `'`, escapes: true}},
 	})
 }
 
 func stripGoComments(code string) string {
-	// Remove /* ... */ first.
-	code = reGoBlock.ReplaceAllString(code, "")
-	lines := strings.Split(code, "\n")
-	out := lines[:0]
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "//") {
-			continue
-		}
-		out = append(out, line)
-	}
-	return strings.Join(out, "\n")
+	return stripCStyleComments(code, cStyleCommentOptions{
+		stringDelimiters: []cStyleStringDelimiter{{value: "`"}, {value: `"`, escapes: true}},
+	})
 }
 
 func stripPythonComments(code string) string {
@@ -150,44 +220,35 @@ func stripPythonComments(code string) string {
 }
 
 func stripJavaScriptComments(code string) string {
-	return stripCStyleComments(code, func(trimmed string) bool {
-		return trimmed == ""
+	return stripCStyleComments(code, cStyleCommentOptions{
+		stringDelimiters: []cStyleStringDelimiter{{value: "`", escapes: true}, {value: `"`, escapes: true}, {value: `'`, escapes: true}},
 	})
 }
 
 func stripTypeScriptComments(code string) string {
-	return stripCStyleComments(code, func(trimmed string) bool {
-		return trimmed == ""
+	return stripCStyleComments(code, cStyleCommentOptions{
+		stringDelimiters: []cStyleStringDelimiter{{value: "`", escapes: true}, {value: `"`, escapes: true}, {value: `'`, escapes: true}},
 	})
 }
 
 func stripKotlinComments(code string) string {
-	// Kotlin uses C-style comments; skip empty and bare "*" lines (KDoc bodies).
-	return stripCStyleComments(code, func(trimmed string) bool {
-		return trimmed == "" || trimmed == "*"
+	return stripCStyleComments(code, cStyleCommentOptions{
+		stringDelimiters:    []cStyleStringDelimiter{{value: `"""`}, {value: `"`, escapes: true}, {value: `'`, escapes: true}},
+		nestedBlockComments: true,
 	})
 }
 
 func stripPHPComments(code string) string {
-	// PHP supports C-style block/line comments and also # for single-line comments.
-	code = reJavaBlock.ReplaceAllString(code, "")
-	code = reJavaLine.ReplaceAllString(code, "")
-	code = rePHPHash.ReplaceAllString(code, "")
-	lines := strings.Split(code, "\n")
-	out := lines[:0]
-	for _, line := range lines {
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		out = append(out, line)
-	}
-	return strings.Join(out, "\n")
+	return stripCStyleComments(code, cStyleCommentOptions{
+		hashLineComments: true,
+		stringDelimiters: []cStyleStringDelimiter{{value: `"`, escapes: true}, {value: `'`, escapes: true}},
+	})
 }
 
 func stripRustComments(code string) string {
-	// Rust uses C-style comments (including /// and //! doc comments); skip empty and bare "*" lines.
-	return stripCStyleComments(code, func(trimmed string) bool {
-		return trimmed == "" || trimmed == "*"
+	return stripCStyleComments(code, cStyleCommentOptions{
+		stringDelimiters:    []cStyleStringDelimiter{{value: `"`, escapes: true}},
+		nestedBlockComments: true,
 	})
 }
 
@@ -260,9 +321,8 @@ func writeSwiftNonCommentByte(result *strings.Builder, character byte, blockDept
 }
 
 func stripCSharpComments(code string) string {
-	// Skip empty and XML doc comment lines (/// or bare *).
-	return stripCStyleComments(code, func(trimmed string) bool {
-		return trimmed == "" || trimmed == "*" || strings.HasPrefix(trimmed, "///")
+	return stripCStyleComments(code, cStyleCommentOptions{
+		stringDelimiters: []cStyleStringDelimiter{{value: `"`, escapes: true}, {value: `'`, escapes: true}},
 	})
 }
 
