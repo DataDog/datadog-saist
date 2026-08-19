@@ -14,7 +14,7 @@
   ## Features
 
   - **AI-Powered Analysis**: Uses advanced AI models to detect security vulnerabilities
-  - **Multiple Language Support**: Go, Java, Python, C#, JavaScript, TypeScript, Kotlin, and Swift
+  - **Multiple Language Support**: Go, Java, Python, C#, C++, JavaScript, TypeScript, Kotlin, PHP, Ruby, Rust, Elixir, and Swift
   - **SARIF Output**: Generates industry-standard SARIF reports
   - **Context-Aware**: Builds project context for more accurate analysis
 

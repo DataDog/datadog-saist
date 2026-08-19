@@ -22,6 +22,7 @@ const (
 	Elixir
 	Swift
 	Dart
+	Cpp
 )
 
 func (l Language) String() string {
@@ -52,6 +53,8 @@ func (l Language) String() string {
 		return "Swift"
 	case Dart:
 		return "Dart"
+	case Cpp:
+		return "Cpp"
 	default:
 		return "LanguageUnknown"
 	}
@@ -87,6 +90,8 @@ func GetLanguage(filePath string) Language {
 		return Swift
 	case ".dart":
 		return Dart
+	case ".cc", ".cpp", ".cxx", ".c++", ".hh", ".hpp", ".hxx", ".h++":
+		return Cpp
 	default:
 		return LanguageUnknown
 	}
@@ -112,5 +117,6 @@ func GetAllLanguages() []Language {
 		Elixir,
 		Swift,
 		Dart,
+		Cpp,
 	}
 }

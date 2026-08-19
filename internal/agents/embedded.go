@@ -28,6 +28,7 @@ var languageGlobs = map[string][]string{
 	"elixir":     {"**/*.ex", "**/*.exs"},
 	"swift":      {"**/*.swift"},
 	"dart":       {"**/*.dart"},
+	"cpp":        {"**/*.cc", "**/*.cpp", "**/*.cxx", "**/*.c++", "**/*.hh", "**/*.hpp", "**/*.hxx", "**/*.h++"},
 }
 
 // LoadLocalRules returns one api.AiPrompt per embedded *.md file in this
