@@ -292,6 +292,7 @@ core,github.com/tklauser/go-sysconf,BSD-3-Clause,"Copyright (c) 2018-2022, Tobia
 core,github.com/tklauser/numcpus,Apache-2.0,Copyright 2018 Tobias Klauser
 core,github.com/tree-sitter-grammars/tree-sitter-kotlin/bindings/go,MIT,Copyright (c) 2024 Amaan Qureshi <amaanq12@gmail.com>
 core,github.com/tree-sitter/go-tree-sitter,MIT,Copyright (c) 2024 Amaan Qureshi <amaanq12@gmail.com>
+core,github.com/tree-sitter/tree-sitter-cpp/bindings/go,MIT,Copyright (c) 2014 Max Brunsfeld
 core,github.com/tree-sitter/tree-sitter-elixir/bindings/go,Apache-2.0,Copyright (c) 2018-2021 Max Brunsfeld | Copyright (c) 2021 Anantha Kumaran | Copyright 2021 The Elixir Team | copyright to the terms below
 core,github.com/tree-sitter/tree-sitter-go/bindings/go,MIT,Copyright (c) 2014 Max Brunsfeld
 core,github.com/tree-sitter/tree-sitter-java/bindings/go,MIT,Copyright (c) 2017 Ayman Nadeem

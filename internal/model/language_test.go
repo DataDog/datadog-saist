@@ -40,10 +40,22 @@ func TestGetLanguageSwiftFiles(t *testing.T) {
 	assert.Equal(t, Swift, GetLanguage("Sources/App.SWIFT"))
 }
 
+func TestGetLanguageCppFiles(t *testing.T) {
+	assert.Equal(t, Cpp, GetLanguage("src/main.cpp"))
+	assert.Equal(t, Cpp, GetLanguage("src/main.CPP"))
+	assert.Equal(t, Cpp, GetLanguage("src/main.cc"))
+	assert.Equal(t, Cpp, GetLanguage("src/main.cxx"))
+	assert.Equal(t, Cpp, GetLanguage("src/main.c++"))
+	assert.Equal(t, Cpp, GetLanguage("include/server.hpp"))
+	assert.Equal(t, Cpp, GetLanguage("include/server.hh"))
+	assert.Equal(t, Cpp, GetLanguage("include/server.hxx"))
+	assert.Equal(t, Cpp, GetLanguage("include/server.h++"))
+}
+
 func TestGetLanguageUnknownFiles(t *testing.T) {
 	assert.Equal(t, LanguageUnknown, GetLanguage("README"))
 	assert.Equal(t, LanguageUnknown, GetLanguage("document.txt"))
-	assert.Equal(t, LanguageUnknown, GetLanguage("program.cpp"))
+	assert.Equal(t, LanguageUnknown, GetLanguage("program.cp"))
 	assert.Equal(t, LanguageUnknown, GetLanguage(""))
 	assert.Equal(t, LanguageUnknown, GetLanguage(".gitignore"))
 }
@@ -71,6 +83,10 @@ func TestLanguageStringKotlin(t *testing.T) {
 
 func TestLanguageStringSwift(t *testing.T) {
 	assert.Equal(t, "Swift", Swift.String())
+}
+
+func TestLanguageStringCpp(t *testing.T) {
+	assert.Equal(t, "Cpp", Cpp.String())
 }
 
 func TestLanguageStringUnknown(t *testing.T) {

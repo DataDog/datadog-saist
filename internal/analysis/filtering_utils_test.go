@@ -238,3 +238,19 @@ func TestIsTestFileByPathSwift(t *testing.T) {
 	assert.True(t, IsTestFileByPath("Tests/AppTests/FeatureTests.swift", model.Swift))
 	assert.False(t, IsTestFileByPath("Sources/App/Feature.swift", model.Swift))
 }
+
+func TestIsGeneratedFileCpp(t *testing.T) {
+	path := writeTempFile(t, ".pb.cc", "namespace generated {}")
+	generated, err := IsGeneratedFile(path, model.Cpp)
+	assert.NoError(t, err)
+	assert.True(t, generated)
+}
+
+func TestIsTestFileCpp(t *testing.T) {
+	assert.True(t, IsTestFileFromContent(nil, "tests/server_test.cpp", model.Cpp))
+	assert.True(t, IsTestFileFromContent(nil, "tests/server_unittest.c++", model.Cpp))
+	assert.True(t, IsTestFileFromContent([]byte("#include <gtest/gtest.h>"), "src/server.cpp", model.Cpp))
+	assert.True(t, IsTestFileFromContent([]byte("#include <boost/test/unit_test.hpp>"), "src/server.cpp", model.Cpp))
+	assert.False(t, IsTestFileFromContent([]byte("const char* header = \"gtest/gtest.h\";"), "src/server.cpp", model.Cpp))
+	assert.False(t, IsTestFileFromContent([]byte("#include <vector>"), "src/server.cpp", model.Cpp))
+}

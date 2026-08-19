@@ -120,6 +120,22 @@ var swiftTestPathPatterns = []string{
 	"**/*UITests.swift",
 }
 
+var cppTestPathPatterns = []string{
+	"**/*Test.cc",
+	"**/*Test.cpp",
+	"**/*Test.cxx",
+	"**/*Test.c++",
+	"**/*Tests.cc",
+	"**/*Tests.cpp",
+	"**/*Tests.cxx",
+	"**/*Tests.c++",
+	"**/*_unittest.cc",
+	"**/*_unittest.cpp",
+	"**/*_unittest.cxx",
+	"**/*_unittest.c++",
+	"**/*Tests.cxx",
+}
+
 var DefaultIgnoredGlobs = []string{
 	"**/node_modules/**/*",
 	"**/jspm_packages/**/*",
@@ -148,6 +164,10 @@ func isGeneratedFileSuffix(path string) bool {
 	return strings.HasSuffix(path, ".pb.go") ||
 		strings.HasSuffix(path, "_pb2.py") ||
 		strings.HasSuffix(path, ".pb.ex") ||
+		strings.HasSuffix(path, ".pb.cc") ||
+		strings.HasSuffix(path, ".pb.cpp") ||
+		strings.HasSuffix(path, ".pb.h") ||
+		strings.HasSuffix(path, ".pb.hpp") ||
 		strings.HasSuffix(path, ".generated.go")
 }
 
@@ -242,6 +262,12 @@ func IsGeneratedFileFromContent(fullContent []byte, path string, language model.
 		return strings.Contains(content, GeneratedByMarker) ||
 			strings.Contains(content, ProtoBufHeader) ||
 			strings.Contains(content, ThriftHeader)
+
+	case model.Cpp:
+		return strings.Contains(content, GeneratedByMarker) ||
+			strings.Contains(content, ProtoBufHeader) ||
+			strings.Contains(content, ThriftHeader) ||
+			isGeneratedFileSuffix(path)
 
 	default:
 		return isGeneratedFileSuffix(path)
@@ -366,6 +392,11 @@ func IsGeneratedFileByContent(content []byte, path string, language model.Langua
 			strings.Contains(header, ProtoBufHeader) ||
 			strings.Contains(header, ThriftHeader)
 
+	case model.Cpp:
+		return strings.Contains(header, GeneratedByMarker) ||
+			strings.Contains(header, ProtoBufHeader) ||
+			strings.Contains(header, ThriftHeader)
+
 	default:
 		return false
 	}
@@ -444,6 +475,9 @@ func hasTestLikePath(path string, language model.Language) bool {
 	case model.Swift:
 		return matchesAnyGlob(path, slices.Concat(defaultTestPaths, defaultTestFilenames, swiftTestPathPatterns))
 
+	case model.Cpp:
+		return matchesAnyGlob(path, slices.Concat(defaultTestPaths, defaultTestFilenames, cppTestPathPatterns))
+
 	default:
 		// For other languages we don't classify here
 		return false
@@ -470,9 +504,35 @@ func hasTestLikeImport(language model.Language, code, path string) bool {
 		return elixirHasTestLikeImport(code)
 	case model.Swift:
 		return swiftHasTestLikeImport(code)
+	case model.Cpp:
+		return cppHasTestLikeImport(code)
 	default:
 		return false
 	}
+}
+
+func cppHasTestLikeImport(code string) bool {
+	cppTestHeaders := []string{
+		"gtest/gtest.h",
+		"gmock/gmock.h",
+		"catch2/",
+		"doctest/doctest.h",
+		"boost/test/",
+	}
+
+	scanner := bufio.NewScanner(strings.NewReader(code))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if !strings.HasPrefix(line, "#include") {
+			continue
+		}
+		for _, header := range cppTestHeaders {
+			if strings.Contains(line, header) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // ----- Go import detection -----
