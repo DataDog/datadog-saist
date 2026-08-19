@@ -238,3 +238,12 @@ func TestIsTestFileByPathSwift(t *testing.T) {
 	assert.True(t, IsTestFileByPath("Tests/AppTests/FeatureTests.swift", model.Swift))
 	assert.False(t, IsTestFileByPath("Sources/App/Feature.swift", model.Swift))
 }
+
+func TestDartFileClassification(t *testing.T) {
+	assert.True(t, IsTestFileFromContent(nil, "integration_test/app_test.dart", model.Dart))
+	assert.True(t, IsTestFileFromContent([]byte("import 'package:flutter_test/flutter_test.dart';"), "lib/widget.dart", model.Dart))
+	assert.True(t, IsGeneratedFileFromContent([]byte("// GENERATED CODE - DO NOT MODIFY BY HAND"), "lib/model.dart", model.Dart))
+	assert.True(t, IsGeneratedFileFromContent(nil, "lib/model.freezed.dart", model.Dart))
+	assert.True(t, ShouldIgnorePath("example/.dart_tool/build/generated.dart"))
+	assert.False(t, ShouldIgnorePath("example/build/generated.go"))
+}

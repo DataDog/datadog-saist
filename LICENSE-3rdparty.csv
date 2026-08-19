@@ -153,6 +153,7 @@ core,github.com/Microsoft/go-winio/internal/socket,MIT,Copyright (c) 2015 Micros
 core,github.com/Microsoft/go-winio/internal/stringbuffer,MIT,Copyright (c) 2015 Microsoft
 core,github.com/Microsoft/go-winio/pkg/guid,MIT,Copyright (c) 2015 Microsoft
 core,github.com/alex-pinkus/tree-sitter-swift/bindings/go,MIT,Copyright (c) 2021 alex-pinkus
+core,github.com/UserNobody14/tree-sitter-dart/bindings/go,MIT,Copyright (c) 2020-2023 UserNobody14 and others
 core,github.com/bahlo/generic-list-go,BSD-3-Clause,Copyright (c) 2009 The Go Authors. All rights reserved
 core,github.com/bmatcuk/doublestar/v4,MIT,Copyright (c) 2014 Bob Matcuk
 core,github.com/buger/jsonparser,MIT,Copyright (c) 2016 Leonid Bugaev

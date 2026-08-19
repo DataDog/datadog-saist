@@ -3,6 +3,7 @@ module github.com/DataDog/datadog-saist
 go 1.24.3
 
 require (
+	github.com/UserNobody14/tree-sitter-dart v0.0.0-20260707040301-be07cf7118d3
 	github.com/bmatcuk/doublestar/v4 v4.9.1
 	github.com/google/generative-ai-go v0.20.1
 	github.com/invopop/jsonschema v0.13.0

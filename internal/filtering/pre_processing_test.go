@@ -1,6 +1,7 @@
 package filtering
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/DataDog/datadog-saist/internal/log"
@@ -64,6 +65,98 @@ func TestShouldAnalyze_UnknownVulnerability(t *testing.T) {
 
 	result := ShouldAnalyze(&ctx, log.NoopLogger())
 	assert.True(t, result, "Expected ShouldAnalyze to return true for unknown vulnerability (no filtering)")
+}
+
+func TestStripDartComments(t *testing.T) {
+	code := `final route = r'/api/*'; // Process.run(request.query)
+final template = """/* still a string */""";
+/* outer /* nested */ comment */
+Process.run('tool', [request.url.queryParameters['arg']!]);`
+	stripped := StripCodeForDetection(code, model.Dart)
+	assert.Contains(t, stripped, `r'/api/*'`)
+	assert.Contains(t, stripped, `"""/* still a string */"""`)
+	assert.NotContains(t, stripped, "outer")
+	assert.Contains(t, stripped, "process.run")
+	assert.Equal(t, strings.ToLower(`final value = "unterminated /* process.run"`), StripCodeForDetection(`final value = "unterminated /* Process.run"`, model.Dart))
+}
+
+func TestShouldAnalyzeDartRepresentativeRules(t *testing.T) {
+	assertDartRuleMatches := func(ruleID, code string) {
+		t.Helper()
+		ctx := model.DetectionContext{Language: model.Dart, Rule: api.AiPrompt{ID: ruleID}, Code: code}
+		assert.True(t, ShouldAnalyze(&ctx, log.NoopLogger()), ruleID)
+	}
+
+	assertDartRuleMatches("datadog/dart-sqli", "import 'package:sqflite/sqflite.dart'; db.rawQuery('select $id')")
+	assertDartRuleMatches("datadog/dart-cmdi", "Process.run(request.url.queryParameters['cmd']!, const [])")
+	assertDartRuleMatches("datadog/dart-xss", "element.setInnerHtml(request.url.queryParameters['html']!)")
+	assertDartRuleMatches("datadog/dart-pathtraversal", "File(request.url.queryParameters['path']!).readAsString()")
+	assertDartRuleMatches("datadog/dart-zipslip", "ZipDecoder().decodeBytes(data); File(entry.name).writeAsBytesSync(bytes)")
+	assertDartRuleMatches("datadog/dart-ldapi", "import 'package:dartdap/client.dart'; ldap.query(request.url.queryParameters['filter']!)")
+	assertDartRuleMatches("datadog/dart-codei", "import 'package:dart_eval/dart_eval.dart'; eval(request.readAsString())")
+	assertDartRuleMatches("datadog/dart-loginjection", "import 'package:logging/logging.dart'; Logger('app').info(request.headers['x'])")
+	assertDartRuleMatches("datadog/dart-integeroverflow", "Int32List.fromList([int.parse(request.url.queryParameters['n']!)])")
+	assertDartRuleMatches("datadog/dart-sensitiveinfodisclosure", "Response.json(body: {'token': Platform.environment['TOKEN']})")
+	assertDartRuleMatches("datadog/dart-errorinfoleak", "Response.internalServerError(body: stackTrace.toString())")
+	assertDartRuleMatches("datadog/dart-accesscontrol", "import 'package:shelf_router/shelf_router.dart'; db.findById(request.url.queryParameters['id'])")
+	assertDartRuleMatches("datadog/dart-brokencrypto", "final cipher = ECBBlockCipher(DESEngine())")
+	assertDartRuleMatches("datadog/dart-weakhash", "final digest = md5.convert(bytes)")
+	assertDartRuleMatches("datadog/dart-weakrandomness", "final resetToken = Random().nextInt(999999)")
+	assertDartRuleMatches("datadog/dart-trustboundary", "request.session['role'] = request.url.queryParameters['role']")
+	assertDartRuleMatches("datadog/dart-openredirect", "Response.found(request.url.queryParameters['next']!)")
+	assertDartRuleMatches("datadog/dart-insecurecookie", "response.cookies.add(Cookie('session', token))")
+	assertDartRuleMatches("datadog/dart-xpathi", "import 'package:xml/xpath.dart'; doc.xpath(request.url.queryParameters['q']!)")
+	assertDartRuleMatches("datadog/dart-improperoutputhandling", "import 'package:google_generative_ai/google_generative_ai.dart'; final answer = await model.generateContent(prompt); Process.run(answer.text!, [])")
+	assertDartRuleMatches("datadog/dart-excessiveagency", "FunctionDeclaration('delete', () => File(path).delete())")
+	assertDartRuleMatches("datadog/dart-systempromptleakage", "Response.ok(systemInstruction)")
+	assertDartRuleMatches("datadog/dart-unboundedconsumption", "import 'package:google_generative_ai/google_generative_ai.dart'; GenerativeModel(model: 'x').generateContent(prompt)")
+	assertDartRuleMatches("datadog/dart-vectorembeddingweaknesses", "pinecone.similaritySearch(request.url.queryParameters['q']!)")
+	assertDartRuleMatches("datadog/dart-datamodelpoisoning", "client.files.upload(bytes: uploadedDataset, purpose: FilePurpose.fineTune)")
+	assertDartRuleMatches("datadog/dart-misinformation", "import 'package:google_generative_ai/google_generative_ai.dart'; final answer = await model.generateContent(medicalPrompt); return Response.ok(answer.text)")
+	assertDartRuleMatches("datadog/dart-promptinjection", "import 'package:google_generative_ai/google_generative_ai.dart'; model.generateContent(Content.text(request.readAsString()))")
+	assertDartRuleMatches("datadog/dart-supplychain", "Interpreter.fromBuffer(await http.get(Uri.parse(url)))")
+	assertDartRuleMatches("datadog/dart-pathtraversal", "File(context.request.uri.queryParameters['path']!).readAsString()")
+	assertDartRuleMatches("datadog/dart-promptinjection", "model.generateContent(Content.text(await context.request.body()))")
+	assertDartRuleMatches("datadog/dart-sensitiveinfodisclosure", "final apiToken = Platform.environment['TOKEN']; debugPrint(apiToken)")
+	assertDartRuleMatches("datadog/dart-brokencrypto", "final key = Key.fromBase64('c2VjcmV0')")
+	assertDartRuleMatches("datadog/dart-weakrandomness", "final secure = Random.secure(); final resetToken = Random().nextInt(1000000)")
+	assertDartRuleMatches("datadog/dart-weakrandomness", "final rng = Random(42); final apiKey = rng.nextInt(1 << 32)")
+	assertDartRuleMatches("datadog/dart-sqli", "db.rawQuery('select * from users where id = $id')")
+	assertDartRuleMatches("datadog/dart-sqli", "connection.execute('select * from users where id = $id')")
+	assertDartRuleMatches("datadog/dart-accesscontrol", "repository.findById(request.params['accountId'])")
+	assertDartRuleMatches("datadog/dart-systempromptleakage", "debugPrint(systemPrompt)")
+	assertDartRuleMatches("datadog/dart-systempromptleakage", "logger.info(systemPrompt)")
+	assertDartRuleMatches("datadog/dart-promptinjection", "import 'package:openai_dart/openai_dart.dart'; client.responses.create(CreateResponseRequest(input: await request.body()))")
+	assertDartRuleMatches("datadog/dart-unboundedconsumption", "import 'package:dart_openai/dart_openai.dart'; OpenAI.instance.chat.create(messages: messages)")
+	assertDartRuleMatches("datadog/dart-excessiveagency", "final tool = Tool.function(name: 'deleteFile', description: 'Delete a file')")
+	assertDartRuleMatches("datadog/dart-excessiveagency", "for (final toolCall in response.allToolCalls) { await File(toolCall.function.arguments['path']).delete(); }")
+
+	ctx := model.DetectionContext{Language: model.Dart, Rule: api.AiPrompt{ID: "datadog/dart-cmdi"}, Code: "final process = 'documentation only';"}
+	assert.False(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+
+	ctx = model.DetectionContext{Language: model.Dart, Rule: api.AiPrompt{ID: "datadog/dart-supplychain"}, Code: "Interpreter.fromBuffer(bundledModelBytes)"}
+	assert.False(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+
+	ctx = model.DetectionContext{Language: model.Dart, Rule: api.AiPrompt{ID: "datadog/dart-trustboundary"}, Code: "final user = request.context['user'];"}
+	assert.False(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+
+	ctx = model.DetectionContext{Language: model.Dart, Rule: api.AiPrompt{ID: "datadog/dart-systempromptleakage"}, Code: "final log = systemPrompt.length;"}
+	assert.False(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+
+	ctx = model.DetectionContext{Language: model.Dart, Rule: api.AiPrompt{ID: "datadog/dart-sensitiveinfodisclosure"}, Code: "import 'package:langchain/langchain.dart'; final token = loadToken();"}
+	assert.False(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+
+	ctx = model.DetectionContext{Language: model.Dart, Rule: api.AiPrompt{ID: "datadog/dart-improperoutputhandling"}, Code: "import 'package:langchain/langchain.dart'; Process.run(command, const []);"}
+	assert.False(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+
+	ctx = model.DetectionContext{Language: model.Dart, Rule: api.AiPrompt{ID: "datadog/dart-datamodelpoisoning"}, Code: "final dataset = await request.readAsString(); render(dataset);"}
+	assert.False(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+
+	ctx = model.DetectionContext{Language: model.Dart, Rule: api.AiPrompt{ID: "datadog/dart-codei"}, Code: "import 'package:dart_eval/dart_eval.dart'; render(await request.readAsString());"}
+	assert.False(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+
+	ctx = model.DetectionContext{Language: model.Dart, Rule: api.AiPrompt{ID: "datadog/dart-zipslip"}, Code: "await extractArchiveToDisk(archive, root);"}
+	assert.False(t, ShouldAnalyze(&ctx, log.NoopLogger()))
 }
 
 func TestShouldAnalyze_MultipleKeywordsInCode(t *testing.T) {
