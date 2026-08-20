@@ -143,6 +143,12 @@ var cppTestPathPatterns = []string{
 	"**/*_unittest.c++",
 }
 
+var cppBuildOutputGlobs = []string{
+	"**/build/**/*",
+	"**/cmake-build-*/**/*",
+	"**/_deps/**/*",
+}
+
 var DefaultIgnoredGlobs = []string{
 	"**/node_modules/**/*",
 	"**/jspm_packages/**/*",
@@ -197,6 +203,9 @@ func ShouldIgnorePath(path string) bool {
 		"**/.pub-cache/**/*",
 		"**/build/**/*",
 	}) {
+		return true
+	}
+	if model.GetLanguage(p) == model.Cpp && matchesAnyGlob(p, cppBuildOutputGlobs) {
 		return true
 	}
 
@@ -548,27 +557,151 @@ func hasTestLikeImport(language model.Language, code, path string) bool {
 }
 
 func cppHasTestLikeImport(code string) bool {
-	cppTestHeaders := []string{
-		"gtest/gtest.h",
-		"gmock/gmock.h",
-		"catch2/",
-		"doctest/doctest.h",
-		"boost/test/",
-	}
+	lineStart := true
+	inBlockComment := false
+	stringDelimiter := byte(0)
+	rawStringClosing := ""
 
-	scanner := bufio.NewScanner(strings.NewReader(code))
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if !strings.HasPrefix(line, "#include") {
+	for i := 0; i < len(code); {
+		if rawStringClosing != "" {
+			if strings.HasPrefix(code[i:], rawStringClosing) {
+				i += len(rawStringClosing)
+				rawStringClosing = ""
+				lineStart = false
+				continue
+			}
+			if code[i] == '\n' {
+				lineStart = true
+			}
+			i++
 			continue
 		}
-		for _, header := range cppTestHeaders {
-			if strings.Contains(line, header) {
-				return true
+
+		if inBlockComment {
+			if strings.HasPrefix(code[i:], "*/") {
+				i += 2
+				inBlockComment = false
+				continue
 			}
+			if code[i] == '\n' {
+				lineStart = true
+			}
+			i++
+			continue
 		}
+
+		if stringDelimiter != 0 {
+			if code[i] == '\\' && i+1 < len(code) {
+				if code[i+1] == '\n' {
+					lineStart = true
+				}
+				i += 2
+				continue
+			}
+			if code[i] == stringDelimiter {
+				stringDelimiter = 0
+			} else if code[i] == '\n' {
+				lineStart = true
+			}
+			i++
+			continue
+		}
+
+		if code[i] == '\n' {
+			lineStart = true
+			i++
+			continue
+		}
+		if lineStart && (code[i] == ' ' || code[i] == '\t' || code[i] == '\r') {
+			i++
+			continue
+		}
+		if strings.HasPrefix(code[i:], "//") {
+			for i < len(code) && code[i] != '\n' {
+				i++
+			}
+			continue
+		}
+		if strings.HasPrefix(code[i:], "/*") {
+			inBlockComment = true
+			i += 2
+			continue
+		}
+		if closing, ok := cppRawStringClosing(code, i); ok {
+			rawStringClosing = closing
+			lineStart = false
+			i += 2
+			continue
+		}
+		if code[i] == '"' || code[i] == '\'' {
+			stringDelimiter = code[i]
+			lineStart = false
+			i++
+			continue
+		}
+		if lineStart && code[i] == '#' && cppIncludesTestHeader(code[i+1:]) {
+			return true
+		}
+
+		lineStart = false
+		i++
 	}
 	return false
+}
+
+func cppRawStringClosing(code string, start int) (string, bool) {
+	if !strings.HasPrefix(code[start:], `R"`) {
+		return "", false
+	}
+
+	delimiterStart := start + 2
+	open := delimiterStart
+	for open < len(code) && code[open] != '(' {
+		if open-delimiterStart == 16 || strings.ContainsRune(" ()\\\t\r\n", rune(code[open])) {
+			return "", false
+		}
+		open++
+	}
+	if open == len(code) {
+		return "", false
+	}
+	return ")" + code[delimiterStart:open] + `"`, true
+}
+
+func cppIncludesTestHeader(directive string) bool {
+	directive = strings.TrimLeft(directive, " \t")
+	if !strings.HasPrefix(directive, "include") {
+		return false
+	}
+
+	rest := strings.TrimSpace(directive[len("include"):])
+	if rest == "" {
+		return false
+	}
+
+	var header string
+	switch rest[0] {
+	case '<':
+		end := strings.IndexByte(rest, '>')
+		if end == -1 {
+			return false
+		}
+		header = rest[1:end]
+	case '"':
+		end := strings.IndexByte(rest[1:], '"')
+		if end == -1 {
+			return false
+		}
+		header = rest[1 : end+1]
+	default:
+		return false
+	}
+
+	return header == "gtest/gtest.h" ||
+		header == "gmock/gmock.h" ||
+		header == "doctest/doctest.h" ||
+		strings.HasPrefix(header, "catch2/") ||
+		strings.HasPrefix(header, "boost/test/")
 }
 
 // ----- Go import detection -----
