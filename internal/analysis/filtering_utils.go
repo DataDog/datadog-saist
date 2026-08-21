@@ -558,84 +558,103 @@ func hasTestLikeImport(language model.Language, code, path string) bool {
 
 func cppHasTestLikeImport(code string) bool {
 	lineStart := true
-	inBlockComment := false
-	stringDelimiter := byte(0)
-	rawStringClosing := ""
+	state := cppLexicalState{}
 
 	for i := 0; i < len(code); {
-		if rawStringClosing != "" {
-			var closed bool
-			i, lineStart, closed = consumeCppDelimited(code, i, rawStringClosing, lineStart)
-			if closed {
-				rawStringClosing = ""
-			}
+		if nextPosition, nextLineStart, handled := consumeCppLiteralState(code, i, lineStart, &state); handled {
+			i = nextPosition
+			lineStart = nextLineStart
 			continue
 		}
 
-		if inBlockComment {
-			var closed bool
-			i, lineStart, closed = consumeCppDelimited(code, i, "*/", lineStart)
-			if closed {
-				inBlockComment = false
-			}
-			continue
+		nextPosition, nextLineStart, testInclude := consumeCppCode(code, i, lineStart, &state)
+		if testInclude {
+			return true
 		}
-
-		if stringDelimiter != 0 {
-			var closed bool
-			i, lineStart, closed = consumeCppStringLiteral(code, i, stringDelimiter, lineStart)
-			if closed {
-				stringDelimiter = 0
-			}
-			continue
-		}
-
-		if code[i] == '\n' {
-			lineStart = true
-			i++
-			continue
-		}
-		if lineStart && (code[i] == ' ' || code[i] == '\t' || code[i] == '\r') {
-			i++
-			continue
-		}
-		if strings.HasPrefix(code[i:], "//") {
-			for i < len(code) && code[i] != '\n' {
-				i++
-			}
-			continue
-		}
-		if strings.HasPrefix(code[i:], "/*") {
-			inBlockComment = true
-			i += 2
-			continue
-		}
-		if closing, ok := cppRawStringClosing(code, i); ok {
-			rawStringClosing = closing
-			lineStart = false
-			i += 2
-			continue
-		}
-
-		switch code[i] {
-		case '"', '\'':
-			stringDelimiter = code[i]
-			lineStart = false
-			i++
-			continue
-		case '#':
-			if lineStart && cppIncludesTestHeader(code[i+1:]) {
-				return true
-			}
-		}
-
-		lineStart = false
-		i++
+		i = nextPosition
+		lineStart = nextLineStart
 	}
 	return false
 }
 
-func consumeCppDelimited(code string, position int, closing string, lineStart bool) (int, bool, bool) {
+type cppLexicalState struct {
+	inBlockComment   bool
+	stringDelimiter  byte
+	rawStringClosing string
+}
+
+func consumeCppLiteralState(
+	code string,
+	position int,
+	lineStart bool,
+	state *cppLexicalState,
+) (nextPosition int, nextLineStart, handled bool) {
+	switch {
+	case state.rawStringClosing != "":
+		nextPosition, nextLineStart, closed := consumeCppDelimited(code, position, state.rawStringClosing, lineStart)
+		if closed {
+			state.rawStringClosing = ""
+		}
+		return nextPosition, nextLineStart, true
+	case state.inBlockComment:
+		nextPosition, nextLineStart, closed := consumeCppDelimited(code, position, "*/", lineStart)
+		if closed {
+			state.inBlockComment = false
+		}
+		return nextPosition, nextLineStart, true
+	case state.stringDelimiter != 0:
+		nextPosition, nextLineStart, closed := consumeCppStringLiteral(code, position, state.stringDelimiter, lineStart)
+		if closed {
+			state.stringDelimiter = 0
+		}
+		return nextPosition, nextLineStart, true
+	default:
+		return position, lineStart, false
+	}
+}
+
+func consumeCppCode(code string, position int, lineStart bool, state *cppLexicalState) (nextPosition int, nextLineStart, testInclude bool) {
+	if code[position] == '\n' {
+		return position + 1, true, false
+	}
+	if lineStart && (code[position] == ' ' || code[position] == '\t' || code[position] == '\r') {
+		return position + 1, lineStart, false
+	}
+	switch {
+	case strings.HasPrefix(code[position:], "//"):
+		for position < len(code) && code[position] != '\n' {
+			position++
+		}
+		return position, lineStart, false
+	case strings.HasPrefix(code[position:], "/*"):
+		state.inBlockComment = true
+		return position + 2, lineStart, false
+	case cppStartsRawString(code, position, state):
+		return position + 2, false, false
+	}
+
+	switch code[position] {
+	case '"', '\'':
+		state.stringDelimiter = code[position]
+		return position + 1, false, false
+	case '#':
+		if lineStart && cppIncludesTestHeader(code[position+1:]) {
+			return position, lineStart, true
+		}
+	}
+	return position + 1, false, false
+}
+
+func cppStartsRawString(code string, position int, state *cppLexicalState) bool {
+	closing, ok := cppRawStringClosing(code, position)
+	if !ok {
+		return false
+	}
+	state.rawStringClosing = closing
+	return true
+}
+
+func consumeCppDelimited(code string, position int, closing string, lineStart bool) (nextPosition int, nextLineStart, closed bool) {
 	if strings.HasPrefix(code[position:], closing) {
 		return position + len(closing), false, true
 	}
@@ -645,7 +664,7 @@ func consumeCppDelimited(code string, position int, closing string, lineStart bo
 	return position + 1, lineStart, false
 }
 
-func consumeCppStringLiteral(code string, position int, delimiter byte, lineStart bool) (int, bool, bool) {
+func consumeCppStringLiteral(code string, position int, delimiter byte, lineStart bool) (nextPosition int, nextLineStart, closed bool) {
 	switch code[position] {
 	case '\\':
 		if position+1 < len(code) {
