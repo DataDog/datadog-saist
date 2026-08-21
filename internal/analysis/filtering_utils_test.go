@@ -247,3 +247,30 @@ func TestDartFileClassification(t *testing.T) {
 	assert.True(t, ShouldIgnorePath("example/.dart_tool/build/generated.dart"))
 	assert.False(t, ShouldIgnorePath("example/build/generated.go"))
 }
+
+func TestIsGeneratedFileCpp(t *testing.T) {
+	path := writeTempFile(t, ".pb.cc", "namespace generated {}")
+	generated, err := IsGeneratedFile(path, model.Cpp)
+	assert.NoError(t, err)
+	assert.True(t, generated)
+}
+
+func TestIsTestFileCpp(t *testing.T) {
+	assert.True(t, IsTestFileFromContent(nil, "tests/server_test.cpp", model.Cpp))
+	assert.True(t, IsTestFileFromContent(nil, "tests/server_unittest.c++", model.Cpp))
+	assert.True(t, IsTestFileFromContent([]byte("#include <gtest/gtest.h>"), "src/server.cpp", model.Cpp))
+	assert.True(t, IsTestFileFromContent([]byte("# include \"gmock/gmock.h\""), "src/server.cpp", model.Cpp))
+	assert.True(t, IsTestFileFromContent([]byte("#include <boost/test/unit_test.hpp>"), "src/server.cpp", model.Cpp))
+	assert.False(t, IsTestFileFromContent([]byte("const char* header = \"gtest/gtest.h\";"), "src/server.cpp", model.Cpp))
+	assert.False(t, IsTestFileFromContent([]byte("/*\n#include <gtest/gtest.h>\n*/"), "src/server.cpp", model.Cpp))
+	assert.False(t, IsTestFileFromContent([]byte("const char* fixture = R\"(\n#include <gtest/gtest.h>\n)\";"), "src/server.cpp", model.Cpp))
+	assert.False(t, IsTestFileFromContent([]byte("#include <vector>"), "src/server.cpp", model.Cpp))
+}
+
+func TestShouldIgnoreCppBuildOutput(t *testing.T) {
+	assert.True(t, ShouldIgnorePath("project/build/generated.cpp"))
+	assert.True(t, ShouldIgnorePath("project/cmake-build-debug/generated.hpp"))
+	assert.True(t, ShouldIgnorePath("project/_deps/library/source.cc"))
+	assert.False(t, ShouldIgnorePath("project/build/generated.go"))
+	assert.False(t, ShouldIgnorePath("project/src/build_helpers/source.cpp"))
+}

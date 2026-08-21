@@ -10,6 +10,8 @@ import (
 
 	treesitter "github.com/tree-sitter/go-tree-sitter"
 
+	treesittercpp "github.com/tree-sitter/tree-sitter-cpp/bindings/go"
+
 	treesittergo "github.com/tree-sitter/tree-sitter-go/bindings/go"
 
 	treesitterjava "github.com/tree-sitter/tree-sitter-java/bindings/go"
@@ -101,6 +103,10 @@ var contextRetrievers = map[model.Language]ContextRetriever{
 	model.Dart: {
 		Language:        treesitter.NewLanguage(treesitterdart.Language()),
 		FunctionGetTags: DartGetTags,
+	},
+	model.Cpp: {
+		Language:        treesitter.NewLanguage(treesittercpp.Language()),
+		FunctionGetTags: CppGetTags,
 	},
 }
 

@@ -45,10 +45,22 @@ func TestGetLanguageDartFiles(t *testing.T) {
 	assert.Equal(t, Dart, GetLanguage("lib/App.DART"))
 }
 
+func TestGetLanguageCppFiles(t *testing.T) {
+	assert.Equal(t, Cpp, GetLanguage("src/main.cpp"))
+	assert.Equal(t, Cpp, GetLanguage("src/main.CPP"))
+	assert.Equal(t, Cpp, GetLanguage("src/main.cc"))
+	assert.Equal(t, Cpp, GetLanguage("src/main.cxx"))
+	assert.Equal(t, Cpp, GetLanguage("src/main.c++"))
+	assert.Equal(t, Cpp, GetLanguage("include/server.hpp"))
+	assert.Equal(t, Cpp, GetLanguage("include/server.hh"))
+	assert.Equal(t, Cpp, GetLanguage("include/server.hxx"))
+	assert.Equal(t, Cpp, GetLanguage("include/server.h++"))
+}
+
 func TestGetLanguageUnknownFiles(t *testing.T) {
 	assert.Equal(t, LanguageUnknown, GetLanguage("README"))
 	assert.Equal(t, LanguageUnknown, GetLanguage("document.txt"))
-	assert.Equal(t, LanguageUnknown, GetLanguage("program.cpp"))
+	assert.Equal(t, LanguageUnknown, GetLanguage("program.cp"))
 	assert.Equal(t, LanguageUnknown, GetLanguage(""))
 	assert.Equal(t, LanguageUnknown, GetLanguage(".gitignore"))
 }
@@ -80,6 +92,10 @@ func TestLanguageStringSwift(t *testing.T) {
 
 func TestLanguageStringDart(t *testing.T) {
 	assert.Equal(t, "Dart", Dart.String())
+}
+
+func TestLanguageStringCpp(t *testing.T) {
+	assert.Equal(t, "Cpp", Cpp.String())
 }
 
 func TestLanguageStringUnknown(t *testing.T) {

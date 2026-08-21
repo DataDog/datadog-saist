@@ -63,3 +63,18 @@ func TestMatchFilesToRules_ElixirKeywordFilters(t *testing.T) {
 	matched := MatchFilesToRules(files, rules)
 	assert.Contains(t, matched["handler.ex"], "datadog/elixir-sqli")
 }
+
+func TestMatchFilesToRules_CppKeywordFilters(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "handler.cpp")
+	require.NoError(t, os.WriteFile(p, []byte("std::system(command.c_str());"), 0o600))
+
+	rules := []api.AiPrompt{{
+		ID:                 "datadog/cpp-cmdi",
+		Globs:              []string{"**/*.cpp"},
+		FileSearchKeywords: []string{"system"},
+	}}
+	files := []SourceFile{{RelPath: "handler.cpp", AbsPath: p, Lang: model.Cpp}}
+	matched := MatchFilesToRules(files, rules)
+	assert.Equal(t, []string{"datadog/cpp-cmdi"}, matched["handler.cpp"])
+}

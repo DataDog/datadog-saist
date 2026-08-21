@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	treesitterkotlin "github.com/tree-sitter-grammars/tree-sitter-kotlin/bindings/go"
 	treesitter "github.com/tree-sitter/go-tree-sitter"
+	treesittercpp "github.com/tree-sitter/tree-sitter-cpp/bindings/go"
 	treesitterelixir "github.com/tree-sitter/tree-sitter-elixir/bindings/go"
 	treesitterjavascript "github.com/tree-sitter/tree-sitter-javascript/bindings/go"
 	treesitterphp "github.com/tree-sitter/tree-sitter-php/bindings/go"
@@ -1048,7 +1049,6 @@ dynamic main() {
 	assert.Contains(t, names, "Greeter")
 	assert.Contains(t, names, "greet")
 	assert.Contains(t, names, "main")
-	assert.Contains(t, names, "greet")
 	assert.Contains(t, names, "helper")
 	assert.Contains(t, names, "loadValue")
 	assert.Contains(t, names, "loadOptional")
@@ -1057,6 +1057,65 @@ dynamic main() {
 	assert.True(t, slices.ContainsFunc(tags, func(tag model.Tag) bool {
 		return tag.Name == "named" && tag.Type == model.TagDefinition
 	}))
+}
+
+func TestGetContextFromFileCpp(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	err := os.WriteFile(filepath.Join(tmpDir, "server.cpp"), []byte(`class Server {
+public:
+    void handleRequest(const Request& request) {
+        processInput(request.body());
+    }
+};
+
+void processInput(std::string input) {}
+`), 0o644)
+	assert.NoError(t, err)
+
+	llmContext, err := GetContextFromFile(tmpDir, "server.cpp")
+	assert.NoError(t, err)
+	assert.Equal(t, model.Cpp, llmContext.Language)
+
+	names := make([]string, len(llmContext.Tags))
+	for i, tag := range llmContext.Tags {
+		names[i] = tag.Name
+	}
+	assert.Contains(t, names, "Server")
+	assert.Contains(t, names, "handleRequest")
+	assert.Contains(t, names, "processInput")
+}
+
+func TestCppGetTagsDefinitions(t *testing.T) {
+	t.Parallel()
+	code := `namespace app {
+class Greeter {
+public:
+    void sayHi() { greet(); }
+};
+
+void greet() {}
+}`
+	parser := treesitter.NewParser()
+	defer parser.Close()
+	assert.NoError(t, parser.SetLanguage(treesitter.NewLanguage(treesittercpp.Language())))
+	tree := parser.Parse([]byte(code), nil)
+	defer tree.Close()
+
+	tags, err := CppGetTags(GetFunctionData{
+		root:     tree.RootNode(),
+		path:     "app.cpp",
+		code:     []byte(code),
+		language: model.Cpp,
+	})
+	assert.NoError(t, err)
+	names := make([]string, len(tags))
+	for i, tag := range tags {
+		names[i] = tag.Name
+	}
+	assert.Contains(t, names, "Greeter")
+	assert.Contains(t, names, "sayHi")
+	assert.Contains(t, names, "greet")
 }
 
 // Common stuff

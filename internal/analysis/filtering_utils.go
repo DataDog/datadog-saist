@@ -128,6 +128,27 @@ var dartTestPathPatterns = []string{
 	"**/*_test.dart",
 }
 
+var cppTestPathPatterns = []string{
+	"**/*Test.cc",
+	"**/*Test.cpp",
+	"**/*Test.cxx",
+	"**/*Test.c++",
+	"**/*Tests.cc",
+	"**/*Tests.cpp",
+	"**/*Tests.cxx",
+	"**/*Tests.c++",
+	"**/*_unittest.cc",
+	"**/*_unittest.cpp",
+	"**/*_unittest.cxx",
+	"**/*_unittest.c++",
+}
+
+var cppBuildOutputGlobs = []string{
+	"**/build/**/*",
+	"**/cmake-build-*/**/*",
+	"**/_deps/**/*",
+}
+
 var DefaultIgnoredGlobs = []string{
 	"**/node_modules/**/*",
 	"**/jspm_packages/**/*",
@@ -156,6 +177,10 @@ func isGeneratedFileSuffix(path string) bool {
 	return strings.HasSuffix(path, ".pb.go") ||
 		strings.HasSuffix(path, "_pb2.py") ||
 		strings.HasSuffix(path, ".pb.ex") ||
+		strings.HasSuffix(path, ".pb.cc") ||
+		strings.HasSuffix(path, ".pb.cpp") ||
+		strings.HasSuffix(path, ".pb.h") ||
+		strings.HasSuffix(path, ".pb.hpp") ||
 		strings.HasSuffix(path, ".generated.go") ||
 		isDartGeneratedFileSuffix(path)
 }
@@ -178,6 +203,9 @@ func ShouldIgnorePath(path string) bool {
 		"**/.pub-cache/**/*",
 		"**/build/**/*",
 	}) {
+		return true
+	}
+	if model.GetLanguage(p) == model.Cpp && matchesAnyGlob(p, cppBuildOutputGlobs) {
 		return true
 	}
 
@@ -273,6 +301,11 @@ func IsGeneratedFileFromContent(fullContent []byte, path string, language model.
 		return strings.Contains(content, DartGeneratedMarker) ||
 			strings.Contains(content, DartGeneratedPackage) ||
 			isDartGeneratedFileSuffix(path)
+	case model.Cpp:
+		return strings.Contains(content, GeneratedByMarker) ||
+			strings.Contains(content, ProtoBufHeader) ||
+			strings.Contains(content, ThriftHeader) ||
+			isGeneratedFileSuffix(path)
 
 	default:
 		return isGeneratedFileSuffix(path)
@@ -400,6 +433,10 @@ func IsGeneratedFileByContent(content []byte, path string, language model.Langua
 	case model.Dart:
 		return strings.Contains(header, DartGeneratedMarker) ||
 			strings.Contains(header, DartGeneratedPackage)
+	case model.Cpp:
+		return strings.Contains(header, GeneratedByMarker) ||
+			strings.Contains(header, ProtoBufHeader) ||
+			strings.Contains(header, ThriftHeader)
 
 	default:
 		return false
@@ -481,6 +518,8 @@ func hasTestLikePath(path string, language model.Language) bool {
 
 	case model.Dart:
 		return matchesAnyGlob(path, dartTestPathPatterns)
+	case model.Cpp:
+		return matchesAnyGlob(path, slices.Concat(defaultTestPaths, defaultTestFilenames, cppTestPathPatterns))
 
 	default:
 		// For other languages we don't classify here
@@ -510,9 +549,191 @@ func hasTestLikeImport(language model.Language, code, path string) bool {
 		return swiftHasTestLikeImport(code)
 	case model.Dart:
 		return dartHasTestLikeImport(code)
+	case model.Cpp:
+		return cppHasTestLikeImport(code)
 	default:
 		return false
 	}
+}
+
+func cppHasTestLikeImport(code string) bool {
+	lineStart := true
+	state := cppLexicalState{}
+
+	for i := 0; i < len(code); {
+		if nextPosition, nextLineStart, handled := consumeCppLiteralState(code, i, lineStart, &state); handled {
+			i = nextPosition
+			lineStart = nextLineStart
+			continue
+		}
+
+		nextPosition, nextLineStart, testInclude := consumeCppCode(code, i, lineStart, &state)
+		if testInclude {
+			return true
+		}
+		i = nextPosition
+		lineStart = nextLineStart
+	}
+	return false
+}
+
+type cppLexicalState struct {
+	inBlockComment   bool
+	stringDelimiter  byte
+	rawStringClosing string
+}
+
+func consumeCppLiteralState(
+	code string,
+	position int,
+	lineStart bool,
+	state *cppLexicalState,
+) (nextPosition int, nextLineStart, handled bool) {
+	switch {
+	case state.rawStringClosing != "":
+		nextPosition, nextLineStart, closed := consumeCppDelimited(code, position, state.rawStringClosing, lineStart)
+		if closed {
+			state.rawStringClosing = ""
+		}
+		return nextPosition, nextLineStart, true
+	case state.inBlockComment:
+		nextPosition, nextLineStart, closed := consumeCppDelimited(code, position, "*/", lineStart)
+		if closed {
+			state.inBlockComment = false
+		}
+		return nextPosition, nextLineStart, true
+	case state.stringDelimiter != 0:
+		nextPosition, nextLineStart, closed := consumeCppStringLiteral(code, position, state.stringDelimiter, lineStart)
+		if closed {
+			state.stringDelimiter = 0
+		}
+		return nextPosition, nextLineStart, true
+	default:
+		return position, lineStart, false
+	}
+}
+
+func consumeCppCode(code string, position int, lineStart bool, state *cppLexicalState) (nextPosition int, nextLineStart, testInclude bool) {
+	if code[position] == '\n' {
+		return position + 1, true, false
+	}
+	if lineStart && (code[position] == ' ' || code[position] == '\t' || code[position] == '\r') {
+		return position + 1, lineStart, false
+	}
+	switch {
+	case strings.HasPrefix(code[position:], "//"):
+		for position < len(code) && code[position] != '\n' {
+			position++
+		}
+		return position, lineStart, false
+	case strings.HasPrefix(code[position:], "/*"):
+		state.inBlockComment = true
+		return position + 2, lineStart, false
+	case cppStartsRawString(code, position, state):
+		return position + 2, false, false
+	}
+
+	switch code[position] {
+	case '"', '\'':
+		state.stringDelimiter = code[position]
+		return position + 1, false, false
+	case '#':
+		if lineStart && cppIncludesTestHeader(code[position+1:]) {
+			return position, lineStart, true
+		}
+	}
+	return position + 1, false, false
+}
+
+func cppStartsRawString(code string, position int, state *cppLexicalState) bool {
+	closing, ok := cppRawStringClosing(code, position)
+	if !ok {
+		return false
+	}
+	state.rawStringClosing = closing
+	return true
+}
+
+func consumeCppDelimited(code string, position int, closing string, lineStart bool) (nextPosition int, nextLineStart, closed bool) {
+	if strings.HasPrefix(code[position:], closing) {
+		return position + len(closing), false, true
+	}
+	if code[position] == '\n' {
+		lineStart = true
+	}
+	return position + 1, lineStart, false
+}
+
+func consumeCppStringLiteral(code string, position int, delimiter byte, lineStart bool) (nextPosition int, nextLineStart, closed bool) {
+	switch code[position] {
+	case '\\':
+		if position+1 < len(code) {
+			if code[position+1] == '\n' {
+				lineStart = true
+			}
+			return position + 2, lineStart, false
+		}
+	case delimiter:
+		return position + 1, false, true
+	case '\n':
+		lineStart = true
+	}
+	return position + 1, lineStart, false
+}
+
+func cppRawStringClosing(code string, start int) (string, bool) {
+	if !strings.HasPrefix(code[start:], `R"`) {
+		return "", false
+	}
+
+	delimiterStart := start + 2
+	open := delimiterStart
+	for open < len(code) && code[open] != '(' {
+		if open-delimiterStart == 16 || strings.ContainsRune(" ()\\\t\r\n", rune(code[open])) {
+			return "", false
+		}
+		open++
+	}
+	if open == len(code) {
+		return "", false
+	}
+	return ")" + code[delimiterStart:open] + `"`, true
+}
+
+func cppIncludesTestHeader(directive string) bool {
+	directive = strings.TrimLeft(directive, " \t")
+	if !strings.HasPrefix(directive, "include") {
+		return false
+	}
+
+	rest := strings.TrimSpace(directive[len("include"):])
+	if rest == "" {
+		return false
+	}
+
+	var header string
+	switch rest[0] {
+	case '<':
+		end := strings.IndexByte(rest, '>')
+		if end == -1 {
+			return false
+		}
+		header = rest[1:end]
+	case '"':
+		end := strings.IndexByte(rest[1:], '"')
+		if end == -1 {
+			return false
+		}
+		header = rest[1 : end+1]
+	default:
+		return false
+	}
+
+	return header == "gtest/gtest.h" ||
+		header == "gmock/gmock.h" ||
+		header == "doctest/doctest.h" ||
+		strings.HasPrefix(header, "catch2/") ||
+		strings.HasPrefix(header, "boost/test/")
 }
 
 // ----- Go import detection -----

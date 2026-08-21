@@ -21,6 +21,18 @@ func TestShouldAnalyze_CaseInsensitive(t *testing.T) {
 	assert.True(t, result, "Expected ShouldAnalyze to match xpath keyword")
 }
 
+func TestStripCodeForDetectionCppComments(t *testing.T) {
+	code := `// system(comment)
+auto literal = R"tag(system(raw text) // still a string)tag";
+std::system(command.c_str()); /* hidden_system */`
+
+	stripped := StripCodeForDetection(code, model.Cpp)
+	assert.NotContains(t, stripped, "system(comment)")
+	assert.Contains(t, stripped, "system(raw text) // still a string")
+	assert.Contains(t, stripped, "std::system(command.c_str())")
+	assert.NotContains(t, stripped, "hidden_system")
+}
+
 func TestShouldAnalyze_JavaCommandInjection(t *testing.T) {
 	ctx := model.DetectionContext{
 		Language: model.Java,

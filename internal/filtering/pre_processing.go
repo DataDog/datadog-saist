@@ -64,6 +64,8 @@ func codeUsedForDetection(inputCode string, language model.Language) string {
 		return stripSwiftComments(inputCode)
 	case model.Dart:
 		return stripDartComments(inputCode)
+	case model.Cpp:
+		return stripCppComments(inputCode)
 	default:
 		return inputCode
 	}
@@ -95,6 +97,7 @@ type cStyleCommentOptions struct {
 	stringDelimiters           []cStyleStringDelimiter
 	nestedBlockComments        bool
 	failOpenUnterminatedString bool
+	cppRawStrings              bool
 }
 
 // stripCStyleComments removes comments while preserving comment delimiters in
@@ -105,6 +108,12 @@ func stripCStyleComments(code string, options cStyleCommentOptions) string {
 	result.Grow(len(code))
 
 	for i := 0; i < len(code); {
+		if options.cppRawStrings {
+			if end, ok := copyCppRawString(&result, code, i); ok {
+				i = end
+				continue
+			}
+		}
 		if delimiter, ok := matchingStringDelimiter(code[i:], options.stringDelimiters); ok {
 			var terminated bool
 			i, terminated = copyStringLiteral(&result, code, i, delimiter)
@@ -140,6 +149,41 @@ func stripCStyleComments(code string, options cStyleCommentOptions) string {
 	}
 
 	return result.String()
+}
+
+func stripCppComments(code string) string {
+	return stripCStyleComments(code, cStyleCommentOptions{
+		stringDelimiters: []cStyleStringDelimiter{{value: `"`, escapes: true}, {value: `'`, escapes: true}},
+		cppRawStrings:    true,
+	})
+}
+
+func copyCppRawString(result *strings.Builder, code string, start int) (int, bool) {
+	if !strings.HasPrefix(code[start:], `R"`) {
+		return start, false
+	}
+
+	delimiterStart := start + 2
+	open := delimiterStart
+	for open < len(code) && code[open] != '(' {
+		if open-delimiterStart == 16 || strings.ContainsRune(" ()\\\t\r\n", rune(code[open])) {
+			return start, false
+		}
+		open++
+	}
+	if open == len(code) {
+		return start, false
+	}
+
+	closing := ")" + code[delimiterStart:open] + `"`
+	endOffset := strings.Index(code[open+1:], closing)
+	if endOffset == -1 {
+		result.WriteString(code[start:])
+		return len(code), true
+	}
+	end := open + 1 + endOffset + len(closing)
+	result.WriteString(code[start:end])
+	return end, true
 }
 
 func copyStringLiteral(result *strings.Builder, code string, start int, delimiter cStyleStringDelimiter) (int, bool) {

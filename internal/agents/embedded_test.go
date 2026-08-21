@@ -17,3 +17,11 @@ func TestLoadLocalRules(t *testing.T) {
 	}
 	assert.True(t, ids["datadog/go-sqli"], "expected datadog-go-sqli.md to produce ID datadog/go-sqli")
 }
+
+func TestGlobsForCppRule(t *testing.T) {
+	globs := globsForFilename("datadog-cpp-cmdi")
+	assert.Contains(t, globs, "**/*.cpp")
+	assert.Contains(t, globs, "**/*.hpp")
+	assert.NotContains(t, globs, "**/*.c")
+	assert.NotContains(t, globs, "**/*.cp")
+}

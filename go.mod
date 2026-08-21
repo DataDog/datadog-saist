@@ -14,6 +14,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/tree-sitter-grammars/tree-sitter-kotlin v1.1.0
 	github.com/tree-sitter/go-tree-sitter v0.25.0
+	github.com/tree-sitter/tree-sitter-cpp v0.23.4
 	github.com/tree-sitter/tree-sitter-elixir v0.3.5
 	github.com/tree-sitter/tree-sitter-go v0.23.4
 	github.com/tree-sitter/tree-sitter-java v0.23.5
