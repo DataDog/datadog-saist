@@ -564,46 +564,29 @@ func cppHasTestLikeImport(code string) bool {
 
 	for i := 0; i < len(code); {
 		if rawStringClosing != "" {
-			if strings.HasPrefix(code[i:], rawStringClosing) {
-				i += len(rawStringClosing)
+			var closed bool
+			i, lineStart, closed = consumeCppDelimited(code, i, rawStringClosing, lineStart)
+			if closed {
 				rawStringClosing = ""
-				lineStart = false
-				continue
 			}
-			if code[i] == '\n' {
-				lineStart = true
-			}
-			i++
 			continue
 		}
 
 		if inBlockComment {
-			if strings.HasPrefix(code[i:], "*/") {
-				i += 2
+			var closed bool
+			i, lineStart, closed = consumeCppDelimited(code, i, "*/", lineStart)
+			if closed {
 				inBlockComment = false
-				continue
 			}
-			if code[i] == '\n' {
-				lineStart = true
-			}
-			i++
 			continue
 		}
 
 		if stringDelimiter != 0 {
-			if code[i] == '\\' && i+1 < len(code) {
-				if code[i+1] == '\n' {
-					lineStart = true
-				}
-				i += 2
-				continue
-			}
-			if code[i] == stringDelimiter {
+			var closed bool
+			i, lineStart, closed = consumeCppStringLiteral(code, i, stringDelimiter, lineStart)
+			if closed {
 				stringDelimiter = 0
-			} else if code[i] == '\n' {
-				lineStart = true
 			}
-			i++
 			continue
 		}
 
@@ -633,20 +616,50 @@ func cppHasTestLikeImport(code string) bool {
 			i += 2
 			continue
 		}
-		if code[i] == '"' || code[i] == '\'' {
+
+		switch code[i] {
+		case '"', '\'':
 			stringDelimiter = code[i]
 			lineStart = false
 			i++
 			continue
-		}
-		if lineStart && code[i] == '#' && cppIncludesTestHeader(code[i+1:]) {
-			return true
+		case '#':
+			if lineStart && cppIncludesTestHeader(code[i+1:]) {
+				return true
+			}
 		}
 
 		lineStart = false
 		i++
 	}
 	return false
+}
+
+func consumeCppDelimited(code string, position int, closing string, lineStart bool) (int, bool, bool) {
+	if strings.HasPrefix(code[position:], closing) {
+		return position + len(closing), false, true
+	}
+	if code[position] == '\n' {
+		lineStart = true
+	}
+	return position + 1, lineStart, false
+}
+
+func consumeCppStringLiteral(code string, position int, delimiter byte, lineStart bool) (int, bool, bool) {
+	switch code[position] {
+	case '\\':
+		if position+1 < len(code) {
+			if code[position+1] == '\n' {
+				lineStart = true
+			}
+			return position + 2, lineStart, false
+		}
+	case delimiter:
+		return position + 1, false, true
+	case '\n':
+		lineStart = true
+	}
+	return position + 1, lineStart, false
 }
 
 func cppRawStringClosing(code string, start int) (string, bool) {
