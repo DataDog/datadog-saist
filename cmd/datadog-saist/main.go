@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -90,14 +91,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	if isAIGateway && orgID <= 0 {
-		fmt.Fprintf(os.Stderr, "Error: --org-id must be greater than zero when --ai-gateway is enabled\n")
-		flag.Usage()
-		os.Exit(1)
-	}
-
-	if isAIGateway && strings.TrimSpace(repositoryID) == "" {
-		fmt.Fprintf(os.Stderr, "Error: --repository-id flag is required when --ai-gateway is enabled\n")
+	if err := validateAIGatewayFlags(isAIGateway, orgID, repositoryID); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		flag.Usage()
 		os.Exit(1)
 	}
@@ -142,4 +137,17 @@ func main() {
 
 	analysisDuration := time.Since(startTimestamp)
 	fmt.Fprintf(os.Stderr, "\nAnalysis completed in %.2f seconds\n", analysisDuration.Seconds())
+}
+
+func validateAIGatewayFlags(isAIGateway bool, orgID int64, repositoryID string) error {
+	if !isAIGateway {
+		return nil
+	}
+	if orgID <= 0 {
+		return errors.New("--org-id must be greater than zero when --ai-gateway is enabled")
+	}
+	if strings.TrimSpace(repositoryID) == "" {
+		return errors.New("--repository-id flag is required when --ai-gateway is enabled")
+	}
+	return nil
 }
