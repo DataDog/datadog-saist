@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -31,6 +32,8 @@ func main() {
 	var isAIGateway bool
 	var aiGuardEnabled bool
 	var jwtToken string
+	var orgID int64
+	var repositoryID string
 	var useLocalPrompts bool
 	var skipIndexing bool
 
@@ -56,6 +59,8 @@ func main() {
 	flag.BoolVar(&isAIGateway, "ai-gateway", false, "Use AI Gateway format for models (provider/model)")
 	flag.BoolVar(&aiGuardEnabled, "ai-guard", false, "Enable AI Guard headers for AI Gateway requests")
 	flag.StringVar(&jwtToken, "jwt-token", "", "JWT Token to use when fetching prompts")
+	flag.Int64Var(&orgID, "org-id", 0, "Datadog organization ID (required with --ai-gateway)")
+	flag.StringVar(&repositoryID, "repository-id", "", "Datadog repository ID (required with --ai-gateway)")
 	flag.BoolVar(&useLocalPrompts, "local-prompts", false,
 		"Use local markdown files for rule content instead of API content")
 	flag.BoolVar(&skipIndexing, "skip-indexing", false,
@@ -86,6 +91,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := validateAIGatewayFlags(isAIGateway, orgID, repositoryID); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		flag.Usage()
+		os.Exit(1)
+	}
+
 	detectionModel, err := model.GetModelOrPassthrough(detectionModelStr, isAIGateway)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\nAvailable models: %s\n", err, availableModels)
@@ -111,7 +122,7 @@ func main() {
 
 	result, err := analysis.RunAnalysis(context.Background(), directory, detectionModelStr, validationModelStr,
 		output, debug, openaiBaseURL, requestTimeoutSec, fileConcurrency, writePrompts, isAIGateway,
-		aiGuardEnabled, apiKey, jwtToken, 2, "test-repo", useLocalPrompts, skipIndexing)
+		aiGuardEnabled, apiKey, jwtToken, orgID, repositoryID, useLocalPrompts, skipIndexing)
 
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "error calling RunAnalysis: %s", err)
@@ -126,4 +137,17 @@ func main() {
 
 	analysisDuration := time.Since(startTimestamp)
 	fmt.Fprintf(os.Stderr, "\nAnalysis completed in %.2f seconds\n", analysisDuration.Seconds())
+}
+
+func validateAIGatewayFlags(isAIGateway bool, orgID int64, repositoryID string) error {
+	if !isAIGateway {
+		return nil
+	}
+	if orgID <= 0 {
+		return errors.New("--org-id must be greater than zero when --ai-gateway is enabled")
+	}
+	if strings.TrimSpace(repositoryID) == "" {
+		return errors.New("--repository-id flag is required when --ai-gateway is enabled")
+	}
+	return nil
 }
