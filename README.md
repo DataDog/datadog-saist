@@ -61,6 +61,13 @@
   --detection-model gemini-2.5-flash --validation-model gemini-2.5-flash
 ```
 
+  Example with AI Gateway:
+```bash
+  ./bin/datadog-saist --directory <path> --output <output-file> --ai-gateway \
+  --org-id <organization-id> --repository-id <repository-id> \
+  --detection-model openai-gpt5-mini --validation-model openai-gpt5-mini
+```
+
   Required Arguments
   - --directory: Directory to analyze
   - --output: Output file path for SARIF report
@@ -93,6 +100,9 @@
 ```
   Optional Arguments
 
+  - --ai-gateway: Use AI Gateway format for models
+  - --org-id: Datadog organization ID (required with --ai-gateway)
+  - --repository-id: Datadog repository ID (required with --ai-gateway)
   - --debug: Enable debug mode for verbose output
   - --request-timeout-sec: Request timeout in seconds for LLM API calls (default: 30)
   - --file-concurrency: Number of concurrent files to analyze (default: 20)
