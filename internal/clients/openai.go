@@ -154,9 +154,25 @@ func (c *OpenAIClient) GenerateContent(ctx context.Context, systemPrompt, userPr
 		if cacheKey := openAIPromptCacheKey(c.model, c.orgID, systemPrompt, userPrompt); cacheKey != "" {
 			params.PromptCacheKey = openai.String(cacheKey)
 		}
+		extraFields := make(map[string]any)
 		if tags, _ := ctx.Value(aiGatewayTagsKey{}).(map[string]string); len(tags) > 0 {
-			params.SetExtraFields(map[string]any{"tags": tags})
+			extraFields["tags"] = tags
 		}
+		if supportsExplicitPromptCaching(c.model) {
+			stable, dynamic := splitPromptCacheablePrefix(userPrompt)
+			if stable != "" {
+				prefix := openai.TextContentPart(stable)
+				prefix.OfText.SetExtraFields(map[string]any{
+					"prompt_cache_breakpoint": map[string]any{"mode": openAICacheModeExplicit},
+				})
+				params.Messages[1] = openai.UserMessage([]openai.ChatCompletionContentPartUnionParam{
+					prefix,
+					openai.TextContentPart(dynamic),
+				})
+				extraFields["prompt_cache_options"] = map[string]any{"mode": openAICacheModeExplicit}
+			}
+		}
+		params.SetExtraFields(extraFields)
 	}
 
 	// Some newer OpenAI models require MaxCompletionTokens instead of MaxTokens

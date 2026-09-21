@@ -3,6 +3,7 @@ package clients
 import "github.com/DataDog/datadog-saist/internal/prompt"
 
 const (
+	openAICacheModeExplicit            = "explicit"
 	ApplicationJsonHeader              = "application/json"
 	anthropicContentTypeText           = "text"
 	anthropicCacheControlTypeEphemeral = "ephemeral"
