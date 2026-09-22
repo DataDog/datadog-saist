@@ -11,7 +11,9 @@ const EngineVersion = "1.0.1"
 const Unknown = "unknown"
 
 const (
-	OpenAIGPT56LunaName     = "openai-gpt5.6-luna"
+	// OpenAIGPT56LunaName is SAIST's provider-prefixed CLI model name.
+	OpenAIGPT56LunaName = "openai-gpt-5.6-luna"
+	// OpenAIGPT56LunaAPIModel is the model ID sent to the OpenAI API.
 	OpenAIGPT56LunaAPIModel = "gpt-5.6-luna"
 )
 

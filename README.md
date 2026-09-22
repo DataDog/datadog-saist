@@ -65,7 +65,7 @@
 ```bash
   make build
   ./bin/datadog-saist --directory <path> --output <output-file> \
-  --detection-model openai-gpt5.6-luna --validation-model openai-gpt5.6-luna \
+  --detection-model openai-gpt-5.6-luna --validation-model openai-gpt-5.6-luna \
   --openai-base-url https://api.openai.com
 ```
 

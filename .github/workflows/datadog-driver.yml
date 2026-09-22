@@ -47,7 +47,7 @@ jobs:
         DD_SITE: datad0g.com
       run: |
         echo '{"files": {"go-sqli/vulnerable1.go": ["datadog/go-sqli"]}}' > ${GITHUB_WORKSPACE}/tmp/saist-playground/.datadog-driver.json
-        DATADOG_DRIVER_ENABLED=true go run ./cmd/datadog-saist/main.go -directory ${GITHUB_WORKSPACE}/tmp/saist-playground -output /tmp/sample.sarif --validation-model gemini-3-flash --detection-model gemini-3-flash --debug
+        DATADOG_DRIVER_ENABLED=true go run ./cmd/datadog-saist/main.go -directory ${GITHUB_WORKSPACE}/tmp/saist-playground -output /tmp/sample.sarif --validation-model openai-gpt-5.6-luna --detection-model openai-gpt-5.6-luna --debug
         if [ $(jq '.runs[0].results | length' /tmp/sample.sarif) -ne 1 ] ; then echo "more than one file violation found with the datadog driver" ; exit 1 ; fi
         if [ $(jq '.runs[0].artifacts | length' /tmp/sample.sarif) -ne 1 ] ; then echo "more than one file scanned when using the datadog driver" ; exit 1 ; fi
         if [ $(jq '.runs[0].artifacts[0].properties["tags"][0]' /tmp/sample.sarif) -ne '"RULE_SUCCESS:datadog/go-sqli"' ] ; then echo "artifact does not have the right tag" ; exit 1 ; fi
