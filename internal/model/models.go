@@ -50,6 +50,7 @@ var (
 	OpenAIGPT5Mini   = Model{ID: 12, Name: OpenAIGPT5MiniName, Provider: ProviderOpenAI}
 	OpenAIGPT52      = Model{ID: 13, Name: OpenAIGPT52Name, Provider: ProviderOpenAI}
 	OpenAIGPT52Codex = Model{ID: 13, Name: OpenAIGPT52CodexName, Provider: ProviderOpenAI}
+	OpenAIGPT56Luna  = Model{ID: 14, Name: OpenAIGPT56LunaName, Provider: ProviderOpenAI}
 
 	// Anthropic models
 	Claude45Sonnet = Model{ID: 34, Name: Claude45SonnetName, CLIName: Claude45SonnetInputName, Provider: ProviderAnthropic}
@@ -87,6 +88,8 @@ func GetModel(modelStr string) (Model, error) {
 		return OpenAIGPT52, nil
 	case OpenAIGPT52CodexName:
 		return OpenAIGPT52Codex, nil
+	case OpenAIGPT56LunaName:
+		return OpenAIGPT56Luna, nil
 	case Claude45SonnetInputName:
 		return Claude45Sonnet, nil
 	case Claude45HaikuInputName:
@@ -135,7 +138,7 @@ func GetModelOrPassthrough(modelStr string, allowPassthrough bool) (Model, error
 
 func GetAllModels() []Model {
 	return []Model{
-		OpenAIGPT5Mini, OpenAIGPT52, OpenAIGPT52Codex,
+		OpenAIGPT5Mini, OpenAIGPT52, OpenAIGPT52Codex, OpenAIGPT56Luna,
 		Claude45Sonnet, Claude45Haiku,
 		Gemini25Pro, Gemini25Flash, Gemini2FlashLite, Gemini3Flash,
 	}
@@ -186,6 +189,8 @@ func (m Model) toDirectProviderFormat() string {
 		return "gpt-5.2"
 	case OpenAIGPT52Codex.ID:
 		return "gpt-5.2-codex"
+	case OpenAIGPT56Luna.ID:
+		return OpenAIGPT56LunaAPIModel
 	case Gemini25Pro.ID:
 		return Gemini25ProName
 	case Gemini25Flash.ID:
@@ -217,6 +222,8 @@ func (m Model) toAIGatewayFormat() string {
 		return ProviderOpenAI + "/gpt-5.2"
 	case OpenAIGPT52Codex.ID:
 		return ProviderOpenAI + "/gpt-5.2-codex"
+	case OpenAIGPT56Luna.ID:
+		return ProviderOpenAI + "/" + OpenAIGPT56LunaAPIModel
 	case Claude45Sonnet.ID:
 		return ProviderAnthropic + "/claude-sonnet-4-5-20250929"
 	case Claude45Haiku.ID:

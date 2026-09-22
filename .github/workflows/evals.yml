@@ -27,7 +27,7 @@ jobs:
     steps:
       - id: set-matrix
         run: |
-          echo 'modelnames=["gemini-2.5-flash","gemini-3-flash","openai-gpt5.2","openai-gpt5.2-codex","claude-4.5-sonnet","claude-4.5-haiku"]' >> $GITHUB_OUTPUT
+          echo 'modelnames=["openai-gpt-5.6-luna","openai-gpt5.2","openai-gpt5.2-codex","claude-4.5-sonnet","claude-4.5-haiku"]' >> $GITHUB_OUTPUT
           if [[ "${{ github.event_name }}" == "push" ]]; then
             echo 'reponames=["saist-playground"]' >> $GITHUB_OUTPUT
           else

@@ -61,6 +61,16 @@
   --detection-model gemini-2.5-flash --validation-model gemini-2.5-flash
 ```
 
+  Example with GPT-5.6 Luna using OpenAI directly (set `OPENAI_API_KEY` first):
+```bash
+  make build
+  ./bin/datadog-saist --directory <path> --output <output-file> \
+  --detection-model openai-gpt-5.6-luna --validation-model openai-gpt-5.6-luna \
+  --openai-base-url https://api.openai.com
+```
+
+  The OpenAI base URL must omit `/v1`; the client appends it automatically.
+
   Example with AI Gateway:
 ```bash
   ./bin/datadog-saist --directory <path> --output <output-file> --ai-gateway \
