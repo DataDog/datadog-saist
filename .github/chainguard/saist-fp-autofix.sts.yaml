@@ -1,0 +1,11 @@
+# AI SAST FP verification and regression cases from the dedicated dd-source runner.
+issuer: https://gitlab.ddbuild.io
+subject_pattern: "project_path:ddoghq/dd-source:ref_type:branch:ref:main"
+claim_pattern:
+  project_path: "ddoghq/dd-source"
+  ref_type: "branch"
+  ref: "main"
+  ref_path: "refs/heads/main"
+  pipeline_source: "parent_pipeline"
+permissions:
+  contents: read
