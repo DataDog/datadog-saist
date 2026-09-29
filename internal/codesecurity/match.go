@@ -2,11 +2,11 @@ package codesecurity
 
 import (
 	"os"
-	"strings"
 
 	"github.com/DataDog/datadog-saist/internal/filtering"
 	"github.com/DataDog/datadog-saist/internal/model"
 	"github.com/DataDog/datadog-saist/internal/model/api"
+	"github.com/DataDog/datadog-saist/internal/prefilter"
 	"github.com/DataDog/datadog-saist/internal/utils"
 )
 
@@ -18,6 +18,10 @@ type SourceFile struct {
 }
 
 func languageKeyFromModel(lang model.Language) string {
+	return LanguageKey(lang)
+}
+
+func LanguageKey(lang model.Language) string {
 	switch lang {
 	case model.Go:
 		return "go"
@@ -130,13 +134,5 @@ func MatchFilesToRules(files []SourceFile, rules []api.AiPrompt) map[string][]st
 }
 
 func ruleMatchesKeywords(rule *api.AiPrompt, strippedLowerCode string) bool {
-	if len(rule.FileSearchKeywords) == 0 {
-		return true
-	}
-	for _, kw := range rule.FileSearchKeywords {
-		if strings.Contains(strippedLowerCode, strings.ToLower(kw)) {
-			return true
-		}
-	}
-	return false
+	return prefilter.MatchesKeywords(*rule, strippedLowerCode)
 }

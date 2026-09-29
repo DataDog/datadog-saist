@@ -20,6 +20,10 @@
 
   ## Requirements
 
+  For local file/rule selection experiments without detection calls, see
+  [Prefilter experiments](docs/prefilter.md). The standalone planner supports
+  offline legacy filtering, Jev, and before/after comparisons.
+
   - **LLM API key**: You must provide an API key for one of the supported LLM providers
   (Anthropic, OpenAI, or Google Gemini). See [LLM key](#llm-key) below.
 

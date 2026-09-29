@@ -149,27 +149,40 @@ func RunAnalysis(ctx context.Context, directory string, detectionModelStr, valid
 		return AnalysisSummary{}, err
 	}
 	opts.Output = output
+	return RunConfiguredAnalysis(ctx, &opts)
+}
+
+// RunConfiguredAnalysis executes an explicit rule catalog and scan configuration.
+func RunConfiguredAnalysis(ctx context.Context, opts *model.AnalysisOptions) (AnalysisSummary, error) {
+	logger := log.NewDefaultLogger()
+	ctx = ContextWithShimmedLogger(ctx, logger)
+	if opts.ExperimentalDriverOnly && opts.DatadogDriver == nil {
+		return AnalysisSummary{}, fmt.Errorf("experimental driver-only scanning requires a driver")
+	}
 
 	if opts.Debug {
 		opts.Display()
 	}
 
-	result, err := analyzeAndGenerateReport(ctx, &opts)
+	result, err := analyzeAndGenerateReport(ctx, opts)
 	if err != nil {
 		return AnalysisSummary{}, fmt.Errorf("analysis failed: %v", err)
 	}
 
-	sarifInformation := sarif.GenerateSarifInformation(&opts, result)
+	sarifInformation := sarif.GenerateSarifInformation(opts, result)
 	sarifReport, err := sarif.GenerateSarifReport(&sarifInformation)
 	if err != nil {
 		return AnalysisSummary{}, err
 	}
 
-	err = sarif.WriteSarifContentAtomic(sarifReport, output)
+	err = sarif.WriteSarifContentAtomic(sarifReport, opts.Output)
 	if err != nil {
 		logger.Errorf("error writing sarif report: %v", err)
+		if opts.ExperimentalDriverOnly {
+			return AnalysisSummary{}, fmt.Errorf("write SARIF: %w", err)
+		}
 	} else {
-		logger.Infof("Analysis completed successfully. Report written to: %s", output)
+		logger.Infof("Analysis completed successfully. Report written to: %s", opts.Output)
 	}
 
 	return AnalysisSummary{

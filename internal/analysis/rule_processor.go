@@ -16,6 +16,7 @@ import (
 	"github.com/DataDog/datadog-saist/internal/log"
 	"github.com/DataDog/datadog-saist/internal/model"
 	"github.com/DataDog/datadog-saist/internal/model/api"
+	"github.com/DataDog/datadog-saist/internal/prefilter"
 	"github.com/DataDog/datadog-saist/internal/prompt"
 	"github.com/DataDog/datadog-saist/internal/utils"
 )
@@ -184,6 +185,28 @@ func (rp *RuleProcessor) BuildScanDataForResult(ctx context.Context, result *Pro
 	fileText := string(data)
 	strippedCode := filtering.StripCodeForDetection(fileText, fm.Language)
 
+	rules := make([]api.AiPrompt, 0, len(result.applicableRules))
+	for _, rule := range result.applicableRules {
+		rules = append(rules, *rule)
+	}
+	var selector prefilter.Selector = prefilter.Legacy{}
+	if rp.opts.ExperimentalDriverOnly {
+		if rp.opts.DatadogDriver == nil {
+			return fmt.Errorf("experimental driver-only scanning requires a driver")
+		}
+		selector = prefilter.None{}
+	}
+	selection, err := selector.Select(ctx, prefilter.File{
+		Path: fm.RelPath, Language: fm.Language, Code: fileText, StrippedCode: strippedCode,
+	}, rules)
+	if err != nil {
+		return err
+	}
+	selected := make(map[string]bool, len(selection.Decisions))
+	for _, decision := range selection.Decisions {
+		selected[decision.RuleID] = decision.Selected
+	}
+
 	// Allocate once and share across all ScanData for this file.
 	fc := &model.FileContent{
 		Text:     fileText,
@@ -203,7 +226,7 @@ func (rp *RuleProcessor) BuildScanDataForResult(ctx context.Context, result *Pro
 			WritePrompts:        rp.opts.WritePrompts,
 			Rule:                *rule,
 		}
-		if !filtering.ShouldAnalyze(&dctx, log.FromContext(ctx)) {
+		if !selected[rule.ID] {
 			// Skip files that don't need analysis
 			continue
 		}

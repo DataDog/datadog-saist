@@ -21,13 +21,6 @@ import (
 	"github.com/panjf2000/ants/v2"
 )
 
-type fileMeta struct {
-	RelPath  string
-	AbsPath  string
-	Language model.Language
-	Hash     string
-}
-
 // ResultAggregator handles result collection with single mutex
 type ResultAggregator struct {
 	outputPath        string
