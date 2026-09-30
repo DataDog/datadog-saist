@@ -32,13 +32,14 @@ type DetectionAgent struct {
 }
 
 type AgentOption struct {
-	DetectionModel    model.Model
-	ValidationModel   model.Model
-	OpenAiBaseUrl     string
-	RequestTimeoutSec int
-	IsAIGateway       bool
-	AIGuardEnabled    bool
-	OrgID             int64
+	DisableModelFallback bool
+	DetectionModel       model.Model
+	ValidationModel      model.Model
+	OpenAiBaseUrl        string
+	RequestTimeoutSec    int
+	IsAIGateway          bool
+	AIGuardEnabled       bool
+	OrgID                int64
 	// Temporary to avoid larger refactor: this should be handled with log levels, not booleans
 	DebugEnabled bool
 }
@@ -524,6 +525,10 @@ func (agent *DetectionAgent) basicDetection(ctx context.Context, scanData *model
 				return
 			}
 
+			mu.Lock()
+			inputTokens += vResult.InputTokens
+			outputTokens += vResult.OutputTokens
+			mu.Unlock()
 			if vResult.Confirmed {
 				// Prefer verification reason (more detailed with taint analysis) over detection reason
 				message := vResult.Reason
@@ -538,6 +543,10 @@ func (agent *DetectionAgent) basicDetection(ctx context.Context, scanData *model
 					located.EndColumn = fallbackLocation.EndColumn
 				}
 				if locRes, locErr := agent.DetermineViolationLocation(ctx, scanData, violation, vResult); locErr == nil {
+					mu.Lock()
+					inputTokens += locRes.InputTokens
+					outputTokens += locRes.OutputTokens
+					mu.Unlock()
 					located.StartLine = locRes.StartLine
 					located.StartColumn = locRes.StartColumn
 					located.EndLine = locRes.EndLine
@@ -585,7 +594,7 @@ func (agent *DetectionAgent) verificationGenerateContent(ctx context.Context, sc
 	response, err := agent.verificationLLMClient.GenerateContent(contextWithDeadline,
 		systemPrompt, userPrompt, options)
 	if err != nil {
-		if clients.IsRateLimitError(err) && agent.agentOption.IsAIGateway {
+		if clients.IsRateLimitError(err) && agent.agentOption.IsAIGateway && !agent.agentOption.DisableModelFallback {
 			agent.verificationFallbackMu.Lock()
 			alreadyTried := agent.verificationFallbackAttempted
 			if !alreadyTried {
@@ -680,7 +689,7 @@ func (agent *DetectionAgent) Detect(ctx context.Context, scanData *model.ScanDat
 		res, err := agent.basicDetection(ctx, scanData)
 		if err != nil {
 			// On rate limit with AI Gateway, try hardcoded fallback model once
-			if clients.IsRateLimitError(err) && agent.agentOption.IsAIGateway && i == 0 {
+			if clients.IsRateLimitError(err) && agent.agentOption.IsAIGateway && !agent.agentOption.DisableModelFallback && i == 0 {
 				log.FromContext(ctx).Warnf("Rate limit detected, switching to fallback detection model: %s",
 					aIGatewayFallbackModel)
 

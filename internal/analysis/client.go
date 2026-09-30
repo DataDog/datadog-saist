@@ -156,6 +156,9 @@ func RunAnalysis(ctx context.Context, directory string, detectionModelStr, valid
 func RunConfiguredAnalysis(ctx context.Context, opts *model.AnalysisOptions) (AnalysisSummary, error) {
 	logger := log.NewDefaultLogger()
 	ctx = ContextWithShimmedLogger(ctx, logger)
+	if opts.ExperimentalSingleStage && !opts.ExperimentalDriverOnly {
+		return AnalysisSummary{}, fmt.Errorf("single-stage scanning requires experimental driver-only mode")
+	}
 	if opts.ExperimentalDriverOnly && opts.DatadogDriver == nil {
 		return AnalysisSummary{}, fmt.Errorf("experimental driver-only scanning requires a driver")
 	}

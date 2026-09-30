@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/DataDog/datadog-saist/internal/analysis"
+	"github.com/DataDog/datadog-saist/internal/clients"
 	"github.com/DataDog/datadog-saist/internal/model"
 	"github.com/DataDog/datadog-saist/internal/rulecatalog"
 )
@@ -28,7 +29,11 @@ func run() error {
 	detection := flag.String("detection-model", "", "Gateway detection model")
 	validation := flag.String("validation-model", "", "Gateway validation model")
 	concurrency := flag.Int("file-concurrency", 1, "Concurrent source files")
+	scanMode := flag.String("scan-mode", "detect-verify", "detect-verify or single-stage (validation model only)")
 	flag.Parse()
+	if *scanMode != "detect-verify" && *scanMode != "single-stage" {
+		return fmt.Errorf("scan-mode must be detect-verify or single-stage")
+	}
 	if *directory == "" || *output == "" || *rulesPath == "" || *driverPath == "" || *detection == "" || *validation == "" || *concurrency < 1 {
 		return fmt.Errorf("directory, output, rules-json, driver, both models and positive concurrency are required")
 	}
@@ -82,10 +87,12 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	_, err = analysis.RunConfiguredAnalysis(context.Background(), &model.AnalysisOptions{
+	ctx := clients.WithStagingTokenRefresh(context.Background())
+	_, err = analysis.RunConfiguredAnalysis(ctx, &model.AnalysisOptions{
 		Directory: *directory, Output: *output, Rules: rules, DatadogDriver: &driver,
 		ExperimentalDriverOnly: true, DetectionModel: dm, ValidationModel: vm,
-		OpenAIBaseURL: "https://ai-gateway.us1.staging.dog", IsAIGateway: true,
+		ExperimentalSingleStage: *scanMode == "single-stage",
+		OpenAIBaseURL:           "https://ai-gateway.us1.staging.dog", IsAIGateway: true,
 		OrgID: 2, RepositoryID: "k9-saist-jev-prefilter", FileConcurrency: *concurrency,
 		RequestTimeoutSec: 120,
 	})

@@ -73,6 +73,9 @@ func NewOpenAIClient(ctx context.Context, model string, baseURL string, isAIGate
 	httpClient := &http.Client{
 		Timeout: 180 * time.Second, // Set a generous client-level timeout
 	}
+	if transport, ok := ctx.Value(stagingTransportKey{}).(*stagingAuthTransport); ok && isAIGateway {
+		httpClient.Transport = transport
+	}
 
 	// Construct the API base URL - AI Gateway expects /v1 suffix
 	apiBaseURL := host + "/v1"

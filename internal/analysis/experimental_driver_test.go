@@ -49,3 +49,8 @@ func TestExperimentalDriverIsRequired(t *testing.T) {
 	_, err := RunConfiguredAnalysis(context.Background(), &model.AnalysisOptions{ExperimentalDriverOnly: true})
 	assert.EqualError(t, err, "experimental driver-only scanning requires a driver")
 }
+
+func TestSingleStageRequiresExperimentalMode(t *testing.T) {
+	_, err := RunConfiguredAnalysis(context.Background(), &model.AnalysisOptions{ExperimentalSingleStage: true})
+	assert.EqualError(t, err, "single-stage scanning requires experimental driver-only mode")
+}

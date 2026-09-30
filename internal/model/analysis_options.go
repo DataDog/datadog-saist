@@ -8,22 +8,23 @@ import (
 
 // AnalysisOptions contains all configuration options for the analysis (internal use only)
 type AnalysisOptions struct {
-	Directory              string
-	DetectionModel         Model
-	ValidationModel        Model
-	Debug                  bool
-	OpenAIBaseURL          string
-	RequestTimeoutSec      int
-	FileConcurrency        int
-	WritePrompts           bool
-	IsAIGateway            bool
-	AIGuardEnabled         bool
-	Rules                  []api.AiPrompt
-	OrgID                  int64
-	RepositoryID           string
-	SkipIndexing           bool
-	DatadogDriver          *DatadogDriverConfig
-	ExperimentalDriverOnly bool
+	Directory               string
+	DetectionModel          Model
+	ValidationModel         Model
+	Debug                   bool
+	OpenAIBaseURL           string
+	RequestTimeoutSec       int
+	FileConcurrency         int
+	WritePrompts            bool
+	IsAIGateway             bool
+	AIGuardEnabled          bool
+	Rules                   []api.AiPrompt
+	OrgID                   int64
+	RepositoryID            string
+	SkipIndexing            bool
+	DatadogDriver           *DatadogDriverConfig
+	ExperimentalDriverOnly  bool
+	ExperimentalSingleStage bool
 	// Output is the SARIF output path. Used for the final report write and for
 	// periodic partial-result checkpointing during the scan phase.
 	Output string

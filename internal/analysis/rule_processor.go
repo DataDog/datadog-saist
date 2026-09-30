@@ -278,10 +278,19 @@ type RunScanResult struct {
 
 // Runs an individual scan, returning input token count, output token count, and any violations found.
 func (rp *RuleProcessor) runScan(ctx context.Context, scanData *model.ScanData) (RunScanResult, error) {
-	dr, err := rp.agent.Detect(ctx, scanData)
+	var dr *agents.DetectionResult
+	var err error
+	if rp.opts.ExperimentalSingleStage {
+		dr, err = rp.agent.AnalyzeSingleStage(ctx, scanData)
+	} else {
+		dr, err = rp.agent.Detect(ctx, scanData)
+	}
 	if err != nil {
 		if rp.debug {
 			log.FromContext(ctx).Debugf("detect error file=%s rule=%s: %v", scanData.RelativeFilePath, scanData.Rule.ID, err)
+		}
+		if dr != nil {
+			return RunScanResult{FileInputTokens: dr.InputTokens, FileOutputTokens: dr.OutputTokens}, err
 		}
 		return RunScanResult{}, err
 	}
