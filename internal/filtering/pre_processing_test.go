@@ -1295,3 +1295,303 @@ chatModel.chat(phone)`,
 	})
 
 }
+
+// TestShouldAnalyzePhpOWASPAIRules exercises the ten PHP OWASP AI Top 10
+// combined filters added in K9CODESEC-7609. Each case is a canonical positive
+// pattern taken from the matching playground fixture; the companion negative
+// case asserts the combined filter rejects nearby ambiguous code.
+func TestShouldAnalyzePhpOWASPAIRules(t *testing.T) {
+	assertPhpMatches := func(ruleID, code string, want bool) {
+		t.Helper()
+		ctx := model.DetectionContext{
+			Language: model.PHP,
+			Rule:     api.AiPrompt{ID: ruleID},
+			Code:     code,
+		}
+		assert.Equal(t, want, ShouldAnalyze(&ctx, log.NoopLogger()), ruleID)
+	}
+
+	// promptinjection: AI client + request input OR prompt-role signal
+	assertPhpMatches("datadog/php-promptinjection",
+		"$client = \\OpenAI::client($k);\n$q = $_POST['query'];\n$client->chat()->create(['messages' => [['role' => 'user', 'content' => $q]]]);", true)
+	assertPhpMatches("datadog/php-promptinjection",
+		"$name = $_POST['name'];\necho htmlspecialchars($name);", false)
+
+	// sensitiveinfodisclosure: AI context + sensitive data
+	assertPhpMatches("datadog/php-sensitiveinfodisclosure",
+		"$key = getenv('OPENAI_API_KEY');\nerror_log(\"loaded key: $key\");", true)
+	assertPhpMatches("datadog/php-sensitiveinfodisclosure",
+		"$name = $_POST['name'];\necho \"hello $name\";", false)
+
+	assertPhpMatches("datadog/php-sensitiveinfodisclosure",
+		"$key = getenv('STRIPE_SECRET_KEY'); error_log($key);", false)
+	assertPhpMatches("datadog/php-sensitiveinfodisclosure",
+		"$secret = getenv('DB_PASSWORD'); return new JsonResponse(['secret' => $secret]);", false)
+	assertPhpMatches("datadog/php-promptinjection", `
+ use LLPhant\Chat\OpenAIChat;
+ $stmt = $pdo->prepare("SELECT body FROM comments WHERE id = ?");
+ $stmt->execute([$id]);
+ $comment = (string) $stmt->fetchColumn();
+ $chat = new OpenAIChat();
+ return $chat->generateText("Summarize this comment: " . $comment);`, true)
+	assertPhpMatches("datadog/php-promptinjection",
+		"$messages = new MessageBag(); $message = new UserMessage($_POST['text']);", false)
+	assertPhpMatches("datadog/php-excessiveagency", `
+ $client = \OpenAI::client($key);
+ $response = $client->chat()->create(['tools' => $tools, 'messages' => $messages]);
+ foreach ($response->choices[0]->message->toolCalls as $call) {
+  $args = json_decode($call->function->arguments, true, flags: JSON_THROW_ON_ERROR);
+  $http->post($args['path'], ['json' => $args['payload']]);
+ }`, true)
+	assertPhpMatches("datadog/php-excessiveagency",
+		"use NeuronAI\\Tools\\Tool; #[Tool(name: 'remove')] function remove($path) { unlink($path); }", true)
+	assertPhpMatches("datadog/php-excessiveagency",
+		"$http = new GuzzleHttp\\Client(); $http->post($args['path']); User::destroy($id);", false)
+	assertPhpMatches("datadog/php-unboundedconsumption", `
+ use GuzzleHttp\Client;
+ $http = new Client();
+ $response = $http->post('http://llm.internal:8080/v1/completions', [
+  'json' => ['model' => 'llama-3-70b', 'prompt' => $prompt],
+ ]);`, true)
+	assertPhpMatches("datadog/php-unboundedconsumption",
+		"$http = new GuzzleHttp\\Client(); $http->post('https://api.example.com/orders', ['json' => $order]);", false)
+	assertPhpMatches("datadog/php-unboundedconsumption",
+		"Prism::text()->using(Provider::OpenAI, 'gpt-4o')->withPrompt($prompt)->asText();", true)
+
+	// supplychain: model library + fetch/load, or AI client + package install
+	assertPhpMatches("datadog/php-supplychain",
+		"$bytes = file_get_contents(\"https://huggingface.co/$repo/resolve/main/model.onnx\");\n$sess = new OnnxRuntime\\InferenceSession($bytes);", true)
+	assertPhpMatches("datadog/php-supplychain",
+		"$name = $_POST['name'];\necho $name;", false)
+
+	assertPhpMatches("datadog/php-supplychain",
+		"use Rubix\\ML\\PersistentModel; $modelName = 'classifier';", false)
+	assertPhpMatches("datadog/php-supplychain",
+		"$data = file_get_contents('https://example.com/resolve/main/orders.json');", false)
+
+	// datamodelpoisoning: model-load API + user input / finetune
+	assertPhpMatches("datadog/php-datamodelpoisoning",
+		"$path = $_FILES['model']['tmp_name'];\n$model = Rubix\\ML\\PersistentModel::load(new Rubix\\ML\\Persisters\\Filesystem($path));", true)
+	assertPhpMatches("datadog/php-datamodelpoisoning",
+		"$model = Rubix\\ML\\PersistentModel::load(new Rubix\\ML\\Persisters\\Filesystem('/opt/models/vetted.rbx'));", false)
+
+	// improperoutputhandling: AI client + dangerous output sink
+	assertPhpMatches("datadog/php-improperoutputhandling",
+		"$client = \\OpenAI::client($k);\n$sql = $client->chat()->create([...])->choices[0]->message->content;\n$pdo->query($sql);", true)
+	assertPhpMatches("datadog/php-improperoutputhandling",
+		"$client = \\OpenAI::client($k);\n$answer = $client->chat()->create([...])->choices[0]->message->content;\nreturn response()->json(['answer' => $answer]);", false)
+
+	// excessiveagency: AI client + tool/mail/auth pattern
+	assertPhpMatches("datadog/php-excessiveagency",
+		"use Symfony\\AI\\Agent\\Agent;\n$agent = new Agent($platform, $model);\n#[Tool]\nfunction deleteUser($id) { User::destroy($id); }", true)
+	assertPhpMatches("datadog/php-excessiveagency",
+		"$client = \\OpenAI::client($k);\n$resp = $client->chat()->create([...]);\necho $resp->choices[0]->message->content;", false)
+
+	// systempromptleakage: system-prompt indicator + response sink / log / throw
+	assertPhpMatches("datadog/php-systempromptleakage",
+		"$systemPrompt = 'You are a backend admin.';\nreturn response()->json(['system_prompt' => $systemPrompt]);", true)
+	assertPhpMatches("datadog/php-systempromptleakage",
+		"$systemPrompt = 'You are helpful.';\n$client = \\OpenAI::client($k);\n$client->chat()->create(['messages' => [['role' => 'system', 'content' => $systemPrompt]]]);", false)
+
+	// vectorembeddingweaknesses: vector store + ingest op
+	assertPhpMatches("datadog/php-vectorembeddingweaknesses",
+		"$store = new LLPhant\\Embeddings\\VectorStores\\Qdrant\\QdrantVectorStore($client, 'docs');\n$store->addDocument($doc);", true)
+	assertPhpMatches("datadog/php-vectorembeddingweaknesses",
+		"$results = $qdrant->search('docs', $queryVector, 5);", false)
+
+	// misinformation: AI client + response sink + high-impact word
+	assertPhpMatches("datadog/php-misinformation",
+		"$client = \\OpenAI::client($k);\n$diagnosis = $client->chat()->create([...])->choices[0]->message->content;\nreturn new JsonResponse(['medical_diagnosis' => $diagnosis]);", true)
+	assertPhpMatches("datadog/php-misinformation",
+		"$client = \\OpenAI::client($k);\n$summary = $client->chat()->create([...])->choices[0]->message->content;\nreturn response()->json(['summary' => $summary]);", false)
+
+	// unboundedconsumption: AI client + request/stream shape
+	assertPhpMatches("datadog/php-unboundedconsumption",
+		"$client = \\OpenAI::client($k);\n$resp = $client->chat()->create(['model' => 'gpt-4o', 'messages' => $msgs]);", true)
+	assertPhpMatches("datadog/php-unboundedconsumption",
+		"$name = $_POST['name'];\necho htmlspecialchars($name);", false)
+	// Regression cases from the documented APIs, plus non-AI controls.
+	t.Run("php/datamodelpoisoning#2", func(t *testing.T) {
+		ctx := model.DetectionContext{
+			Language: model.PHP,
+			Rule:     api.AiPrompt{ID: "datadog/php-datamodelpoisoning"},
+			Code: `<?php
+Route::post('/retrain', function () {
+    $client = \OpenAI::client(getenv('OPENAI_API_KEY'));
+    $tmp = tempnam(sys_get_temp_dir(), 'ft');
+    $fh = fopen($tmp, 'w');
+    foreach (UserSubmission::recent()->get() as $s) {
+        fwrite($fh, json_encode(['prompt' => $s->prompt, 'completion' => $s->completion]) . "\n");
+    }
+    fclose($fh);
+
+    $file = $client->files->upload([
+        'file' => fopen($tmp, 'r'),
+        'purpose' => 'fine-tune',
+    ]);
+    // <-- SINK: unreviewed user submissions become the training corpus
+    $client->fineTuning->createJob([
+        'training_file' => $file->id,
+        'model' => 'gpt-4o-mini-2024-07-18',
+    ]);
+    return response()->json(['status' => 'queued']);
+});
+`,
+		}
+		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+	})
+	t.Run("php/datamodelpoisoning#5", func(t *testing.T) {
+		ctx := model.DetectionContext{
+			Language: model.PHP,
+			Rule:     api.AiPrompt{ID: "datadog/php-datamodelpoisoning"},
+			Code: `<?php
+use Phpml\Classification\KNearestNeighbors;
+
+Route::post('/train', function (\Illuminate\Http\Request $request) {
+    $classifier = new KNearestNeighbors();
+    $samples = $request->input('samples');
+    $labels  = $request->input('labels');
+    $classifier->train($samples, $labels);  // <-- SINK: untrusted training data
+    return response()->json(['status' => 'trained']);
+});
+`,
+		}
+		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+	})
+	t.Run("php/improperoutputhandling#4", func(t *testing.T) {
+		ctx := model.DetectionContext{
+			Language: model.PHP,
+			Rule:     api.AiPrompt{ID: "datadog/php-improperoutputhandling"},
+			Code: `$filename = trim($client->chat()->create([
+    'model' => 'gpt-4o-mini',
+    'messages' => [
+        ['role' => 'system', 'content' => 'Return only the filename.'],
+        ['role' => 'user', 'content' => $desc],
+    ],
+])->choices[0]->message->content);
+$contents = file_get_contents("/var/app/docs/$filename");  // <-- SINK: LLM-controlled path
+`,
+		}
+		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+	})
+	t.Run("php/improperoutputhandling#5", func(t *testing.T) {
+		ctx := model.DetectionContext{
+			Language: model.PHP,
+			Rule:     api.AiPrompt{ID: "datadog/php-improperoutputhandling"},
+			Code: `use GuzzleHttp\Client;
+
+$url = trim($client->chat()->create([
+    'model' => 'gpt-4o-mini',
+    'messages' => [
+        ['role' => 'system', 'content' => 'Return only the URL.'],
+        ['role' => 'user', 'content' => $desc],
+    ],
+])->choices[0]->message->content);
+$body = (string) (new Client())->get($url)->getBody();  // <-- SINK: LLM-controlled URL enables SSRF
+`,
+		}
+		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+	})
+	t.Run("php/improperoutputhandling#8", func(t *testing.T) {
+		ctx := model.DetectionContext{
+			Language: model.PHP,
+			Rule:     api.AiPrompt{ID: "datadog/php-improperoutputhandling"},
+			Code: `$plugin = $chat->generateText("Return the plugin filename to load for: $task");
+require "/var/app/plugins/$plugin";  // <-- SINK: LLM-controlled include path
+`,
+		}
+		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+	})
+	t.Run("php/improperoutputhandling#9", func(t *testing.T) {
+		ctx := model.DetectionContext{
+			Language: model.PHP,
+			Rule:     api.AiPrompt{ID: "datadog/php-improperoutputhandling"},
+			Code: `$output = $client->chat()->create([
+    'model' => 'gpt-4o',
+    'messages' => [['role' => 'user', 'content' => $prompt]],
+])->choices[0]->message->content;
+error_log($output);  // <-- SINK: ANSI escape sequences reach the log/terminal — visual spoofing / clipboard hijack
+`,
+		}
+		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+	})
+	t.Run("php/excessiveagency#8", func(t *testing.T) {
+		ctx := model.DetectionContext{
+			Language: model.PHP,
+			Rule:     api.AiPrompt{ID: "datadog/php-excessiveagency"},
+			Code: `<?php
+use Mcp\Server\Server;
+use Mcp\Server\Tool\McpTool;
+
+class OpsTools {
+    #[McpTool(name: 'run', description: 'Run a shell command')]
+    public function run(string $cmd): string {
+        return (string) shell_exec($cmd);  // <-- SINK: any MCP caller runs any shell command
+    }
+}
+`,
+		}
+		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+	})
+	t.Run("PHP database email", func(t *testing.T) {
+		ctx := model.DetectionContext{
+			Language: model.PHP,
+			Rule:     api.AiPrompt{ID: "datadog/php-sensitiveinfodisclosure"},
+			Code: `use LLPhant\Chat\OpenAIChat;
+$email = $pdo->query('SELECT email FROM users LIMIT 1')->fetchColumn();
+$chat = new OpenAIChat();
+$chat->generateText($email);`,
+		}
+		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+	})
+	t.Run("PHP phone", func(t *testing.T) {
+		ctx := model.DetectionContext{
+			Language: model.PHP,
+			Rule:     api.AiPrompt{ID: "datadog/php-sensitiveinfodisclosure"},
+			Code: `use LLPhant\Chat\OpenAIChat;
+$chat->generateText($user->phone);`,
+		}
+		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+	})
+	t.Run("PHP phone without AI", func(t *testing.T) {
+		ctx := model.DetectionContext{
+			Language: model.PHP,
+			Rule:     api.AiPrompt{ID: "datadog/php-sensitiveinfodisclosure"},
+			Code:     `$phone = $user->phone; error_log($phone);`,
+		}
+		assert.Equal(t, false, ShouldAnalyze(&ctx, log.NoopLogger()))
+	})
+	t.Run("PHP training without model library", func(t *testing.T) {
+		ctx := model.DetectionContext{
+			Language: model.PHP,
+			Rule:     api.AiPrompt{ID: "datadog/php-datamodelpoisoning"},
+			Code:     `$trainer->train($request->input('training'));`,
+		}
+		assert.Equal(t, false, ShouldAnalyze(&ctx, log.NoopLogger()))
+	})
+	t.Run("MCP without tool", func(t *testing.T) {
+		ctx := model.DetectionContext{
+			Language: model.PHP,
+			Rule:     api.AiPrompt{ID: "datadog/php-excessiveagency"},
+			Code:     `use Mcp\Server\Server; $server = new Server();`,
+		}
+		assert.Equal(t, false, ShouldAnalyze(&ctx, log.NoopLogger()))
+	})
+	t.Run("Tool without MCP or AI", func(t *testing.T) {
+		ctx := model.DetectionContext{
+			Language: model.PHP,
+			Rule:     api.AiPrompt{ID: "datadog/php-excessiveagency"},
+			Code:     `#[McpTool] function run($cmd) { return shell_exec($cmd); }`,
+		}
+		assert.Equal(t, false, ShouldAnalyze(&ctx, log.NoopLogger()))
+	})
+	t.Run("HTTP without AI", func(t *testing.T) {
+		ctx := model.DetectionContext{
+			Language: model.PHP,
+			Rule:     api.AiPrompt{ID: "datadog/php-improperoutputhandling"},
+			Code:     `use GuzzleHttp\Client; $http->get($url);`,
+		}
+		assert.Equal(t, false, ShouldAnalyze(&ctx, log.NoopLogger()))
+	})
+
+}
