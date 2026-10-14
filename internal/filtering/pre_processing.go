@@ -699,6 +699,30 @@ var ruleFilters = map[string]ruleFilterFunc{
 	"datadog/ruby-misinformation":            shouldAnalyzeRubyMisinformationCtx,
 	"datadog/ruby-promptinjection":           shouldAnalyzeRubyPromptinjectionCtx,
 
+	// Kotlin OWASP AI Top 10
+	"datadog/kotlin-promptinjection":           shouldAnalyzeKotlinPromptinjectionCtx,
+	"datadog/kotlin-improperoutputhandling":    shouldAnalyzeKotlinImproperoutputhandlingCtx,
+	"datadog/kotlin-sensitiveinfodisclosure":   shouldAnalyzeKotlinSensitiveinfodisclosureCtx,
+	"datadog/kotlin-excessiveagency":           shouldAnalyzeKotlinExcessiveagencyCtx,
+	"datadog/kotlin-systempromptleakage":       shouldAnalyzeKotlinSystempromptleakageCtx,
+	"datadog/kotlin-unboundedconsumption":      shouldAnalyzeKotlinUnboundedconsumptionCtx,
+	"datadog/kotlin-vectorembeddingweaknesses": shouldAnalyzeKotlinVectorembeddingweaknessesCtx,
+	"datadog/kotlin-datamodelpoisoning":        shouldAnalyzeKotlinDatamodelpoisoningCtx,
+	"datadog/kotlin-misinformation":            shouldAnalyzeKotlinMisinformationCtx,
+	"datadog/kotlin-supplychain":               shouldAnalyzeKotlinSupplychainCtx,
+
+	// PHP OWASP AI Top 10
+	"datadog/php-promptinjection":           shouldAnalyzePhpPromptinjectionCtx,
+	"datadog/php-sensitiveinfodisclosure":   shouldAnalyzePhpSensitiveinfodisclosureCtx,
+	"datadog/php-supplychain":               shouldAnalyzePhpSupplychainCtx,
+	"datadog/php-datamodelpoisoning":        shouldAnalyzePhpDatamodelpoisoningCtx,
+	"datadog/php-improperoutputhandling":    shouldAnalyzePhpImproperoutputhandlingCtx,
+	"datadog/php-excessiveagency":           shouldAnalyzePhpExcessiveagencyCtx,
+	"datadog/php-systempromptleakage":       shouldAnalyzePhpSystempromptleakageCtx,
+	"datadog/php-vectorembeddingweaknesses": shouldAnalyzePhpVectorembeddingweaknessesCtx,
+	"datadog/php-misinformation":            shouldAnalyzePhpMisinformationCtx,
+	"datadog/php-unboundedconsumption":      shouldAnalyzePhpUnboundedconsumptionCtx,
+
 	// Elixir
 	"datadog/elixir-sqli":                      shouldAnalyzeElixirSqliCtx,
 	"datadog/elixir-cmdi":                      shouldAnalyzeElixirCmdiCtx,
@@ -4052,6 +4076,286 @@ func hasDartModelCall(code string) bool {
 		".chat.completions.create(", "openai.instance.chat.create(", "openai.instance.chat.createstream(",
 		"createchatcompletion(", "createchatcompletionstream(", ".invoke(", ".stream(",
 	})
+}
+
+// =============================================================================
+// KOTLIN OWASP AI TOP 10 FILTERS
+// =============================================================================
+
+func hasKotlinAIClient(code string) bool {
+	return containsAny(code, []string{
+		"chatclient", "chatmodel", "chatlanguagemodel", "chatcompletion", "aiservices",
+		"springframework.ai", "langchain4j", "openai", "anthropic", "aallam", "koog",
+		"ollama", "/v1/completions", "/v1/chat/completions",
+	})
+}
+
+func hasKotlinRequestInput(code string) bool {
+	return containsAny(code, []string{
+		"@requestbody", "@requestparam", "@pathvariable", "@requestheader",
+		"@getmapping", "@postmapping", "@putmapping", "@deletemapping",
+		"call.receive", "call.parameters", "call.request.queryparameters",
+		".getparameter(", ".getstringextra(",
+	})
+}
+
+func hasKotlinResponseSink(code string) bool {
+	return containsAny(code, []string{
+		"call.respond", "call.respondtext", "call.respondredirect",
+		"responseentity", "model.addattribute", "@restcontroller",
+		".writer.write(", ".writer.print(", ".getwriter(", ".outputstream.write(",
+		".getoutputstream(", ".sendredirect(",
+	})
+}
+
+// Keep model invocation separate from input/sink signals so ordinary HTTP and
+// logging code does not opt into AI rules merely because it handles user data.
+func shouldAnalyzeKotlinPromptinjectionCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	promptPatterns := []string{
+		".prompt(", ".user(", ".system(", ".chat(", ".generate(", "chatcompletion",
+		"usermessage", "systemprompt", "chatmessage", "/v1/chat/completions",
+		"/v1/completions", "/api/generate", "agent.run(",
+	}
+	return hasKotlinAIClient(code) && (hasKotlinRequestInput(code) || containsAny(code, promptPatterns))
+}
+
+func shouldAnalyzeKotlinImproperoutputhandlingCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	outputSinks := []string{
+		"executequery", "executeupdate", "jdbc", "processbuilder", "runtime.getruntime().exec",
+		"eval(", "writehtml", "respondhtml", "unsafe", "println(", "print(", "logger.",
+		"log.info", "log.debug", "files.write", "writetext(",
+		"files.read", "readtext(", "readbytes(", "getforobject(", "getforentity(",
+		".exchange(", ".retrieve(", "parseexpression(", "evaluate(",
+	}
+	return hasKotlinAIClient(code) && (hasKotlinResponseSink(code) || containsAny(code, outputSinks))
+}
+
+func shouldAnalyzeKotlinSensitiveinfodisclosureCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	sensitiveData := []string{
+		"password", "secret", "api_key", "apikey", "token", "private_key",
+		"email", "phone", "creditcard", "authorization",
+		"credit_card", "ssn", "system.getenv",
+	}
+	return hasKotlinAIClient(code) && containsAny(code, sensitiveData)
+}
+
+func shouldAnalyzeKotlinExcessiveagencyCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	toolPatterns := []string{
+		"@tool", "toolcallback", "methodtoolcallback", "functioncallback",
+		"toolspecification", "chatcompletiontool", "functiondefinition",
+		"tool.builder", "toolregistry", "modelcontextprotocol",
+	}
+	return hasKotlinAIClient(code) && containsAny(code, toolPatterns)
+}
+
+func shouldAnalyzeKotlinSystempromptleakageCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	systemPrompt := []string{
+		"system_prompt", "systemprompt", "system_message", "systemmessage", ".system(",
+	}
+	leakageSinks := []string{"logger.", "log.info", "log.debug", "println", "throw "}
+	return containsAny(code, systemPrompt) &&
+		(hasKotlinResponseSink(code) || containsAny(code, leakageSinks))
+}
+
+func shouldAnalyzeKotlinUnboundedconsumptionCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	requestOrLoop := []string{
+		"chatcompletion", "completion", "generate", "stream", ".chat(",
+		"openaistreamingchatmodel", "while (true)", "collect {", "collect{",
+		"openaichatmodel.builder(", "azureopenaichatmodel.builder(",
+		"openaichatoptions.builder(", ".prompt(",
+	}
+	return hasKotlinAIClient(code) && containsAny(code, requestOrLoop)
+}
+
+func shouldAnalyzeKotlinVectorembeddingweaknessesCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	vectorStores := []string{
+		"qdrant", "pinecone", "weaviate", "chroma", "milvus", "pgvector",
+		"lancedb", "embeddingstore", "vectorstore",
+	}
+	ingestOps := []string{"upsert", "adddocument", "adddocuments", ".add(", ".addall(", ".ingest(", "insert", "index"}
+	return containsAny(code, vectorStores) && containsAny(code, ingestOps)
+}
+
+func hasKotlinModelLibrary(code string) bool {
+	return containsAny(code, []string{
+		"ai.djl", "onnxruntime", "ortsession", "ortenvironment", "savedmodelbundle",
+		"modelserializer", "kinference", "tensorflow", "huggingface", "modelzoo", "zoomodel",
+		"deeplearning4j", "multilayernetwork", "computationgraph", "weka", "serializationhelper",
+	})
+}
+
+func shouldAnalyzeKotlinDatamodelpoisoningCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	modelLoad := []string{
+		"loadmodel", "model.load", "createsession", "savedmodelbundle.load", "modelserializer", "kinference",
+		"multilayernetwork.load", "computationgraph.load", "serializationhelper.read", ".fit(", ".train(",
+	}
+	remoteModelSources := []string{"huggingface", "resolve/main"}
+	return hasKotlinModelLibrary(code) && containsAny(code, modelLoad) &&
+		(hasKotlinRequestInput(code) || containsAny(code, remoteModelSources))
+}
+
+func shouldAnalyzeKotlinMisinformationCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	highImpactOutput := []string{
+		"medical", "diagnosis", "financial", "legal", "prescription",
+		"advice", "recommendation", "decision", "trade", "stock",
+	}
+	return hasKotlinAIClient(code) &&
+		(hasKotlinResponseSink(code) && containsAny(code, highImpactOutput))
+}
+
+func shouldAnalyzeKotlinSupplychainCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	modelFetch := []string{
+		"createsession", "loadmodel", "model.load", "savedmodelbundle.load", "modelserializer",
+		"http.get", "newcall", "readbytes", "optmodelurls",
+	}
+	pkgInstall := []string{"gradle", "dependency:get", "processbuilder", "runtime.exec"}
+	return (hasKotlinModelLibrary(code) && containsAny(code, modelFetch)) ||
+		(hasKotlinAIClient(code) && containsAny(code, pkgInstall))
+}
+
+// =============================================================================
+// PHP OWASP AI TOP 10 FILTERS
+// =============================================================================
+
+func hasPHPAIClient(code string) bool {
+	return containsAny(code, []string{
+		"openai", "prism\\prism", "prism::text", "llphant", "neuronai", "symfony\\ai",
+		"anthropic", "ollama", "chat()->create", "->generatetext(",
+		"/v1/completions", "/v1/chat/completions",
+	})
+}
+
+func hasPHPRequestInput(code string) bool {
+	return containsAny(code, []string{
+		"$_get", "$_post", "$_request", "$_cookie", "$_files",
+		"php://input",
+		"$request->input", "$request->query", "$request->request",
+		"$request->getparsedbody", "$request->getqueryparams", "$request->file",
+	})
+}
+
+func hasPHPResponseSink(code string) bool {
+	return containsAny(code, []string{
+		"echo ", "jsonresponse", "response()->json", "$response->getbody",
+		"$this->render", "return response(",
+	})
+}
+
+func shouldAnalyzePhpPromptinjectionCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	// LLM prompt content can originate in stored data or a function argument,
+	// not only in the current HTTP request (indirect prompt injection).
+	promptSignal := []string{
+		"usermessage", "'role' => 'user'", "'role' => 'system'", "withprompt", "withsystemprompt",
+		"->generatetext(", "chat()->create", "messagebag",
+	}
+	return hasPHPAIClient(code) && (hasPHPRequestInput(code) || containsAny(code, promptSignal))
+}
+
+func shouldAnalyzePhpSensitiveinfodisclosureCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	sensitiveData := []string{
+		"password", "secret", "api_key", "apikey", "token", "private_key",
+		"email", "phone", "creditcard", "authorization",
+		"credit_card", "ssn", "getenv(", "$_env", "$_server",
+	}
+	return hasPHPAIClient(code) && containsAny(code, sensitiveData)
+}
+
+func shouldAnalyzePhpSupplychainCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	modelLibraries := []string{"huggingface", "onnxruntime", "inferencesession", "persistentmodel", "rubix\\ml"}
+	modelFetch := []string{
+		"file_get_contents", "->get(", "->request(", "curl_exec", "::load(",
+		"new inferencesession", "new onnxruntime\\inferencesession",
+	}
+	pkgInstall := []string{"composer require", "exec(", "shell_exec", "proc_open"}
+	return (containsAny(code, modelLibraries) && containsAny(code, modelFetch)) ||
+		(hasPHPAIClient(code) && containsAny(code, pkgInstall))
+}
+
+func shouldAnalyzePhpDatamodelpoisoningCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	modelLoad := []string{
+		"inferencesession", "onnxruntime", "persistentmodel", "rubix\\ml",
+		"rubix\\persisters", "huggingface", "phpml\\",
+	}
+	training := containsAny(code, []string{"finetuning", "finetune", "fine_tune", "fine-tune", "training"})
+	return (containsAny(code, modelLoad) && (hasPHPRequestInput(code) || training)) ||
+		(hasPHPAIClient(code) && training)
+}
+
+func shouldAnalyzePhpImproperoutputhandlingCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	dangerousSinks := []string{
+		"->query(", "pdo::query", "shell_exec", "exec(", "passthru", "proc_open",
+		"system(", "eval(", "include ", "include(", "require ", "require(", "|raw", "{!!", "header(",
+		"file_get_contents(", "fopen(", "readfile(", "->get(", "->request(", "curl_exec(",
+		"mysqli_query(", "->executequery(", "->prepare(", "db::statement(",
+		"echo ", "print(", "fwrite(", "error_log(", "->info(", "->debug(", "->render(", "view(",
+	}
+	return hasPHPAIClient(code) && containsAny(code, dangerousSinks)
+}
+
+func shouldAnalyzePhpExcessiveagencyCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	toolPatterns := []string{
+		"#[tool", "#[mcptool", "#[astool", "function_call", "functioncall", "tool_call",
+		"toolcall", "withtools", "setfunctions", "::destroy(", "mail::", "auth::",
+	}
+	mcpServers := []string{"mcp\\server", "phpmcp\\server"}
+	// An MCP server exposes tools to external agents without embedding a model client.
+	return (hasPHPAIClient(code) || containsAny(code, mcpServers)) &&
+		containsAny(code, toolPatterns)
+}
+
+func shouldAnalyzePhpSystempromptleakageCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	systemPrompt := []string{
+		"system_prompt", "systemprompt", "system_message", "systemmessage",
+		"'role' => 'system'",
+	}
+	leakageSinks := []string{"error_log", "monolog", "log::debug", "log::info", "throw new"}
+	return containsAny(code, systemPrompt) &&
+		(hasPHPResponseSink(code) || containsAny(code, leakageSinks))
+}
+
+func shouldAnalyzePhpVectorembeddingweaknessesCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	vectorStores := []string{
+		"qdrant", "pinecone", "weaviate", "chroma", "milvus", "pgvector",
+		"lancedb", "qdrantvectorstore",
+	}
+	ingestOps := []string{"upsert", "adddocument", "add(", "insert", "index"}
+	return containsAny(code, vectorStores) && containsAny(code, ingestOps)
+}
+
+func shouldAnalyzePhpMisinformationCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	highImpactOutput := []string{
+		"medical", "diagnosis", "financial", "legal", "prescription",
+		"advice", "recommendation", "stock", "trade",
+	}
+	return hasPHPAIClient(code) && (hasPHPResponseSink(code) && containsAny(code, highImpactOutput))
+}
+
+func shouldAnalyzePhpUnboundedconsumptionCtx(ctx *model.DetectionContext) bool {
+	code := getStrippedCode(ctx)
+	requestOrLoop := []string{
+		"chat()->create", "chat()->createstreamed", "asstream", "astext", "generatetext", "->ask",
+		"/v1/completions", "/v1/chat/completions", "/api/generate", "/api/chat",
+	}
+	return hasPHPAIClient(code) && containsAny(code, requestOrLoop)
 }
 
 // ShouldAnalyze does a very early, cheap filter to decide if a file is worth
