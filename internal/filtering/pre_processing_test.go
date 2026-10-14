@@ -844,10 +844,8 @@ func TestShouldAnalyzeSwiftExtendedRules(t *testing.T) {
 	assertSwiftRuleMatches("datadog/swift-supplychain", "let package = .package(url: \"https://example.com/package.git\", from: \"1.0.0\")")
 }
 
-// TestShouldAnalyzeKotlinOWASPAIRules exercises the ten Kotlin OWASP AI Top 10
-// combined filters added in K9CODESEC-7609. Each case is a canonical positive
-// pattern taken from the matching playground fixture; the companion negative
-// case asserts the combined filter rejects nearby ambiguous code.
+// TestShouldAnalyzeKotlinOWASPAIRules checks that the Kotlin OWASP AI filters
+// accept relevant AI patterns and reject similar unrelated code.
 func TestShouldAnalyzeKotlinOWASPAIRules(t *testing.T) {
 	assertKotlinMatches := func(ruleID, code string, want bool) {
 		t.Helper()
@@ -1296,10 +1294,8 @@ chatModel.chat(phone)`,
 
 }
 
-// TestShouldAnalyzePhpOWASPAIRules exercises the ten PHP OWASP AI Top 10
-// combined filters added in K9CODESEC-7609. Each case is a canonical positive
-// pattern taken from the matching playground fixture; the companion negative
-// case asserts the combined filter rejects nearby ambiguous code.
+// TestShouldAnalyzePhpOWASPAIRules checks that the PHP OWASP AI filters
+// accept relevant AI patterns and reject similar unrelated code.
 func TestShouldAnalyzePhpOWASPAIRules(t *testing.T) {
 	assertPhpMatches := func(ruleID, code string, want bool) {
 		t.Helper()

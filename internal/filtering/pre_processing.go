@@ -699,7 +699,7 @@ var ruleFilters = map[string]ruleFilterFunc{
 	"datadog/ruby-misinformation":            shouldAnalyzeRubyMisinformationCtx,
 	"datadog/ruby-promptinjection":           shouldAnalyzeRubyPromptinjectionCtx,
 
-	// Kotlin OWASP AI Top 10 (K9CODESEC-7609)
+	// Kotlin OWASP AI Top 10
 	"datadog/kotlin-promptinjection":           shouldAnalyzeKotlinPromptinjectionCtx,
 	"datadog/kotlin-improperoutputhandling":    shouldAnalyzeKotlinImproperoutputhandlingCtx,
 	"datadog/kotlin-sensitiveinfodisclosure":   shouldAnalyzeKotlinSensitiveinfodisclosureCtx,
@@ -711,7 +711,7 @@ var ruleFilters = map[string]ruleFilterFunc{
 	"datadog/kotlin-misinformation":            shouldAnalyzeKotlinMisinformationCtx,
 	"datadog/kotlin-supplychain":               shouldAnalyzeKotlinSupplychainCtx,
 
-	// PHP OWASP AI Top 10 (K9CODESEC-7609)
+	// PHP OWASP AI Top 10
 	"datadog/php-promptinjection":           shouldAnalyzePhpPromptinjectionCtx,
 	"datadog/php-sensitiveinfodisclosure":   shouldAnalyzePhpSensitiveinfodisclosureCtx,
 	"datadog/php-supplychain":               shouldAnalyzePhpSupplychainCtx,
@@ -4197,8 +4197,9 @@ func shouldAnalyzeKotlinDatamodelpoisoningCtx(ctx *model.DetectionContext) bool 
 		"loadmodel", "model.load", "createsession", "savedmodelbundle.load", "modelserializer", "kinference",
 		"multilayernetwork.load", "computationgraph.load", "serializationhelper.read", ".fit(", ".train(",
 	}
+	remoteModelSources := []string{"huggingface", "resolve/main"}
 	return hasKotlinModelLibrary(code) && containsAny(code, modelLoad) &&
-		(hasKotlinRequestInput(code) || containsAny(code, []string{"huggingface", "resolve/main"}))
+		(hasKotlinRequestInput(code) || containsAny(code, remoteModelSources))
 }
 
 func shouldAnalyzeKotlinMisinformationCtx(ctx *model.DetectionContext) bool {
@@ -4312,8 +4313,9 @@ func shouldAnalyzePhpExcessiveagencyCtx(ctx *model.DetectionContext) bool {
 		"#[tool", "#[mcptool", "#[astool", "function_call", "functioncall", "tool_call",
 		"toolcall", "withtools", "setfunctions", "::destroy(", "mail::", "auth::",
 	}
+	mcpServers := []string{"mcp\\server", "phpmcp\\server"}
 	// An MCP server exposes tools to external agents without embedding a model client.
-	return (hasPHPAIClient(code) || containsAny(code, []string{"mcp\\server", "phpmcp\\server"})) &&
+	return (hasPHPAIClient(code) || containsAny(code, mcpServers)) &&
 		containsAny(code, toolPatterns)
 }
 
