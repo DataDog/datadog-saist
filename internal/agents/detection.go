@@ -18,7 +18,7 @@ import (
 
 // aIGatewayFallbackModel is the model used automatically when rate limit (429) is hit with AI Gateway.
 // Uses a different provider to avoid shared rate limits.
-const aIGatewayFallbackModel = "openai/gpt-4.1-nano"
+const aIGatewayFallbackModel = "openai/gpt-6-luna"
 
 type DetectionAgent struct {
 	llmClient             clients.LLMClient
