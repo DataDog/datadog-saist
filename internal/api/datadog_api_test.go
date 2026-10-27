@@ -7,6 +7,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/DataDog/datadog-saist/internal/filtering"
+	"github.com/DataDog/datadog-saist/internal/log"
+	"github.com/DataDog/datadog-saist/internal/model"
 	"github.com/DataDog/datadog-saist/internal/model/api"
 )
 
@@ -71,4 +74,83 @@ func TestGetPromptsFromApiData(t *testing.T) {
 	assert.Contains(t, prompt.Content, expectedContentStart)
 	assert.Contains(t, prompt.Content, "SQL injections")
 	assert.Contains(t, prompt.Content, "NO VIOLATION AMIGO")
+}
+
+func TestGetPromptsFromApiDataAnalysisFilter(t *testing.T) {
+	data := `{"data":[{"id":"datadog/java-sqli","attributes":{
+		"content":"eA==",
+		"analysis_filter":{"version":1,"expression":{"all":[
+			{"contains_any":["statement"]},{"words_any":["select"]}
+		]}}
+	}}]}`
+	prompts, err := GetPromptsFromApiData(io.NopCloser(strings.NewReader(data)))
+	if !assert.NoError(t, err) || !assert.Len(t, prompts, 1) {
+		return
+	}
+	assert.Equal(t, &api.AnalysisFilter{Version: 1, Expression: api.FilterExpression{All: []api.FilterExpression{
+		{ContainsAny: []string{"statement"}}, {WordsAny: []string{"select"}},
+	}}}, prompts[0].AnalysisFilter)
+}
+
+func TestGetPromptsFromApiDataUnsupportedAnalysisFilter(t *testing.T) {
+	data := `{"data":[{"id":"datadog/java-sqli","attributes":{
+		"content":"eA==",
+		"analysis_filter":{"version":2,"expression":{"all":{"contains_any":["statement"]}}}
+	}}]}`
+	prompts, err := GetPromptsFromApiData(io.NopCloser(strings.NewReader(data)))
+	if !assert.NoError(t, err) || !assert.Len(t, prompts, 1) {
+		return
+	}
+	assert.Equal(t, "datadog/java-sqli", prompts[0].ID)
+	assert.Equal(t, "x", prompts[0].Content)
+	assert.Equal(t, &api.AnalysisFilter{Version: 2}, prompts[0].AnalysisFilter)
+}
+
+func TestGetPromptsFromApiDataInvalidAnalysisFilters(t *testing.T) {
+	data := `{"data":[
+		{"id":"datadog/java-sqli","attributes":{"content":"eA==","file_search_keywords":["select"],
+			"analysis_filter":{"version":1,"expression":{"all":{"contains_any":["missing"]}}}}},
+		{"id":"datadog/java-sqli","attributes":{"content":"eA==","file_search_keywords":["select"],
+			"analysis_filter":{"version":1,"expression":{"contains_any":["missing"],"unknown_operator":true}}}},
+		{"id":"datadog/java-sqli","attributes":{"content":"eA==","file_search_keywords":["select"],
+			"analysis_filter":{"version":"invalid","expression":{"contains_any":["missing"]}}}},
+		{"id":"datadog/java-sqli","attributes":{"content":"eA==","file_search_keywords":["select"],
+			"analysis_filter":"invalid"}}
+	]}`
+	prompts, err := GetPromptsFromApiData(io.NopCloser(strings.NewReader(data)))
+	if !assert.NoError(t, err) || !assert.Len(t, prompts, 4) {
+		return
+	}
+	assertKeywordFallback := func(prompt api.AiPrompt) {
+		t.Helper()
+		assert.Equal(t, "x", prompt.Content)
+		ctx := model.DetectionContext{Language: model.Java, Code: `String query = "SELECT * FROM users";`, Rule: prompt}
+		assert.True(t, filtering.ShouldAnalyze(&ctx, log.NoopLogger()))
+		ctx.Rule.FileSearchKeywords = []string{"missing"}
+		assert.False(t, filtering.ShouldAnalyze(&ctx, log.NoopLogger()))
+	}
+	assertKeywordFallback(prompts[0])
+	assertKeywordFallback(prompts[1])
+	assertKeywordFallback(prompts[2])
+	assertKeywordFallback(prompts[3])
+}
+
+func TestGetPromptsFromApiDataNegationRegexAndCount(t *testing.T) {
+	data := `{"data":[{"id":"datadog/elixir-deserialization","attributes":{
+		"content":"eA==",
+		"analysis_filter":{"version":1,"expression":{"not":{"all":[
+			{"regex_any":["binary_to_term\\s*\\("]},
+			{"count_equals":{"substrings":["binary_to_term("],"count":1}}
+		]}}}
+	}}]}`
+	prompts, err := GetPromptsFromApiData(io.NopCloser(strings.NewReader(data)))
+	if !assert.NoError(t, err) || !assert.Len(t, prompts, 1) {
+		return
+	}
+	assert.Equal(t, &api.AnalysisFilter{Version: 1, Expression: api.FilterExpression{
+		Not: &api.FilterExpression{All: []api.FilterExpression{
+			{RegexAny: []string{`binary_to_term\s*\(`}},
+			{CountEquals: &api.FilterCount{Substrings: []string{"binary_to_term("}, Count: 1}},
+		}},
+	}}, prompts[0].AnalysisFilter)
 }
