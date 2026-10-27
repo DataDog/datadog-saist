@@ -17,7 +17,7 @@ func TestShouldAnalyze_CaseInsensitive(t *testing.T) {
 		Code:     "func main() { xpath.Compile() }", // lowercase required after codeUsedForDetection
 	}
 
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	result := shouldAnalyzeLegacy(&ctx, log.NoopLogger())
 	assert.True(t, result, "Expected ShouldAnalyze to match xpath keyword")
 }
 
@@ -43,7 +43,7 @@ func TestShouldAnalyze_JavaCommandInjection(t *testing.T) {
 		Code: "ProcessBuilder process = new ProcessBuilder();",
 	}
 
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	result := shouldAnalyzeLegacy(&ctx, log.NoopLogger())
 	assert.True(t, result, "Expected ShouldAnalyze to return true for Java code with process keyword")
 }
 
@@ -54,7 +54,7 @@ func TestShouldNotAnalyzeJavadoc(t *testing.T) {
 		Code:     "/**\n * OWASP Benchmark v1.2\n *\n * <p>This file is part of the Open Web Application Security Project (OWASP) Benchmark Project. For\n * details, please see <a\n * href=\"https://owasp.org/www-project-benchmark/\">https://owasp.org/www-project-benchmark/</a>.\n *\n * <p>The OWASP Benchmark is free software: you can redistribute it and/or modify it under the terms\n * of the GNU General Public License as published by the Free Software Foundation, version 2.\n *\n * <p>The OWASP Benchmark is distributed in the hope that it will be useful, but WITHOUT ANY\n * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR\n * PURPOSE. See the GNU General Public License for more details.\n *\n * @author Dave Wichers\n * @created 2015\n */\npackage org.owasp.benchmark.testcode;\n\nimport java.io.IOException;\nimport javax.servlet.ServletException;\nimport javax.servlet.annotation.WebServlet;\nimport javax.servlet.http.HttpServlet;\nimport javax.servlet.http.HttpServletRequest;\nimport javax.servlet.http.HttpServletResponse;\n\n@WebServlet(value = \"/sqli-00/BenchmarkTest00018\")\npublic class BenchmarkTest00018 extends HttpServlet {",
 	}
 
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	result := shouldAnalyzeLegacy(&ctx, log.NoopLogger())
 	assert.False(t, result)
 }
 
@@ -65,7 +65,7 @@ func TestShouldAnalyzeXss(t *testing.T) {
 		Code:     "class Foo {\n HttpServletRequest request = null;\n String foo = request.getParameter(\"user\");\n PrintWriter out = response.getWriter();\n out.println(\"<p>\" + foo + \"</p>\");\n }\n",
 	}
 
-	assert.True(t, ShouldAnalyze(&ctx, log.NoopLogger()), "Expected Java XSS to match with HTML tags and request input")
+	assert.True(t, shouldAnalyzeLegacy(&ctx, log.NoopLogger()), "Expected Java XSS to match with HTML tags and request input")
 }
 
 func TestShouldAnalyze_UnknownVulnerability(t *testing.T) {
@@ -75,7 +75,7 @@ func TestShouldAnalyze_UnknownVulnerability(t *testing.T) {
 		Code:     "func main() { fmt.Println(\"test\") }",
 	}
 
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	result := shouldAnalyzeLegacy(&ctx, log.NoopLogger())
 	assert.True(t, result, "Expected ShouldAnalyze to return true for unknown vulnerability (no filtering)")
 }
 
@@ -96,7 +96,7 @@ func TestShouldAnalyzeDartRepresentativeRules(t *testing.T) {
 	assertDartRuleMatches := func(ruleID, code string) {
 		t.Helper()
 		ctx := model.DetectionContext{Language: model.Dart, Rule: api.AiPrompt{ID: ruleID}, Code: code}
-		assert.True(t, ShouldAnalyze(&ctx, log.NoopLogger()), ruleID)
+		assert.True(t, shouldAnalyzeLegacy(&ctx, log.NoopLogger()), ruleID)
 	}
 
 	assertDartRuleMatches("datadog/dart-sqli", "import 'package:sqflite/sqflite.dart'; db.rawQuery('select $id')")
@@ -144,31 +144,31 @@ func TestShouldAnalyzeDartRepresentativeRules(t *testing.T) {
 	assertDartRuleMatches("datadog/dart-excessiveagency", "for (final toolCall in response.allToolCalls) { await File(toolCall.function.arguments['path']).delete(); }")
 
 	ctx := model.DetectionContext{Language: model.Dart, Rule: api.AiPrompt{ID: "datadog/dart-cmdi"}, Code: "final process = 'documentation only';"}
-	assert.False(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+	assert.False(t, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 
 	ctx = model.DetectionContext{Language: model.Dart, Rule: api.AiPrompt{ID: "datadog/dart-supplychain"}, Code: "Interpreter.fromBuffer(bundledModelBytes)"}
-	assert.False(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+	assert.False(t, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 
 	ctx = model.DetectionContext{Language: model.Dart, Rule: api.AiPrompt{ID: "datadog/dart-trustboundary"}, Code: "final user = request.context['user'];"}
-	assert.False(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+	assert.False(t, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 
 	ctx = model.DetectionContext{Language: model.Dart, Rule: api.AiPrompt{ID: "datadog/dart-systempromptleakage"}, Code: "final log = systemPrompt.length;"}
-	assert.False(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+	assert.False(t, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 
 	ctx = model.DetectionContext{Language: model.Dart, Rule: api.AiPrompt{ID: "datadog/dart-sensitiveinfodisclosure"}, Code: "import 'package:langchain/langchain.dart'; final token = loadToken();"}
-	assert.False(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+	assert.False(t, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 
 	ctx = model.DetectionContext{Language: model.Dart, Rule: api.AiPrompt{ID: "datadog/dart-improperoutputhandling"}, Code: "import 'package:langchain/langchain.dart'; Process.run(command, const []);"}
-	assert.False(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+	assert.False(t, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 
 	ctx = model.DetectionContext{Language: model.Dart, Rule: api.AiPrompt{ID: "datadog/dart-datamodelpoisoning"}, Code: "final dataset = await request.readAsString(); render(dataset);"}
-	assert.False(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+	assert.False(t, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 
 	ctx = model.DetectionContext{Language: model.Dart, Rule: api.AiPrompt{ID: "datadog/dart-codei"}, Code: "import 'package:dart_eval/dart_eval.dart'; render(await request.readAsString());"}
-	assert.False(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+	assert.False(t, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 
 	ctx = model.DetectionContext{Language: model.Dart, Rule: api.AiPrompt{ID: "datadog/dart-zipslip"}, Code: "await extractArchiveToDisk(archive, root);"}
-	assert.False(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+	assert.False(t, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 }
 
 func TestShouldAnalyze_MultipleKeywordsInCode(t *testing.T) {
@@ -179,7 +179,7 @@ func TestShouldAnalyze_MultipleKeywordsInCode(t *testing.T) {
 		Code: "import \"database/sql\"\ndb.Query(\"SELECT * FROM users\"); db.Exec(\"UPDATE table SET value = 1\")",
 	}
 
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	result := shouldAnalyzeLegacy(&ctx, log.NoopLogger())
 	assert.True(t, result, "Expected ShouldAnalyze to return true when code contains DB import and SQL keywords")
 }
 
@@ -190,7 +190,7 @@ func TestShouldAnalyze_CommandInjectionKeywords(t *testing.T) {
 		Code:     "os.system('bash -c \"echo hello\"')",
 	}
 
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	result := shouldAnalyzeLegacy(&ctx, log.NoopLogger())
 	assert.True(t, result, "Expected ShouldAnalyze to return true for code with bash keyword")
 }
 
@@ -204,7 +204,7 @@ func TestShouldAnalyze_LanguageSpecificOverridesGeneric(t *testing.T) {
 		Code: "exec.Command(\"ls\")",
 	}
 
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	result := shouldAnalyzeLegacy(&ctx, log.NoopLogger())
 	assert.True(t, result, "Expected ShouldAnalyze to return true for Go-specific command injection keyword")
 }
 
@@ -228,7 +228,7 @@ func TestShouldAnalyze_XssHtmlTags(t *testing.T) {
 				Code:     tc.code,
 			}
 
-			result := ShouldAnalyze(&ctx, log.NoopLogger())
+			result := shouldAnalyzeLegacy(&ctx, log.NoopLogger())
 			assert.True(t, result, "Expected ShouldAnalyze to return true for %s", tc.name)
 		})
 	}
@@ -241,7 +241,7 @@ func TestShouldAnalyze_EmptyCode(t *testing.T) {
 		Code:     "",
 	}
 
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	result := shouldAnalyzeLegacy(&ctx, log.NoopLogger())
 	assert.False(t, result, "Expected ShouldAnalyze to return false for empty code")
 }
 
@@ -252,7 +252,7 @@ func TestShouldAnalyze_KeywordAsPartOfLargerWord(t *testing.T) {
 		Code:     "import \"database/sql\"\nfunction selectAll() { db.Query(\"select * from users\"); return all; }",
 	}
 
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	result := shouldAnalyzeLegacy(&ctx, log.NoopLogger())
 	assert.True(t, result, "Expected ShouldAnalyze to return true with DB import and select keyword")
 }
 
@@ -268,7 +268,7 @@ func TestShouldAnalyze_GoSqliPgx(t *testing.T) {
 			"}",
 	}
 
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	result := shouldAnalyzeLegacy(&ctx, log.NoopLogger())
 	assert.True(t, result, "Expected ShouldAnalyze to return true for pgx driver with non-db handle and raw-string SQL")
 }
 
@@ -283,7 +283,7 @@ func TestShouldAnalyze_WithFileSearchKeywordsFromRule(t *testing.T) {
 		Code: "func main() { customkeyword() }",
 	}
 
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	result := shouldAnalyzeLegacy(&ctx, log.NoopLogger())
 	assert.True(t, result, "Expected ShouldAnalyze to return true when FileSearchKeywords from rule matches")
 }
 
@@ -298,7 +298,7 @@ func TestShouldAnalyze_WithFileSearchKeywordsNotMatching(t *testing.T) {
 		Code: "func main() { fmt.Println(\"hello\") }",
 	}
 
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	result := shouldAnalyzeLegacy(&ctx, log.NoopLogger())
 	assert.False(t, result, "Expected ShouldAnalyze to return false when FileSearchKeywords from rule don't match")
 }
 
@@ -312,7 +312,7 @@ func TestShouldAnalyze_NoKeywordsAnalyzesEverything(t *testing.T) {
 		Code: "func main() { fmt.Println(\"hello\") }",
 	}
 
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	result := shouldAnalyzeLegacy(&ctx, log.NoopLogger())
 	assert.True(t, result, "Expected ShouldAnalyze to return true when no keywords are defined (analyze everything)")
 }
 
@@ -507,7 +507,7 @@ func TestShouldAnalyze_ElixirCriticalFilterRegressions(t *testing.T) {
 				Rule:     api.AiPrompt{ID: tt.rule},
 				Code:     tt.code,
 			}
-			assert.Equal(t, tt.want, ShouldAnalyze(&ctx, log.NoopLogger()))
+			assert.Equal(t, tt.want, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 		})
 	}
 }
@@ -518,7 +518,7 @@ func TestShouldAnalyze_ElixirSqlInjection(t *testing.T) {
 		Rule:     api.AiPrompt{ID: "datadog/elixir-sqli"},
 		Code:     "Repo.query(\"SELECT * FROM users WHERE id = #{id}\")",
 	}
-	assert.True(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+	assert.True(t, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 }
 
 func TestShouldAnalyze_ElixirSqlInjectionRequiresSql(t *testing.T) {
@@ -527,7 +527,7 @@ func TestShouldAnalyze_ElixirSqlInjectionRequiresSql(t *testing.T) {
 		Rule:     api.AiPrompt{ID: "datadog/elixir-sqli"},
 		Code:     "Repo.query(query, [id])",
 	}
-	assert.False(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+	assert.False(t, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 }
 
 func TestShouldAnalyze_ElixirSqlInjectionWithRequestQuery(t *testing.T) {
@@ -536,7 +536,7 @@ func TestShouldAnalyze_ElixirSqlInjectionWithRequestQuery(t *testing.T) {
 		Rule:     api.AiPrompt{ID: "datadog/elixir-sqli"},
 		Code:     `def run(conn, params), do: Repo.query(params["query"])`,
 	}
-	assert.True(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+	assert.True(t, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 }
 
 func TestShouldAnalyze_ElixirPromptInjectionRequiresInput(t *testing.T) {
@@ -545,7 +545,7 @@ func TestShouldAnalyze_ElixirPromptInjectionRequiresInput(t *testing.T) {
 		Rule:     api.AiPrompt{ID: "datadog/elixir-promptinjection"},
 		Code:     "ReqLLM.generate_text(model: model, prompt: system_prompt)",
 	}
-	assert.False(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+	assert.False(t, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 }
 
 // ============================================================
@@ -559,7 +559,7 @@ func TestShouldAnalyze_CSharpSqlInjection(t *testing.T) {
 		Code:     "var cmd = new SqlCommand(\"SELECT * FROM users WHERE id = \" + userId, connection);",
 	}
 
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	result := shouldAnalyzeLegacy(&ctx, log.NoopLogger())
 	assert.True(t, result, "Expected ShouldAnalyze to return true for C# code with SqlCommand and SQL keywords")
 }
 
@@ -570,7 +570,7 @@ func TestShouldAnalyze_CSharpSqlInjection_NoMatch(t *testing.T) {
 		Code:     "Console.WriteLine(\"Hello World\");",
 	}
 
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	result := shouldAnalyzeLegacy(&ctx, log.NoopLogger())
 	assert.False(t, result, "Expected ShouldAnalyze to return false for C# code without SQL keywords")
 }
 
@@ -581,7 +581,7 @@ func TestShouldAnalyze_CSharpXss(t *testing.T) {
 		Code:     "Response.Write(\"<div>\" + Request.QueryString[\"name\"] + \"</div>\");",
 	}
 
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	result := shouldAnalyzeLegacy(&ctx, log.NoopLogger())
 	assert.True(t, result, "Expected ShouldAnalyze to return true for C# XSS pattern")
 }
 
@@ -592,7 +592,7 @@ func TestShouldAnalyze_CSharpDeserialization(t *testing.T) {
 		Code:     "BinaryFormatter formatter = new BinaryFormatter();\nobject obj = formatter.Deserialize(stream);",
 	}
 
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	result := shouldAnalyzeLegacy(&ctx, log.NoopLogger())
 	assert.True(t, result, "Expected ShouldAnalyze to return true for C# BinaryFormatter deserialization")
 }
 
@@ -603,7 +603,7 @@ func TestShouldAnalyze_CSharpPathTraversal(t *testing.T) {
 		Code:     "string path = Path.Combine(basePath, Request.QueryString[\"file\"]);\nFile.ReadAllText(path);",
 	}
 
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	result := shouldAnalyzeLegacy(&ctx, log.NoopLogger())
 	assert.True(t, result, "Expected ShouldAnalyze to return true for C# path traversal pattern")
 }
 
@@ -614,7 +614,7 @@ func TestShouldAnalyze_CSharpWeakHash(t *testing.T) {
 		Code:     "var md5 = MD5.Create();\nvar hash = md5.ComputeHash(Encoding.UTF8.GetBytes(password));",
 	}
 
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	result := shouldAnalyzeLegacy(&ctx, log.NoopLogger())
 	assert.True(t, result, "Expected ShouldAnalyze to return true for C# weak hash with password")
 }
 
@@ -625,7 +625,7 @@ func TestShouldAnalyze_CSharpInsecureCookie(t *testing.T) {
 		Code:     "Response.Cookies.Append(\"session\", sessionId, new CookieOptions { });",
 	}
 
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	result := shouldAnalyzeLegacy(&ctx, log.NoopLogger())
 	assert.True(t, result, "Expected ShouldAnalyze to return true for C# cookie operations")
 }
 
@@ -636,7 +636,7 @@ func TestShouldAnalyze_CSharpWeakRandomness(t *testing.T) {
 		Code:     "var random = new Random();\nvar token = random.Next().ToString();",
 	}
 
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	result := shouldAnalyzeLegacy(&ctx, log.NoopLogger())
 	assert.True(t, result, "Expected ShouldAnalyze to return true for C# weak randomness with token")
 }
 
@@ -647,7 +647,7 @@ func TestShouldAnalyze_CSharpLdapInjection(t *testing.T) {
 		Code:     "var searcher = new DirectorySearcher(entry);\nsearcher.Filter = \"(cn=\" + userName + \")\";",
 	}
 
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	result := shouldAnalyzeLegacy(&ctx, log.NoopLogger())
 	assert.True(t, result, "Expected ShouldAnalyze to return true for C# LDAP injection pattern")
 }
 
@@ -658,7 +658,7 @@ func TestShouldAnalyze_CSharpXPathInjection(t *testing.T) {
 		Code:     "XmlDocument doc = new XmlDocument();\nvar nodes = doc.SelectNodes(\"/users/user[@id='\" + userId + \"']\");",
 	}
 
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	result := shouldAnalyzeLegacy(&ctx, log.NoopLogger())
 	assert.True(t, result, "Expected ShouldAnalyze to return true for C# XPath injection pattern")
 }
 
@@ -669,7 +669,7 @@ func TestShouldAnalyze_CSharpAccessControl(t *testing.T) {
 		Code:     "[HttpGet]\npublic IActionResult GetUser([FromRoute] int id)\n{\n    return Ok(db.Users.FindById(id));\n}",
 	}
 
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	result := shouldAnalyzeLegacy(&ctx, log.NoopLogger())
 	assert.True(t, result, "Expected ShouldAnalyze to return true for C# access control pattern")
 }
 
@@ -680,7 +680,7 @@ func TestShouldAnalyze_CSharpTrustBoundary(t *testing.T) {
 		Code:     "HttpContext.Session.SetString(\"user\", Request.Form[\"username\"]);",
 	}
 
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	result := shouldAnalyzeLegacy(&ctx, log.NoopLogger())
 	assert.True(t, result, "Expected ShouldAnalyze to return true for C# trust boundary pattern")
 }
 
@@ -691,7 +691,7 @@ func TestShouldAnalyze_CSharpCodeInjection(t *testing.T) {
 		Code:     "var provider = new CSharpCodeProvider();\nvar results = provider.CompileAssemblyFromSource(parameters, Request.Form[\"code\"]);",
 	}
 
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	result := shouldAnalyzeLegacy(&ctx, log.NoopLogger())
 	assert.True(t, result, "Expected ShouldAnalyze to return true for C# code injection pattern")
 }
 
@@ -702,7 +702,7 @@ func TestShouldAnalyze_CSharpBrokenCrypto(t *testing.T) {
 		Code:     "var des = DESCryptoServiceProvider.Create();\nvar aes = Aes.Create();\naes.Mode = CipherMode.ECB;",
 	}
 
-	result := ShouldAnalyze(&ctx, log.NoopLogger())
+	result := shouldAnalyzeLegacy(&ctx, log.NoopLogger())
 	assert.True(t, result, "Expected ShouldAnalyze to return true for C# broken crypto pattern")
 }
 
@@ -712,7 +712,7 @@ func TestShouldAnalyzeSwiftSqli(t *testing.T) {
 		Rule:     api.AiPrompt{ID: "datadog/swift-sqli"},
 		Code:     "let query = \"SELECT * FROM users WHERE id = \\(id)\"\ntry database.execute(sql: query)",
 	}
-	assert.True(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+	assert.True(t, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 }
 
 func TestShouldAnalyzeSwiftCmdi(t *testing.T) {
@@ -721,7 +721,7 @@ func TestShouldAnalyzeSwiftCmdi(t *testing.T) {
 		Rule:     api.AiPrompt{ID: "datadog/swift-cmdi"},
 		Code:     "let task = Process()\ntask.launchPath = \"/bin/sh\"\ntask.launch()",
 	}
-	assert.True(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+	assert.True(t, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 }
 
 func TestShouldAnalyzeSwiftXss(t *testing.T) {
@@ -730,7 +730,7 @@ func TestShouldAnalyzeSwiftXss(t *testing.T) {
 		Rule:     api.AiPrompt{ID: "datadog/swift-xss"},
 		Code:     "let name = try req.query.get(String.self, at: \"name\")\nreturn Response(body: .init(string: \"<p>\\(name)</p>\"))",
 	}
-	assert.True(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+	assert.True(t, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 }
 
 func TestShouldNotAnalyzeSwiftCommentOnly(t *testing.T) {
@@ -739,7 +739,7 @@ func TestShouldNotAnalyzeSwiftCommentOnly(t *testing.T) {
 		Rule:     api.AiPrompt{ID: "datadog/swift-cmdi"},
 		Code:     "// Process().launch()",
 	}
-	assert.False(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+	assert.False(t, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 }
 
 func TestStripSwiftCommentsPreservesStringLiteralsAndHandlesNesting(t *testing.T) {
@@ -801,7 +801,7 @@ func TestShouldAnalyzeSwiftAdditionalAPIs(t *testing.T) {
 				Rule:     api.AiPrompt{ID: tt.ruleID},
 				Code:     tt.code,
 			}
-			assert.True(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+			assert.True(t, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 		})
 	}
 }
@@ -814,7 +814,7 @@ func TestShouldAnalyzeSwiftExtendedRules(t *testing.T) {
 			Rule:     api.AiPrompt{ID: ruleID},
 			Code:     code,
 		}
-		assert.True(t, ShouldAnalyze(&ctx, log.NoopLogger()), ruleID)
+		assert.True(t, shouldAnalyzeLegacy(&ctx, log.NoopLogger()), ruleID)
 	}
 
 	assertSwiftRuleMatches("datadog/swift-pathtraversal", "let path = req.parameters.get(String.self, at: \"file\")\ntry FileManager.default.removeItem(at: URL(fileURLWithPath: path))")
@@ -854,7 +854,7 @@ func TestShouldAnalyzeKotlinOWASPAIRules(t *testing.T) {
 			Rule:     api.AiPrompt{ID: ruleID},
 			Code:     code,
 		}
-		assert.Equal(t, want, ShouldAnalyze(&ctx, log.NoopLogger()), ruleID)
+		assert.Equal(t, want, shouldAnalyzeLegacy(&ctx, log.NoopLogger()), ruleID)
 	}
 
 	// sensitiveinfodisclosure: AI context + sensitive data
@@ -935,7 +935,7 @@ func TestShouldAnalyzeKotlinOWASPAIRules(t *testing.T) {
 val bytes = Files.readAllBytes(Paths.get("/var/app/docs/$filename"))  // <-- SINK: LLM-controlled path
 `,
 		}
-		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, true, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("kotlin/improperoutputhandling#5", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -945,7 +945,7 @@ val bytes = Files.readAllBytes(Paths.get("/var/app/docs/$filename"))  // <-- SIN
 val body = restTemplate.getForObject(url, String::class.java)  // <-- SINK: LLM-controlled URL enables SSRF
 `,
 		}
-		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, true, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("kotlin/improperoutputhandling#8", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -955,7 +955,7 @@ val body = restTemplate.getForObject(url, String::class.java)  // <-- SINK: LLM-
 val value = SpelExpressionParser().parseExpression(expr).getValue(context)  // <-- SINK: SpEL code execution
 `,
 		}
-		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, true, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("kotlin/systempromptleakage#4", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -972,7 +972,7 @@ class PromptServlet : HttpServlet() {
 }
 `,
 		}
-		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, true, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("kotlin/unboundedconsumption#2", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -995,7 +995,7 @@ class SpringAiConfig {
 }
 `,
 		}
-		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, true, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("kotlin/unboundedconsumption#5", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -1021,7 +1021,7 @@ class AssistantFactory {
 }
 `,
 		}
-		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, true, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("kotlin/unboundedconsumption#6", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -1045,7 +1045,7 @@ class ChatService(builder: ChatClient.Builder) {
 }
 `,
 		}
-		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, true, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("kotlin/unboundedconsumption#9", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -1068,7 +1068,7 @@ class AiConfig {
 }
 `,
 		}
-		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, true, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("kotlin/vectorembeddingweaknesses#2", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -1091,7 +1091,7 @@ class BatchIngestController(
 }
 `,
 		}
-		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, true, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("kotlin/vectorembeddingweaknesses#7", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -1112,7 +1112,7 @@ class RagIngestController(
 }
 `,
 		}
-		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, true, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("kotlin/datamodelpoisoning#5", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -1132,7 +1132,7 @@ class ModelServlet : HttpServlet() {
 }
 `,
 		}
-		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, true, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("kotlin/datamodelpoisoning#6", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -1155,7 +1155,7 @@ class Dl4jController {
 }
 `,
 		}
-		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, true, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("kotlin/datamodelpoisoning#8", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -1176,7 +1176,7 @@ class WekaController {
 }
 `,
 		}
-		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, true, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("kotlin/datamodelpoisoning#9", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -1201,7 +1201,7 @@ class TrainController(private val model: org.deeplearning4j.nn.multilayer.MultiL
 }
 `,
 		}
-		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, true, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("Koog Android intent", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -1211,7 +1211,7 @@ class TrainController(private val model: org.deeplearning4j.nn.multilayer.MultiL
 val prompt = intent.getStringExtra("prompt") ?: return
 agent.run(prompt)`,
 		}
-		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, true, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("Koog function input", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -1220,7 +1220,7 @@ agent.run(prompt)`,
 			Code: `import ai.koog.agents.core.agent.AIAgent
 suspend fun answer(agent: AIAgent<String, String>, prompt: String) = agent.run(prompt)`,
 		}
-		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, true, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("Android without AI", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -1229,7 +1229,7 @@ suspend fun answer(agent: AIAgent<String, String>, prompt: String) = agent.run(p
 			Code: `val prompt = intent.getStringExtra("prompt") ?: return
 agent.run(prompt)`,
 		}
-		assert.Equal(t, false, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, false, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("JDBC email", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -1239,7 +1239,7 @@ agent.run(prompt)`,
 val email = rs.getString("email")
 chatModel.chat(email)`,
 		}
-		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, true, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("Phone without AI", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -1248,7 +1248,7 @@ chatModel.chat(email)`,
 			Code: `val phone = rs.getString("phone")
 logger.info(phone)`,
 		}
-		assert.Equal(t, false, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, false, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("PII phone", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -1257,7 +1257,7 @@ logger.info(phone)`,
 			Code: `val phone = rs.getString("phone")
 chatModel.chat(phone)`,
 		}
-		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, true, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("Servlet without system prompt", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -1265,7 +1265,7 @@ chatModel.chat(phone)`,
 			Rule:     api.AiPrompt{ID: "datadog/kotlin-systempromptleakage"},
 			Code:     `resp.writer.write("hello")`,
 		}
-		assert.Equal(t, false, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, false, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("Generic model training", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -1273,7 +1273,7 @@ chatModel.chat(phone)`,
 			Rule:     api.AiPrompt{ID: "datadog/kotlin-datamodelpoisoning"},
 			Code:     `@PostMapping("/train") fun train(@RequestBody data: Data) { model.fit(data) }`,
 		}
-		assert.Equal(t, false, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, false, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("Read only embeddings", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -1281,7 +1281,7 @@ chatModel.chat(phone)`,
 			Rule:     api.AiPrompt{ID: "datadog/kotlin-vectorembeddingweaknesses"},
 			Code:     `embeddingStore.search(request)`,
 		}
-		assert.Equal(t, false, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, false, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("File read without AI", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -1289,7 +1289,7 @@ chatModel.chat(phone)`,
 			Rule:     api.AiPrompt{ID: "datadog/kotlin-improperoutputhandling"},
 			Code:     `Files.readAllBytes(Paths.get(filename))`,
 		}
-		assert.Equal(t, false, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, false, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 
 }
@@ -1304,7 +1304,7 @@ func TestShouldAnalyzePhpOWASPAIRules(t *testing.T) {
 			Rule:     api.AiPrompt{ID: ruleID},
 			Code:     code,
 		}
-		assert.Equal(t, want, ShouldAnalyze(&ctx, log.NoopLogger()), ruleID)
+		assert.Equal(t, want, shouldAnalyzeLegacy(&ctx, log.NoopLogger()), ruleID)
 	}
 
 	// promptinjection: AI client + request input OR prompt-role signal
@@ -1434,7 +1434,7 @@ Route::post('/retrain', function () {
 });
 `,
 		}
-		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, true, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("php/datamodelpoisoning#5", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -1452,7 +1452,7 @@ Route::post('/train', function (\Illuminate\Http\Request $request) {
 });
 `,
 		}
-		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, true, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("php/improperoutputhandling#4", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -1468,7 +1468,7 @@ Route::post('/train', function (\Illuminate\Http\Request $request) {
 $contents = file_get_contents("/var/app/docs/$filename");  // <-- SINK: LLM-controlled path
 `,
 		}
-		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, true, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("php/improperoutputhandling#5", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -1486,7 +1486,7 @@ $url = trim($client->chat()->create([
 $body = (string) (new Client())->get($url)->getBody();  // <-- SINK: LLM-controlled URL enables SSRF
 `,
 		}
-		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, true, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("php/improperoutputhandling#8", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -1496,7 +1496,7 @@ $body = (string) (new Client())->get($url)->getBody();  // <-- SINK: LLM-control
 require "/var/app/plugins/$plugin";  // <-- SINK: LLM-controlled include path
 `,
 		}
-		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, true, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("php/improperoutputhandling#9", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -1509,7 +1509,7 @@ require "/var/app/plugins/$plugin";  // <-- SINK: LLM-controlled include path
 error_log($output);  // <-- SINK: ANSI escape sequences reach the log/terminal — visual spoofing / clipboard hijack
 `,
 		}
-		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, true, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("php/excessiveagency#8", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -1527,7 +1527,7 @@ class OpsTools {
 }
 `,
 		}
-		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, true, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("PHP database email", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -1538,7 +1538,7 @@ $email = $pdo->query('SELECT email FROM users LIMIT 1')->fetchColumn();
 $chat = new OpenAIChat();
 $chat->generateText($email);`,
 		}
-		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, true, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("PHP phone", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -1547,7 +1547,7 @@ $chat->generateText($email);`,
 			Code: `use LLPhant\Chat\OpenAIChat;
 $chat->generateText($user->phone);`,
 		}
-		assert.Equal(t, true, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, true, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("PHP phone without AI", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -1555,7 +1555,7 @@ $chat->generateText($user->phone);`,
 			Rule:     api.AiPrompt{ID: "datadog/php-sensitiveinfodisclosure"},
 			Code:     `$phone = $user->phone; error_log($phone);`,
 		}
-		assert.Equal(t, false, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, false, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("PHP training without model library", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -1563,7 +1563,7 @@ $chat->generateText($user->phone);`,
 			Rule:     api.AiPrompt{ID: "datadog/php-datamodelpoisoning"},
 			Code:     `$trainer->train($request->input('training'));`,
 		}
-		assert.Equal(t, false, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, false, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("MCP without tool", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -1571,7 +1571,7 @@ $chat->generateText($user->phone);`,
 			Rule:     api.AiPrompt{ID: "datadog/php-excessiveagency"},
 			Code:     `use Mcp\Server\Server; $server = new Server();`,
 		}
-		assert.Equal(t, false, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, false, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("Tool without MCP or AI", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -1579,7 +1579,7 @@ $chat->generateText($user->phone);`,
 			Rule:     api.AiPrompt{ID: "datadog/php-excessiveagency"},
 			Code:     `#[McpTool] function run($cmd) { return shell_exec($cmd); }`,
 		}
-		assert.Equal(t, false, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, false, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 	t.Run("HTTP without AI", func(t *testing.T) {
 		ctx := model.DetectionContext{
@@ -1587,7 +1587,7 @@ $chat->generateText($user->phone);`,
 			Rule:     api.AiPrompt{ID: "datadog/php-improperoutputhandling"},
 			Code:     `use GuzzleHttp\Client; $http->get($url);`,
 		}
-		assert.Equal(t, false, ShouldAnalyze(&ctx, log.NoopLogger()))
+		assert.Equal(t, false, shouldAnalyzeLegacy(&ctx, log.NoopLogger()))
 	})
 
 }

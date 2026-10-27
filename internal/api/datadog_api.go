@@ -17,21 +17,22 @@ type jsonApiResponse struct {
 		ID         string `json:"id"`
 		Type       string `json:"type"`
 		Attributes struct {
-			Category              string   `json:"category"`
-			Checksum              string   `json:"checksum"`
-			Content               string   `json:"content"`
-			Cwe                   string   `json:"cwe"`
-			Description           string   `json:"description"`
-			Directories           []string `json:"directories"`
-			ExecutionMode         string   `json:"execution_mode"`
-			Globs                 []string `json:"globs"`
-			IsDefault             bool     `json:"is_default"`
-			IsTesting             bool     `json:"is_testing"`
-			Severity              string   `json:"severity"`
-			ShortDescription      string   `json:"short_description"`
-			Version               string   `json:"rule_version"`
-			ResultKeywordsExclude []string `jsonapi:"attribute" json:"result_keywords_exclude,omitempty"` //nolint:lll    // keywords used to exclude some results (e.g. false positives)
-			FileSearchKeywords    []string `jsonapi:"attribute" json:"file_search_keywords,omitempty"`    // keywords used to select files for analysis
+			AnalysisFilter        *api.AnalysisFilter `json:"analysis_filter,omitempty"`
+			Category              string              `json:"category"`
+			Checksum              string              `json:"checksum"`
+			Content               string              `json:"content"`
+			Cwe                   string              `json:"cwe"`
+			Description           string              `json:"description"`
+			Directories           []string            `json:"directories"`
+			ExecutionMode         string              `json:"execution_mode"`
+			Globs                 []string            `json:"globs"`
+			IsDefault             bool                `json:"is_default"`
+			IsTesting             bool                `json:"is_testing"`
+			Severity              string              `json:"severity"`
+			ShortDescription      string              `json:"short_description"`
+			Version               string              `json:"rule_version"`
+			ResultKeywordsExclude []string            `jsonapi:"attribute" json:"result_keywords_exclude,omitempty"` //nolint:lll    // keywords used to exclude some results (e.g. false positives)
+			FileSearchKeywords    []string            `jsonapi:"attribute" json:"file_search_keywords,omitempty"`    // keywords used to select files for analysis
 		} `json:"attributes"`
 	} `json:"data"`
 }
@@ -121,6 +122,7 @@ func GetPromptsFromApiData(data io.ReadCloser) ([]api.AiPrompt, error) {
 			Version:               ruleVersion,
 			ResultKeywordsExclude: item.Attributes.ResultKeywordsExclude,
 			FileSearchKeywords:    item.Attributes.FileSearchKeywords,
+			AnalysisFilter:        item.Attributes.AnalysisFilter,
 		}
 	}
 
