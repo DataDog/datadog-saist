@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestAnalysisFilterCannotBroadenEligibility(t *testing.T) {
+func TestAnalysisFilterUsesMetadata(t *testing.T) {
 	ctx := model.DetectionContext{
 		Language: model.Java,
 		Code:     `String query = "SELECT * FROM users";`,
@@ -17,10 +17,37 @@ func TestAnalysisFilterCannotBroadenEligibility(t *testing.T) {
 			Version: 1, Expression: api.FilterExpression{ContainsAny: []string{"select"}},
 		}},
 	}
+	assert.True(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+	ctx.Rule.ID = "custom/rule"
+	ctx.Rule.FileSearchKeywords = []string{"database"}
+	assert.True(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+	ctx.Rule.AnalysisFilter.Expression.ContainsAny = []string{"missing"}
 	assert.False(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+}
+
+func TestAnalysisFilterFallbackPreservesRejections(t *testing.T) {
+	ctx := model.DetectionContext{
+		Language: model.Java, Code: `String query = "SELECT * FROM users";`,
+		Rule: api.AiPrompt{ID: "datadog/java-sqli", FileSearchKeywords: []string{"select"}},
+	}
+	assert.False(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+	ctx.Rule.AnalysisFilter = &api.AnalysisFilter{Version: api.AnalysisFilterVersion + 1,
+		Expression: api.FilterExpression{ContainsAny: []string{"select"}},
+	}
+	assert.False(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+	ctx.Rule.AnalysisFilter.Version = api.AnalysisFilterVersion
+	ctx.Rule.AnalysisFilter.Expression = api.FilterExpression{Any: []api.FilterExpression{
+		{ContainsAny: []string{"select"}}, {},
+	}}
+	assert.False(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+
 	ctx.Rule.ID = "custom/rule"
 	ctx.Rule.FileSearchKeywords = []string{"database"}
 	assert.False(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+	ctx.Rule.AnalysisFilter = nil
+	assert.False(t, ShouldAnalyze(&ctx, log.NoopLogger()))
+	ctx.Rule.FileSearchKeywords = []string{"select"}
+	assert.True(t, ShouldAnalyze(&ctx, log.NoopLogger()))
 }
 
 func TestAnalysisFilterCompatibility(t *testing.T) {

@@ -4366,10 +4366,9 @@ func ShouldAnalyze(detectionContext *model.DetectionContext, logger log.DDSource
 		return false
 	}
 
-	// Keep the legacy gate during migration so metadata cannot broaden eligibility.
 	if filter := detectionContext.Rule.AnalysisFilter; filter != nil && filter.Version == api.AnalysisFilterVersion {
-		if matches, supported := matchFilterExpression(getStrippedCode(detectionContext), &filter.Expression); supported && !matches {
-			return false
+		if matches, supported := matchFilterExpression(getStrippedCode(detectionContext), &filter.Expression); supported {
+			return matches
 		}
 	}
 
