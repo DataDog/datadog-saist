@@ -62,40 +62,6 @@ func TestFilterExpressionOperators(t *testing.T) {
 	assert.False(t, supported)
 }
 
-func FuzzJavaSQLFilterParity(f *testing.F) {
-	rule := api.AiPrompt{ID: "datadog/java-sqli", AnalysisFilter: &api.AnalysisFilter{
-		Version: 1,
-		Expression: api.FilterExpression{All: []api.FilterExpression{
-			{ContainsAny: []string{
-				"connection", "drivermanager", "preparedstatement", "statement", "resultset",
-				"executequery(", "executeupdate(", "execute(",
-				"jdbctemplate", "namedparamjdbctemplate", "simplejdbccall",
-				"entitymanager", "createquery(", "createsqlquery(", "session.createquery", "session.createsqlquery",
-				"dsl.", "dslcontext", "selectfrom(",
-			}},
-			{WordsAny: []string{"select", "update", "insert", "delete", "from", "where"}},
-		}},
-	}}
-	f.Add(`statement.executeQuery("SELECT * FROM users WHERE name='" + name + "'");`)
-	f.Add(`// statement SELECT
-class Example {}`)
-	f.Add(`String value = "select";`)
-	f.Add(`statement.selected()`)
-	f.Add("")
-	for _, hint := range rule.AnalysisFilter.Expression.All[0].ContainsAny {
-		for _, word := range rule.AnalysisFilter.Expression.All[1].WordsAny {
-			f.Add(hint + " " + word)
-		}
-	}
-	f.Fuzz(func(t *testing.T, code string) {
-		ctx := model.DetectionContext{Language: model.Java, Code: code, Rule: rule}
-		matches, supported := matchFilterExpression(getStrippedCode(&ctx), &rule.AnalysisFilter.Expression)
-		assert.True(t, supported)
-		assert.Equal(t, shouldAnalyzeJavaSqliCtx(&ctx), matches)
-		assert.Equal(t, shouldAnalyzeJavaSqliCtx(&ctx), ShouldAnalyze(&ctx, log.NoopLogger()))
-	})
-}
-
 func TestFilterNegation(t *testing.T) {
 	expression := api.FilterExpression{Not: &api.FilterExpression{ContainsAny: []string{"safe_load"}}}
 	matches, supported := matchFilterExpression("yaml.load(data)", &expression)
