@@ -6,6 +6,7 @@ import (
 
 	"github.com/DataDog/datadog-saist/internal/log"
 	"github.com/DataDog/datadog-saist/internal/model"
+	"github.com/DataDog/datadog-saist/internal/model/api"
 )
 
 var (
@@ -4363,6 +4364,13 @@ func shouldAnalyzePhpUnboundedconsumptionCtx(ctx *model.DetectionContext) bool {
 func ShouldAnalyze(detectionContext *model.DetectionContext, logger log.DDSourceLogger) bool {
 	if detectionContext.Code == "" {
 		return false
+	}
+
+	// Keep the legacy gate during migration so metadata cannot broaden eligibility.
+	if filter := detectionContext.Rule.AnalysisFilter; filter != nil && filter.Version == api.AnalysisFilterVersion {
+		if matches, supported := matchFilterExpression(getStrippedCode(detectionContext), &filter.Expression); supported && !matches {
+			return false
+		}
 	}
 
 	// If we have a specialized filter for this rule, use it.
