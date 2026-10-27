@@ -1,0 +1,2581 @@
+{
+  "datadog/csharp-accesscontrol": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["[httpget]", "[httppost]", "[httpput]", "[httpdelete]", "[route(", "[apicontroller]", "controllerbase", "controller"]
+        },
+        {
+          "contains_any": ["fromroute", "fromquery", "findbyid", "getbyid", "find(", "firstordefault(", "singleordefault("]
+        }
+      ]
+    }
+  },
+  "datadog/csharp-brokencrypto": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["des.create", "descryptoserviceprovider", "new des(", "tripledes.create", "tripledescryptoserviceprovider", "new tripledes(", "rc2.create", "rc2cryptoserviceprovider", "new rc2(", "rsa.create(512", "rsa.create(1024", "keysize = 512", "keysize = 1024"]
+    }
+  },
+  "datadog/csharp-cmdi": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["process.start(", "new process(", "processstartinfo", "new processstartinfo(", ".startinfo", ".filename", ".arguments", "cmd.exe", "cmd /c", "powershell", "bash", "system.diagnostics.process"]
+    }
+  },
+  "datadog/csharp-codei": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["csharpcodeprovider", "compileassemblyfromsource", "assembly.load", "activator.createinstance", "type.invokemember", "methodinfo.invoke", "expression.compile", "roslyn"]
+        },
+        {
+          "contains_any": ["request.", "frombody", "fromquery", "httpcontext"]
+        }
+      ]
+    }
+  },
+  "datadog/csharp-deserialization": {
+    "version": 1,
+    "expression": {
+      "any": [
+        {
+          "all": [
+            {
+              "contains_any": ["binaryformatter", "objectstateformatter", "soapformatter", "netdatacontractserializer", "losformatter", "jsonconvert.deserializeobject", "javascriptserializer", "xmlserializer", "datacontractserializer", "typenamehanding"]
+            },
+            {
+              "contains_any": ["stream", "request.", "file.", "httpcontext"]
+            }
+          ]
+        },
+        {
+          "contains_any": ["binaryformatter", "objectstateformatter"]
+        }
+      ]
+    }
+  },
+  "datadog/csharp-insecurecookie": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["response.cookies.append", "response.cookies.add", "new cookie(", "cookieoptions", "httpcontext.response.cookies"]
+    }
+  },
+  "datadog/csharp-ldapi": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["directoryentry", "directorysearcher", "system.directoryservices", "ldapconnection", "novell.directory.ldap", ".findall(", ".findone(", "searchrequest", "sendrequest(", ".filter", "searcher.filter", "ldap://", "dc=", "cn=", "ou="]
+    }
+  },
+  "datadog/csharp-pathtraversal": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["file.open", "file.read", "file.write", "file.delete", "filestream", "streamreader", "streamwriter", "path.combine", "path.getfullpath", "fileinfo", "directoryinfo", "physicalfile", "directory."]
+    }
+  },
+  "datadog/csharp-sqli": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["sqlconnection", "sqlcommand", "sqldataadapter", "sqldatareader", "executenonquery(", "executereader(", "executescalar(", "dbcontext", "entity framework", "linq to sql", "dapper", "npgsqlconnection", "mysqlconnection", "oledbconnection"]
+        },
+        {
+          "words_any": ["select", "update", "insert", "delete", "from", "where"]
+        }
+      ]
+    }
+  },
+  "datadog/csharp-trustboundary": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["session", "httpcontext.session", "ihttpsessionfeature", "tempdata", "request.form", "request.query", "claimsprincipal", "httpcontext.user", "setstring", "setint32", "viewdata", "viewbag"]
+    }
+  },
+  "datadog/csharp-weakhash": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["md5.create", "md5cryptoserviceprovider", "new md5cryptoserviceprovider", "md5managed", "md5cng", "sha1.create", "sha1cryptoserviceprovider", "new sha1cryptoserviceprovider", "sha1managed", "sha1cng", "hmacmd5", "hmacsha1", "hashalgorithm.create(\"md5\"", "hashalgorithm.create(\"sha1\"", "computehash("]
+    }
+  },
+  "datadog/csharp-weakrandomness": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["new random(", "random.next", "random.nextdouble", "random.nextbytes", "random.nextsingle", "random.nextint64", "system.random"]
+        },
+        {
+          "contains_any": ["token", "password", "session", "secret", "key", "otp", "verification", "csrf", "nonce", "apikey", "api_key", "cookie", "rememberme", "remember_me", "auth", "login", "credential"]
+        }
+      ]
+    }
+  },
+  "datadog/csharp-xpathi": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["xpathnavigator", "xpathdocument", "selectsinglenode", "selectnodes", "xpathexpression", "xpath", "xmldocument"]
+    }
+  },
+  "datadog/csharp-xss": {
+    "version": 1,
+    "expression": {
+      "any": [
+        {
+          "contains_any": ["<html", "<body", "<script", "<form", "<input", "<img", "<iframe", "<div", "<span", "<a ", "<p>"]
+        },
+        {
+          "all": [
+            {
+              "contains_any": ["response.write", "response.writeasync", "writeasync(", "htmlhelper", "@html.raw", "html.raw(", "content(", "contentresult", "viewbag", "viewdata", "string.format(", "return content("]
+            },
+            {
+              "contains_any": ["request.querystring", "request.query", "request.query.keys", "request.form", "request.headers", "request.cookies", "request[", "httpcontext", "frombody", "fromquery", "fromroute", "fromform", "iheaderdictionary"]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/dart-accesscontrol": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["findbyid(", ".doc(", ".delete(", ".update(", ".select("]
+        },
+        {
+          "contains_any": ["request.url.queryparameters", "request.uri.queryparameters", "request.url.pathsegments", "request.uri.pathsegments", "request.readasstring(", "request.body(", "request.json(", "request.bytes(", "request.formdata(", "request.headers", "request.params", "request.query", "formdata", "texteditingcontroller", "stdin.readline", "platform.environment", "externalinput", "externalmessage", "externalquery", "externaldataset", "externalcount", "externalgroup", "externalname", "externalurl", "externalpredicate", "retrieveddocument", "uploaded"]
+        }
+      ]
+    }
+  },
+  "datadog/dart-brokencrypto": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["aesmode.ecb", "aes/ecb", "paddedblockcipher", "desengine", "rc4engine", "ecbblockcipher", "iv.fromlength(", "key.fromutf8(", "key.frombase64(", "key.frombase16(", "iv.fromutf8(", "iv.frombase64(", "iv.frombase16("]
+    }
+  },
+  "datadog/dart-cmdi": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["process.run(", "process.start(", "process.runsync(", "package:process_run"]
+        },
+        {
+          "any": [
+            {
+              "contains_any": ["request.url.queryparameters", "request.uri.queryparameters", "request.url.pathsegments", "request.uri.pathsegments", "request.readasstring(", "request.body(", "request.json(", "request.bytes(", "request.formdata(", "request.headers", "request.params", "request.query", "formdata", "texteditingcontroller", "stdin.readline", "platform.environment", "externalinput", "externalmessage", "externalquery", "externaldataset", "externalcount", "externalgroup", "externalname", "externalurl", "externalpredicate", "retrieveddocument", "uploaded"]
+            },
+            {
+              "contains_any": ["runinshell: true", "executable"]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/dart-codei": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["eval(", "compiler.compile(", "runtime.executelib(", "runtime().executelib(", "runjavascript("]
+        },
+        {
+          "contains_any": ["request.url.queryparameters", "request.uri.queryparameters", "request.url.pathsegments", "request.uri.pathsegments", "request.readasstring(", "request.body(", "request.json(", "request.bytes(", "request.formdata(", "request.headers", "request.params", "request.query", "formdata", "texteditingcontroller", "stdin.readline", "platform.environment", "externalinput", "externalmessage", "externalquery", "externaldataset", "externalcount", "externalgroup", "externalname", "externalurl", "externalpredicate", "retrieveddocument", "uploaded"]
+        }
+      ]
+    }
+  },
+  "datadog/dart-datamodelpoisoning": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["finetuning", "fine_tune", "trainingfile", "trainingdata", ".jsonl", "adddataset(", "files.upload(", "filepurpose.finetune"]
+        },
+        {
+          "contains_any": ["request.url.queryparameters", "request.uri.queryparameters", "request.url.pathsegments", "request.uri.pathsegments", "request.readasstring(", "request.body(", "request.json(", "request.bytes(", "request.formdata(", "request.headers", "request.params", "request.query", "formdata", "texteditingcontroller", "stdin.readline", "platform.environment", "externalinput", "externalmessage", "externalquery", "externaldataset", "externalcount", "externalgroup", "externalname", "externalurl", "externalpredicate", "retrieveddocument", "uploaded"]
+        }
+      ]
+    }
+  },
+  "datadog/dart-errorinfoleak": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["stacktrace", "exception", ".tostring()", "error"]
+        },
+        {
+          "contains_any": ["response.ok(", "response.json(", "response.internalservererror(", "httpresponse", "response.write(", "return response("]
+        }
+      ]
+    }
+  },
+  "datadog/dart-excessiveagency": {
+    "version": 1,
+    "expression": {
+      "any": [
+        {
+          "contains_any": ["functiondeclaration", "tool.fromfunction", "stringtool.fromfunction", "tool.function(", "definetool(", "toolnames", "mcp_dart"]
+        },
+        {
+          "all": [
+            {
+              "contains_any": ["functioncall", "functioncalls", "toolcall", "alltoolcalls", "call.name", "function.name"]
+            },
+            {
+              "contains_any": ["file(", "process.run(", "process.start(", "httpclient", "rawquery(", ".delete(", ".update("]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/dart-improperoutputhandling": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["google_generative_ai", "langchain", "openai_dart", "dart_openai", "firebase_vertexai", "generativemodel(", "chatopenai", "generatecontent("]
+        },
+        {
+          "contains_any": ["generatecontent(", "generatecontentstream(", "chatopenai", ".responses.create(", ".chat.completions.create(", "openai.instance.chat.create(", "openai.instance.chat.createstream(", "createchatcompletion(", "createchatcompletionstream(", ".invoke(", ".stream("]
+        },
+        {
+          "contains_any": ["process.run(", "process.start(", "rawquery(", "rawinsert(", "rawupdate(", "rawdelete(", "setinnerhtml(", ".innerhtml =", "runjavascript(", "compiler.compile(", "writeasstring("]
+        }
+      ]
+    }
+  },
+  "datadog/dart-insecurecookie": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["cookie(", "response.cookies.add(", "set-cookie", "httpheaders.setcookieheader"]
+    }
+  },
+  "datadog/dart-integeroverflow": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["tosigned(", "tounsigned(", "int8list", "uint8list", "int16list", "uint16list", "int32list", "uint32list", "@int32", "@uint32", "dart:ffi"]
+        },
+        {
+          "contains_any": ["request.url.queryparameters", "request.uri.queryparameters", "request.url.pathsegments", "request.uri.pathsegments", "request.readasstring(", "request.body(", "request.json(", "request.bytes(", "request.formdata(", "request.headers", "request.params", "request.query", "formdata", "texteditingcontroller", "stdin.readline", "platform.environment", "externalinput", "externalmessage", "externalquery", "externaldataset", "externalcount", "externalgroup", "externalname", "externalurl", "externalpredicate", "retrieveddocument", "uploaded"]
+        }
+      ]
+    }
+  },
+  "datadog/dart-ldapi": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["package:dartdap", "ldap.query(", "parsequery("]
+        },
+        {
+          "contains_any": ["request.url.queryparameters", "request.uri.queryparameters", "request.url.pathsegments", "request.uri.pathsegments", "request.readasstring(", "request.body(", "request.json(", "request.bytes(", "request.formdata(", "request.headers", "request.params", "request.query", "formdata", "texteditingcontroller", "stdin.readline", "platform.environment", "externalinput", "externalmessage", "externalquery", "externaldataset", "externalcount", "externalgroup", "externalname", "externalurl", "externalpredicate", "retrieveddocument", "uploaded"]
+        }
+      ]
+    }
+  },
+  "datadog/dart-loginjection": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["package:logging", "logger(", "logger.", "developer.log("]
+        },
+        {
+          "contains_any": ["request.url.queryparameters", "request.uri.queryparameters", "request.url.pathsegments", "request.uri.pathsegments", "request.readasstring(", "request.body(", "request.json(", "request.bytes(", "request.formdata(", "request.headers", "request.params", "request.query", "formdata", "texteditingcontroller", "stdin.readline", "platform.environment", "externalinput", "externalmessage", "externalquery", "externaldataset", "externalcount", "externalgroup", "externalname", "externalurl", "externalpredicate", "retrieveddocument", "uploaded"]
+        }
+      ]
+    }
+  },
+  "datadog/dart-misinformation": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["google_generative_ai", "langchain", "openai_dart", "dart_openai", "firebase_vertexai", "generativemodel(", "chatopenai", "generatecontent("]
+        },
+        {
+          "contains_any": ["generatecontent(", "generatecontentstream(", "chatopenai", ".responses.create(", ".chat.completions.create(", "openai.instance.chat.create(", "openai.instance.chat.createstream(", "createchatcompletion(", "createchatcompletionstream(", ".invoke(", ".stream("]
+        },
+        {
+          "contains_any": ["medical", "diagnos", "legal", "financial", "credit", "eligibility", "safety", "recommendation"]
+        },
+        {
+          "any": [
+            {
+              "contains_any": ["response.ok(", "response.json(", "response.internalservererror(", "httpresponse", "response.write(", "return response("]
+            },
+            {
+              "contains_any": ["automatically", "decision(", "filelegalclaim(", "recommendation("]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/dart-openredirect": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["response.found(", "movedpermanently(", "httpresponse.redirect(", "response.redirect(", "locationheader"]
+        },
+        {
+          "contains_any": ["request.url.queryparameters", "request.uri.queryparameters", "request.url.pathsegments", "request.uri.pathsegments", "request.readasstring(", "request.body(", "request.json(", "request.bytes(", "request.formdata(", "request.headers", "request.params", "request.query", "formdata", "texteditingcontroller", "stdin.readline", "platform.environment", "externalinput", "externalmessage", "externalquery", "externaldataset", "externalcount", "externalgroup", "externalname", "externalurl", "externalpredicate", "retrieveddocument", "uploaded"]
+        }
+      ]
+    }
+  },
+  "datadog/dart-pathtraversal": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["readasstring(", "readasbytes(", "writeasstring(", "openread(", "openwrite(", "sendfile(", "virtualdirectory"]
+        },
+        {
+          "contains_any": ["request.url.queryparameters", "request.uri.queryparameters", "request.url.pathsegments", "request.uri.pathsegments", "request.readasstring(", "request.body(", "request.json(", "request.bytes(", "request.formdata(", "request.headers", "request.params", "request.query", "formdata", "texteditingcontroller", "stdin.readline", "platform.environment", "externalinput", "externalmessage", "externalquery", "externaldataset", "externalcount", "externalgroup", "externalname", "externalurl", "externalpredicate", "retrieveddocument", "uploaded"]
+        }
+      ]
+    }
+  },
+  "datadog/dart-promptinjection": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["google_generative_ai", "langchain", "openai_dart", "dart_openai", "firebase_vertexai", "generativemodel(", "chatopenai", "generatecontent("]
+        },
+        {
+          "contains_any": ["generatecontent(", "generatecontentstream(", "chatopenai", ".responses.create(", ".chat.completions.create(", "openai.instance.chat.create(", "openai.instance.chat.createstream(", "createchatcompletion(", "createchatcompletionstream(", ".invoke(", ".stream("]
+        },
+        {
+          "contains_any": ["request.url.queryparameters", "request.uri.queryparameters", "request.url.pathsegments", "request.uri.pathsegments", "request.readasstring(", "request.body(", "request.json(", "request.bytes(", "request.formdata(", "request.headers", "request.params", "request.query", "formdata", "texteditingcontroller", "stdin.readline", "platform.environment", "externalinput", "externalmessage", "externalquery", "externaldataset", "externalcount", "externalgroup", "externalname", "externalurl", "externalpredicate", "retrieveddocument", "uploaded"]
+        }
+      ]
+    }
+  },
+  "datadog/dart-sensitiveinfodisclosure": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["platform.environment", "dotenv.env", "fluttersecurestorage", "api_key", "apikey", "password", "secret", "token"]
+        },
+        {
+          "any": [
+            {
+              "contains_any": ["response.ok(", "response.json(", "response.internalservererror(", "httpresponse", "response.write(", "return response("]
+            },
+            {
+              "contains_any": ["print(", "debugprint(", "developer.log(", "logger(", "logger.", ".log(", "log("]
+            },
+            {
+              "all": [
+                {
+                  "contains_any": ["google_generative_ai", "langchain", "openai_dart", "dart_openai", "firebase_vertexai", "generativemodel(", "chatopenai", "generatecontent("]
+                },
+                {
+                  "contains_any": ["generatecontent(", "generatecontentstream(", "chatopenai", ".responses.create(", ".chat.completions.create(", "openai.instance.chat.create(", "openai.instance.chat.createstream(", "createchatcompletion(", "createchatcompletionstream(", ".invoke(", ".stream("]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/dart-sqli": {
+    "version": 1,
+    "expression": {
+      "any": [
+        {
+          "contains_any": ["rawquery(", "rawinsert(", "rawupdate(", "rawdelete(", "customselect(", "customstatement("]
+        },
+        {
+          "all": [
+            {
+              "contains_any": ["connection.execute("]
+            },
+            {
+              "words_any": ["select", "update", "insert", "delete", "from", "where"]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/dart-supplychain": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["interpreter.fromfile(", "interpreter.frombuffer(", "tflite.loadmodel(", "runtime(bytedata", "runtime.ofprogram(", "flutter_eval", "dart_eval"]
+        },
+        {
+          "any": [
+            {
+              "contains_any": ["httpclient", "http.get(", "dio.get(", "dio().get(", "download(", "uri.parse("]
+            },
+            {
+              "contains_any": ["request.url.queryparameters", "request.uri.queryparameters", "request.url.pathsegments", "request.uri.pathsegments", "request.readasstring(", "request.body(", "request.json(", "request.bytes(", "request.formdata(", "request.headers", "request.params", "request.query", "formdata", "texteditingcontroller", "stdin.readline", "platform.environment", "externalinput", "externalmessage", "externalquery", "externaldataset", "externalcount", "externalgroup", "externalname", "externalurl", "externalpredicate", "retrieveddocument", "uploaded"]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/dart-systempromptleakage": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["systeminstruction", "content.system", "chatmessage.system", "systemprompt", "systemchatmessage"]
+        },
+        {
+          "any": [
+            {
+              "contains_any": ["response.ok(", "response.json(", "response.internalservererror(", "httpresponse", "response.write(", "return response("]
+            },
+            {
+              "contains_any": ["print(", "debugprint(", "developer.log(", "logger(", "logger.", ".log(", "log("]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/dart-trustboundary": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["httpsession", "request.session", "jwtclaim", "jsonwebtoken", "request.context"]
+        },
+        {
+          "contains_any": ["request.url.queryparameters", "request.uri.queryparameters", "request.url.pathsegments", "request.uri.pathsegments", "request.readasstring(", "request.body(", "request.json(", "request.bytes(", "request.formdata(", "request.headers", "request.params", "request.query", "formdata", "texteditingcontroller", "stdin.readline", "platform.environment", "externalinput", "externalmessage", "externalquery", "externaldataset", "externalcount", "externalgroup", "externalname", "externalurl", "externalpredicate", "retrieveddocument", "uploaded"]
+        }
+      ]
+    }
+  },
+  "datadog/dart-unboundedconsumption": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["google_generative_ai", "langchain", "openai_dart", "dart_openai", "firebase_vertexai", "generativemodel(", "chatopenai", "generatecontent("]
+        },
+        {
+          "contains_any": ["generatecontent(", "generatecontentstream(", "chatopenai", ".responses.create(", ".chat.completions.create(", "openai.instance.chat.create(", "openai.instance.chat.createstream(", "createchatcompletion(", "createchatcompletionstream(", ".invoke(", ".stream("]
+        }
+      ]
+    }
+  },
+  "datadog/dart-vectorembeddingweaknesses": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["langchain_chroma", "pinecone", "chromadb", "similaritysearch(", "querydocuments(", "memoryvectorstore"]
+        },
+        {
+          "contains_any": ["request.url.queryparameters", "request.uri.queryparameters", "request.url.pathsegments", "request.uri.pathsegments", "request.readasstring(", "request.body(", "request.json(", "request.bytes(", "request.formdata(", "request.headers", "request.params", "request.query", "formdata", "texteditingcontroller", "stdin.readline", "platform.environment", "externalinput", "externalmessage", "externalquery", "externaldataset", "externalcount", "externalgroup", "externalname", "externalurl", "externalpredicate", "retrieveddocument", "uploaded"]
+        }
+      ]
+    }
+  },
+  "datadog/dart-weakhash": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["md5.convert(", "sha1.convert(", "digest('md5')", "digest(\"md5\")", "digest('sha-1')", "digest(\"sha-1\")", "md5digest", "sha1digest"]
+    }
+  },
+  "datadog/dart-weakrandomness": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["random().nextint(", "random().nextdouble(", "random("]
+        },
+        {
+          "contains_any": ["token", "nonce", "password", "reset", "api_key", "apikey", "session", "otp", "csrf"]
+        }
+      ]
+    }
+  },
+  "datadog/dart-xpathi": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["package:xml/xpath.dart", ".xpath(", "xpath.source", "queryxpath(", "htmlxpath"]
+        },
+        {
+          "contains_any": ["request.url.queryparameters", "request.uri.queryparameters", "request.url.pathsegments", "request.uri.pathsegments", "request.readasstring(", "request.body(", "request.json(", "request.bytes(", "request.formdata(", "request.headers", "request.params", "request.query", "formdata", "texteditingcontroller", "stdin.readline", "platform.environment", "externalinput", "externalmessage", "externalquery", "externaldataset", "externalcount", "externalgroup", "externalname", "externalurl", "externalpredicate", "retrieveddocument", "uploaded"]
+        }
+      ]
+    }
+  },
+  "datadog/dart-xss": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["setinnerhtml(", ".innerhtml =", "nodetreesanitizer.trusted", "loadhtmlstring("]
+        },
+        {
+          "contains_any": ["request.url.queryparameters", "request.uri.queryparameters", "request.url.pathsegments", "request.uri.pathsegments", "request.readasstring(", "request.body(", "request.json(", "request.bytes(", "request.formdata(", "request.headers", "request.params", "request.query", "formdata", "texteditingcontroller", "stdin.readline", "platform.environment", "externalinput", "externalmessage", "externalquery", "externaldataset", "externalcount", "externalgroup", "externalname", "externalurl", "externalpredicate", "retrieveddocument", "uploaded"]
+        }
+      ]
+    }
+  },
+  "datadog/dart-zipslip": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["zipdecoder", "tardecoder", "archivefile"]
+        },
+        {
+          "contains_any": ["file(", "directory(", "link("]
+        }
+      ]
+    }
+  },
+  "datadog/elixir-accesscontrol": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["repo.get(", "repo.get!(", "repo.one(", "repo.update(", "repo.delete(", "from("]
+        },
+        {
+          "any": [
+            {
+              "contains_any": ["params[\"id\"]", "params[:id]", "conn.params", "path_params"]
+            },
+            {
+              "contains_any": ["conn.params", "params[", "body_params", "query_params", "get_req_header("]
+            },
+            {
+              "regex_any": ["(?s)\\bdefp?\\s+[a-z_][a-z0-9_!?]*\\s*(?:\\(\\s*)?(?:_?conn|%plug\\.conn\\{.*?\\}\\s*=\\s*_?conn)\\s*,\\s*(?:%\\{\\s*\"|params\\b)"]
+            },
+            {
+              "regex_any": ["(?s)\\bdefp?\\s+handle_event\\s*(?:\\(\\s*)?(?:\"[^\"]*\"|[a-z_][a-z0-9_!?]*)\\s*,\\s*(?:%\\{\\s*\"|params\\b)"]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/elixir-brokencrypto": {
+    "version": 1,
+    "expression": {
+      "contains_any": [":des_", ":rc4", ":blowfish_", ":aes_ecb", "_ecb"]
+    }
+  },
+  "datadog/elixir-cmdi": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["system.cmd(", ":os.cmd(", "port.open(", "muontrap.cmd(", "porcelain.shell("]
+    }
+  },
+  "datadog/elixir-codei": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["code.eval_string(", "code.eval_quoted(", "eex.eval_string(", ":erl_eval.expr", "module.create("]
+        },
+        {
+          "any": [
+            {
+              "contains_any": ["conn.params", "params[", "body_params", "query_params", "get_req_header("]
+            },
+            {
+              "regex_any": ["(?s)\\bdefp?\\s+[a-z_][a-z0-9_!?]*\\s*(?:\\(\\s*)?(?:_?conn|%plug\\.conn\\{.*?\\}\\s*=\\s*_?conn)\\s*,\\s*(?:%\\{\\s*\"|params\\b)"]
+            },
+            {
+              "regex_any": ["(?s)\\bdefp?\\s+handle_event\\s*(?:\\(\\s*)?(?:\"[^\"]*\"|[a-z_][a-z0-9_!?]*)\\s*,\\s*(?:%\\{\\s*\"|params\\b)"]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/elixir-datamodelpoisoning": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["bumblebee", "nx", "axon", "ortex", "huggingface", "safetensors"]
+        },
+        {
+          "contains_any": ["dataset", "training", "fine_tun", "load_model", "load_featurizer", "from_pretrained"]
+        }
+      ]
+    }
+  },
+  "datadog/elixir-deserialization": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": [":erlang.binary_to_term", "binary_to_term("]
+        },
+        {
+          "not": {
+            "all": [
+              {
+                "count_equals": {
+                  "substrings": ["binary_to_term("],
+                  "count": 1
+                }
+              },
+              {
+                "regex_any": ["(?s)(?::erlang\\.)?binary_to_term\\s*\\([^()]*(?:,\\s*\\[\\s*:safe\\s*\\])\\s*\\)"]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "datadog/elixir-errorinfoleak": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["exception.message(", "exception.format(", "__stacktrace__", "stacktrace", "inspect(error", "inspect(exception"]
+        },
+        {
+          "contains_any": ["json(conn,", "send_resp(", "render(conn,", "put_resp_body("]
+        }
+      ]
+    }
+  },
+  "datadog/elixir-excessiveagency": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["langchain", "reqllm", "ex_openai", "openai", "anthropic"]
+        },
+        {
+          "contains_any": ["function_call", "tool_call", "tools:", "function:", "execute(", "mcp"]
+        }
+      ]
+    }
+  },
+  "datadog/elixir-improperoutputhandling": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["langchain", "reqllm", "ex_openai", "openai", "chat_completion", "llm"]
+        },
+        {
+          "contains_any": ["system.cmd(", ":os.cmd(", "code.eval_string(", "phoenix.html.raw(", "repo.query(", "file.write("]
+        }
+      ]
+    }
+  },
+  "datadog/elixir-insecurecookie": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["put_resp_cookie(", "delete_resp_cookie(", "plug.session", "store: :cookie", "put_session("]
+    }
+  },
+  "datadog/elixir-integeroverflow": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["signed-integer", "unsigned-integer", "size(", "integer-size(", "nif", "rustler", "port.command("]
+        },
+        {
+          "any": [
+            {
+              "contains_any": ["conn.params", "params[", "body_params", "query_params", "get_req_header("]
+            },
+            {
+              "regex_any": ["(?s)\\bdefp?\\s+[a-z_][a-z0-9_!?]*\\s*(?:\\(\\s*)?(?:_?conn|%plug\\.conn\\{.*?\\}\\s*=\\s*_?conn)\\s*,\\s*(?:%\\{\\s*\"|params\\b)"]
+            },
+            {
+              "regex_any": ["(?s)\\bdefp?\\s+handle_event\\s*(?:\\(\\s*)?(?:\"[^\"]*\"|[a-z_][a-z0-9_!?]*)\\s*,\\s*(?:%\\{\\s*\"|params\\b)"]
+            },
+            {
+              "contains_any": ["binary.decode_", "string.to_integer("]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/elixir-ldapi": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": [":eldap", "eldap.search", "eldap.simple_bind", "ldapex", "ldap."]
+        },
+        {
+          "contains_any": ["filter", "base", "dn", "search"]
+        }
+      ]
+    }
+  },
+  "datadog/elixir-loginjection": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["logger.debug(", "logger.info(", "logger.warning(", "logger.warn(", "logger.error(", ":logger."]
+        },
+        {
+          "any": [
+            {
+              "contains_any": ["conn.params", "params[", "body_params", "query_params", "get_req_header("]
+            },
+            {
+              "regex_any": ["(?s)\\bdefp?\\s+[a-z_][a-z0-9_!?]*\\s*(?:\\(\\s*)?(?:_?conn|%plug\\.conn\\{.*?\\}\\s*=\\s*_?conn)\\s*,\\s*(?:%\\{\\s*\"|params\\b)"]
+            },
+            {
+              "regex_any": ["(?s)\\bdefp?\\s+handle_event\\s*(?:\\(\\s*)?(?:\"[^\"]*\"|[a-z_][a-z0-9_!?]*)\\s*,\\s*(?:%\\{\\s*\"|params\\b)"]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/elixir-misinformation": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["langchain", "reqllm", "ex_openai", "openai", "anthropic"]
+        },
+        {
+          "contains_any": ["medical", "diagnosis", "financial", "legal", "decision", "recommendation", "answer", "response"]
+        }
+      ]
+    }
+  },
+  "datadog/elixir-openredirect": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["redirect(conn,", "external:", "redirect(to:", "redirect(external:"]
+        },
+        {
+          "any": [
+            {
+              "contains_any": ["conn.params", "params[", "body_params", "query_params", "get_req_header("]
+            },
+            {
+              "regex_any": ["(?s)\\bdefp?\\s+[a-z_][a-z0-9_!?]*\\s*(?:\\(\\s*)?(?:_?conn|%plug\\.conn\\{.*?\\}\\s*=\\s*_?conn)\\s*,\\s*(?:%\\{\\s*\"|params\\b)"]
+            },
+            {
+              "regex_any": ["(?s)\\bdefp?\\s+handle_event\\s*(?:\\(\\s*)?(?:\"[^\"]*\"|[a-z_][a-z0-9_!?]*)\\s*,\\s*(?:%\\{\\s*\"|params\\b)"]
+            },
+            {
+              "contains_any": ["referer"]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/elixir-pathtraversal": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["file.read(", "file.read!(", "file.write(", "file.write!(", "file.open(", "file.open!(", "file.rm(", "file.rm!(", "file.cp(", "file.cp!(", "send_file(", "send_download(", "path.join("]
+        },
+        {
+          "any": [
+            {
+              "contains_any": ["conn.params", "params[", "body_params", "query_params", "get_req_header("]
+            },
+            {
+              "regex_any": ["(?s)\\bdefp?\\s+[a-z_][a-z0-9_!?]*\\s*(?:\\(\\s*)?(?:_?conn|%plug\\.conn\\{.*?\\}\\s*=\\s*_?conn)\\s*,\\s*(?:%\\{\\s*\"|params\\b)"]
+            },
+            {
+              "regex_any": ["(?s)\\bdefp?\\s+handle_event\\s*(?:\\(\\s*)?(?:\"[^\"]*\"|[a-z_][a-z0-9_!?]*)\\s*,\\s*(?:%\\{\\s*\"|params\\b)"]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/elixir-promptinjection": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["langchain", "reqllm", "ex_openai", "openai", "anthropic", "messages:", "prompt:"]
+        },
+        {
+          "any": [
+            {
+              "contains_any": ["conn.params", "params[", "body_params", "query_params", "get_req_header("]
+            },
+            {
+              "regex_any": ["(?s)\\bdefp?\\s+[a-z_][a-z0-9_!?]*\\s*(?:\\(\\s*)?(?:_?conn|%plug\\.conn\\{.*?\\}\\s*=\\s*_?conn)\\s*,\\s*(?:%\\{\\s*\"|params\\b)"]
+            },
+            {
+              "regex_any": ["(?s)\\bdefp?\\s+handle_event\\s*(?:\\(\\s*)?(?:\"[^\"]*\"|[a-z_][a-z0-9_!?]*)\\s*,\\s*(?:%\\{\\s*\"|params\\b)"]
+            },
+            {
+              "contains_any": ["user_input", "user_message", "document"]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/elixir-sensitiveinfodisclosure": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["password", "secret", "api_key", "apikey", "token", "private_key", "credit_card", "ssn"]
+        },
+        {
+          "contains_any": ["langchain", "reqllm", "ex_openai", "openai", "anthropic", "json(conn,", "text(conn,", "html(conn,", "send_resp(", "render(conn,", "put_resp_body(", "logger.", "inspect("]
+        }
+      ]
+    }
+  },
+  "datadog/elixir-sqli": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["ecto.adapters.sql", "repo.query", "sql.query", "postgrex", "myxql", "tds", "ecto.repo"]
+        },
+        {
+          "any": [
+            {
+              "words_any": ["select", "update", "insert", "delete", "from", "where"]
+            },
+            {
+              "contains_any": ["conn.params", "params[", "body_params", "query_params", "get_req_header("]
+            },
+            {
+              "regex_any": ["(?s)\\bdefp?\\s+[a-z_][a-z0-9_!?]*\\s*(?:\\(\\s*)?(?:_?conn|%plug\\.conn\\{.*?\\}\\s*=\\s*_?conn)\\s*,\\s*(?:%\\{\\s*\"|params\\b)"]
+            },
+            {
+              "regex_any": ["(?s)\\bdefp?\\s+handle_event\\s*(?:\\(\\s*)?(?:\"[^\"]*\"|[a-z_][a-z0-9_!?]*)\\s*,\\s*(?:%\\{\\s*\"|params\\b)"]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/elixir-supplychain": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "not": {
+            "all": [
+              {
+                "not": {
+                  "contains_any": ["req.get(", "req.request(", "finch.request(", "httpoison.get(", ":httpc.request(", "download("]
+                }
+              },
+              {
+                "any": [
+                  {
+                    "all": [
+                      {
+                        "count_equals": {
+                          "substrings": ["bumblebee.load_model(", "bumblebee.load_featurizer(", "axon.deserialize(", "nx.deserialize("],
+                          "count": 1
+                        }
+                      },
+                      {
+                        "not": {
+                          "contains_any": ["ortex"]
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "all": [
+                      {
+                        "count_equals": {
+                          "substrings": ["bumblebee.load_model(", "bumblebee.load_featurizer(", "axon.deserialize(", "nx.deserialize("],
+                          "count": 0
+                        }
+                      },
+                      {
+                        "contains_any": ["ortex"]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "regex_any": ["(?s)bumblebee\\.load_(?:model|featurizer)\\s*\\(\\s*\\{:hf,\\s*\"[^\"]+\"\\s*,\\s*revision:\\s*\"[0-9a-f]{40}\"\\s*\\}"]
+              }
+            ]
+          }
+        },
+        {
+          "contains_any": ["bumblebee.load_model(", "bumblebee.load_featurizer(", "ortex", "axon.deserialize(", "nx.deserialize("]
+        },
+        {
+          "any": [
+            {
+              "contains_any": ["req.get(", "req.request(", "finch.request(", "httpoison.get(", ":httpc.request(", "download("]
+            },
+            {
+              "contains_any": ["{:hf,"]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/elixir-systempromptleakage": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["system_prompt", "system prompt", "role: :system", "role: \"system\"", "type: :system"]
+        },
+        {
+          "contains_any": ["json(conn,", "send_resp(", "render(conn,", "logger.", "inspect("]
+        }
+      ]
+    }
+  },
+  "datadog/elixir-trustboundary": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["put_session(", "configure_session(", "assign(conn,", "guardian.encode_and_sign("]
+        },
+        {
+          "any": [
+            {
+              "contains_any": ["conn.params", "params[", "body_params", "query_params", "get_req_header("]
+            },
+            {
+              "regex_any": ["(?s)\\bdefp?\\s+[a-z_][a-z0-9_!?]*\\s*(?:\\(\\s*)?(?:_?conn|%plug\\.conn\\{.*?\\}\\s*=\\s*_?conn)\\s*,\\s*(?:%\\{\\s*\"|params\\b)"]
+            },
+            {
+              "regex_any": ["(?s)\\bdefp?\\s+handle_event\\s*(?:\\(\\s*)?(?:\"[^\"]*\"|[a-z_][a-z0-9_!?]*)\\s*,\\s*(?:%\\{\\s*\"|params\\b)"]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/elixir-unboundedconsumption": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["langchain", "reqllm", "ex_openai", "openai", "anthropic"]
+        },
+        {
+          "contains_any": ["chat_completion", "completion", "generate", "stream", "while", "enum.reduce", "task.async_stream"]
+        }
+      ]
+    }
+  },
+  "datadog/elixir-vectorembeddingweaknesses": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["pgvector", "vector", "qdrant", "pinecone", "weaviate", "embedding", "cosine_distance", "l2_distance"]
+        },
+        {
+          "contains_any": ["similarity", "nearest", "search", "query", "distance", "embedding"]
+        }
+      ]
+    }
+  },
+  "datadog/elixir-weakhash": {
+    "version": 1,
+    "expression": {
+      "contains_any": [":md5,", ":md5)", ":sha,", ":sha)", ":erlang.md5(", "md5("]
+    }
+  },
+  "datadog/elixir-weakrandomness": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": [":rand.", "enum.random(", "enum.take_random(", "system.unique_integer("]
+        },
+        {
+          "contains_any": ["token", "password", "session", "secret", "otp", "nonce", "api_key", "cookie", "auth", "credential"]
+        }
+      ]
+    }
+  },
+  "datadog/elixir-xpathi": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["sweet_xml", "sweetxml", "sigil_x", "xpath(", ":xmerl_xpath.string("]
+    }
+  },
+  "datadog/elixir-xss": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["phoenix.html.raw(", "{:safe,", "html(conn,", "send_resp(", "put_resp_content_type("]
+        },
+        {
+          "any": [
+            {
+              "contains_any": ["conn.params", "params[", "body_params", "query_params", "get_req_header("]
+            },
+            {
+              "regex_any": ["(?s)\\bdefp?\\s+[a-z_][a-z0-9_!?]*\\s*(?:\\(\\s*)?(?:_?conn|%plug\\.conn\\{.*?\\}\\s*=\\s*_?conn)\\s*,\\s*(?:%\\{\\s*\"|params\\b)"]
+            },
+            {
+              "regex_any": ["(?s)\\bdefp?\\s+handle_event\\s*(?:\\(\\s*)?(?:\"[^\"]*\"|[a-z_][a-z0-9_!?]*)\\s*,\\s*(?:%\\{\\s*\"|params\\b)"]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/elixir-zipslip": {
+    "version": 1,
+    "expression": {
+      "contains_any": [":zip.extract", ":erl_tar.extract", "unzip(", "extract("]
+    }
+  },
+  "datadog/go-accesscontrol": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["http.handlefunc", "mux.handlefunc", "router.", "gin.context", "echo.context"]
+        },
+        {
+          "contains_any": ["r.url.query", "vars[", "param(", "c.param(", "findbyid", "getbyid"]
+        }
+      ]
+    }
+  },
+  "datadog/go-brokencrypto": {
+    "version": 1,
+    "expression": {
+      "any": [
+        {
+          "contains_any": ["crypto/des", "crypto/rc4"]
+        },
+        {
+          "contains_any": ["des.newcipher", "des.newtripledescipher", "rc4.newcipher"]
+        }
+      ]
+    }
+  },
+  "datadog/go-cmdi": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["os/exec", "exec.command(", "exec.commandcontext(", ".run(", ".start(", ".output(", ".combinedoutput(", "cmd.exe", "/bin/sh", "/bin/bash", "bash"]
+    }
+  },
+  "datadog/go-codei": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["reflect.", "plugin.open", "unsafe."]
+        },
+        {
+          "contains_any": ["r.url.query", "r.formvalue", "r.header.get"]
+        }
+      ]
+    }
+  },
+  "datadog/go-deserialization": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["encoding/gob", "gob.newdecoder", "gob.decode", "json.unmarshal", "yaml.unmarshal", "xml.unmarshal"]
+        },
+        {
+          "contains_any": ["http.request", "r.body", "ioutil.readall", "io.readall", "net.conn"]
+        }
+      ]
+    }
+  },
+  "datadog/go-insecurecookie": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["http.setcookie", "&http.cookie{"]
+    }
+  },
+  "datadog/go-ldapi": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["ldap.", "go-ldap", "gopkg.in/ldap", "ldap.dial", "ldap.search", "ldap.bind", "searchrequest", ".search(", ".bind(", "filter", "ldapfilter", "basedn", "dc=", "cn=", "ou="]
+    }
+  },
+  "datadog/go-pathtraversal": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["os.open(", "os.openfile(", "os.create(", "os.readfile(", "os.writefile(", "os.stat(", "os.lstat(", "os.remove(", "os.removeall(", "os.rename(", "os.mkdir(", "os.mkdirall(", "ioutil.readfile", "ioutil.writefile", "http.servefile", "http.fileserver", "filepath.join("]
+        },
+        {
+          "contains_any": ["r.url.query", "r.formvalue", "r.form", "r.parseform", "r.url.path", "r.header.get", "r.header", "os.args", "os.getenv", "r.cookies(", "c.query(", "c.param(", "c.postform", "mux.vars(", "chi.urlparam(", "dosomething(", "param :=", "bar :=", "for name, values := range"]
+        }
+      ]
+    }
+  },
+  "datadog/go-sqli": {
+    "version": 1,
+    "expression": {
+      "any": [
+        {
+          "contains_any": ["{call", "callablestatement", "callproc"]
+        },
+        {
+          "contains_any": ["\"select ", "\"insert ", "\"update ", "\"delete ", "select userid", "select * from", "insert into", "update users", "delete from", "from users where", "from customers where"]
+        },
+        {
+          "all": [
+            {
+              "any": [
+                {
+                  "contains_any": ["\"database/sql\"", "database/sql", "db.exec(", "db.query(", "db.queryrow(", "db.prepare(", "sqlx.", "gorm.io/gorm", "sqlquery", "sqlstmt", "jackc/pgx", "pgx.", "pgxpool", ".query(ctx", ".queryrow(ctx", ".exec(ctx", ".querycontext(", ".execcontext("]
+                },
+                {
+                  "contains_any": ["sql"]
+                }
+              ]
+            },
+            {
+              "words_any": ["select", "update", "insert", "delete", "call", "exec"]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/go-trustboundary": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["session.", "session[", "sessiondata[", "sessionstore[", ".values[", "context.withvalue", "gorilla/sessions", "store.get("]
+        },
+        {
+          "contains_any": ["r.url.query", "r.url.rawquery", "r.formvalue", "r.postformvalue", "r.header.get", "r.header.values", "r.header[", "r.header {", "range r.header", "r.form[", "r.form.", "r.form {", "range r.form", "r.parseform", "r.cookies(", "r.cookie(", "mux.vars(", "chi.urlparam(", "c.query(", "c.param("]
+        }
+      ]
+    }
+  },
+  "datadog/go-weakhash": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["crypto/md5", "crypto/sha1", "md5.new(", "md5.sum(", "sha1.new(", "sha1.sum(", "hash.hash", "hasher.write"]
+    }
+  },
+  "datadog/go-weakrandomness": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["math/rand", "rand.intn", "rand.int(", "rand.int63", "rand.int31", "rand.uint32", "rand.uint64", "rand.float32", "rand.float64", "rand.read", "rand.seed", "rand.new(", "rand.newsource", "rand.shuffle", "rand.perm", "rand.expfloat64", "rand.normfloat64"]
+        },
+        {
+          "contains_any": ["token", "password", "session", "secret", "key", "otp", "verification", "csrf", "nonce", "apikey", "api_key", "cookie", "rememberme", "remember_me", "auth", "login", "credential"]
+        }
+      ]
+    }
+  },
+  "datadog/go-xpathi": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["xmlquery", "xpath", "antchfx", "libxml"]
+    }
+  },
+  "datadog/go-xss": {
+    "version": 1,
+    "expression": {
+      "any": [
+        {
+          "contains_any": ["<html", "<body", "<script", "<form", "<input", "<img", "<iframe", "<div", "<span", "<a ", "<p>", "<h1", "<h2"]
+        },
+        {
+          "contains_any": ["responsewriter", "http.responsewriter", "w.write(", "fmt.fprintf(", "fmt.fprint(", "fmt.fprintln(", "io.writestring(", "template.execute", "template.html(", "html/template", "text/template"]
+        },
+        {
+          "contains_any": ["r.url.query", "r.url.rawquery", "r.formvalue", "r.postformvalue", "r.header.get", "r.parseform", "r.form[", "mux.vars(", "chi.urlparam(", "c.query(", "c.param("]
+        }
+      ]
+    }
+  },
+  "datadog/java-accesscontrol": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["@getmapping", "@postmapping", "@putmapping", "@deletemapping", "@requestmapping", "@controller", "@restcontroller"]
+        },
+        {
+          "contains_any": ["@pathvariable", "@requestparam", "findbyid(", "getbyid(", "repository."]
+        }
+      ]
+    }
+  },
+  "datadog/java-brokencrypto": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["\"des\"", "\"des/", "cipher.getinstance(\"des", "\"desede\"", "\"desede/", "cipher.getinstance(\"desede", "\"rc4\"", "\"arcfour\"", "cipher.getinstance(\"rc4", "cipher.getinstance(\"arcfour", "\"rc2\"", "cipher.getinstance(\"rc2", "\"blowfish\"", "cipher.getinstance(\"blowfish", "initialize(512", "initialize(1024"]
+    }
+  },
+  "datadog/java-cmdi": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["runtime.getruntime(", ".exec(", "processbuilder", "new processbuilder(", "process.start", "cmd.exe", "/bin/sh", "/bin/bash", "bash -c", "sh -c"]
+    }
+  },
+  "datadog/java-codei": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["scriptengine", "scriptenginemanager", ".eval(", "groovyshell", "spelexpressionparser", "parseexpression(", "mvel.", "ognl.", "class.forname(", "getmethod(", ".invoke("]
+        },
+        {
+          "contains_any": ["getparameter(", "getheader(", "requestparam", "pathvariable", "requestbody"]
+        }
+      ]
+    }
+  },
+  "datadog/java-deserialization": {
+    "version": 1,
+    "expression": {
+      "any": [
+        {
+          "all": [
+            {
+              "contains_any": ["objectinputstream", "readobject(", "xstream", "fromxml(", "xmldecoder", "enabledefaulttyping", "yaml.load", "kryo"]
+            },
+            {
+              "contains_any": ["getinputstream(", "request.", "socket.", "file.", "multipartfile"]
+            }
+          ]
+        },
+        {
+          "contains_any": ["objectinputstream", "xmldecoder"]
+        }
+      ]
+    }
+  },
+  "datadog/java-insecurecookie": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["addcookie(", "new cookie("]
+    }
+  },
+  "datadog/java-ldapi": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["dircontext", "ldapcontext", "initialdircontext", "ldaptemplate", "javax.naming", ".search(", ".bind("]
+    }
+  },
+  "datadog/java-pathtraversal": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["new file(", "java.io.file(", "fileinputstream", "fileoutputstream", "filereader", "filewriter", "files.read", "files.write", "files.delete", "files.exists", "files.copy", "files.move", "paths.get(", "path.of(", ".exists(", ".canread(", ".length(", ".listfiles("]
+        },
+        {
+          "contains_any": ["getparameter(", "getheader(", "pathvariable", "requestparam", "getoriginalfilename(", "getcookies(", "getheaders(", "getparametermap(", "cookievalue", "requestheader", "separateclassrequest", "gettheparameter(", "getparameternames(", "getparametervalues(", "thingfactory", "thinginterface", "dosomething("]
+        }
+      ]
+    }
+  },
+  "datadog/java-sqli": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["connection", "drivermanager", "preparedstatement", "statement", "resultset", "executequery(", "executeupdate(", "execute(", "jdbctemplate", "namedparamjdbctemplate", "simplejdbccall", "entitymanager", "createquery(", "createsqlquery(", "session.createquery", "session.createsqlquery", "dsl.", "dslcontext", "selectfrom("]
+        },
+        {
+          "words_any": ["select", "update", "insert", "delete", "from", "where"]
+        }
+      ]
+    }
+  },
+  "datadog/java-trustboundary": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": [".setattribute(", ".putvalue(", "getsession()", "httpsession"]
+        },
+        {
+          "contains_any": ["getparameter(", "getheader(", "requestparam", "getcookies(", "getheadernames(", "getheaders(", "getparametermap(", "getparametervalues(", "getparameternames(", "getquerystring(", "getpathinfo(", "separateclassrequest", "gettheparameter(", "thingfactory", "dosomething(", "new test("]
+        }
+      ]
+    }
+  },
+  "datadog/java-weakhash": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["messagedigest.getinstance(\"md5\"", "messagedigest.getinstance(\"sha-1\"", "messagedigest.getinstance(\"sha1\"", "\"md5\"", "\"sha-1\"", "\"sha1\"", "digestutils.md5", "digestutils.sha1", "md5hex", "sha1hex", "hashing.md5", "hashing.sha1", "messagedigest"]
+    }
+  },
+  "datadog/java-weakrandomness": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["new random(", "java.util.random", "math.random(", "threadlocalrandom", "random.nextint", "random.nextlong", "random.nextbytes", "random.nextdouble", "random.nextfloat", "random.nextgaussian", "random.ints(", "random.longs(", "random.doubles("]
+        },
+        {
+          "contains_any": ["token", "password", "session", "secret", "key", "otp", "verification", "csrf", "nonce", "apikey", "api_key", "cookie", "rememberme", "remember_me", "auth", "login", "credential"]
+        }
+      ]
+    }
+  },
+  "datadog/java-xpathi": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["xpath", "xpathfactory", "xpathexpression", "documentbuilderfactory", ".compile(", ".evaluate("]
+    }
+  },
+  "datadog/java-xss": {
+    "version": 1,
+    "expression": {
+      "any": [
+        {
+          "contains_any": ["<html", "<body", "<script", "<form", "<input", "<img", "<iframe", "<div", "<span", "<a ", "<p>", "<p "]
+        },
+        {
+          "contains_any": ["getparameter(", "getheader(", "getcookie(", "getquerystring(", "request.", "request.get", "response.getwriter(", "printwriter"]
+        },
+        {
+          "contains_any": ["xss", "javascript:", "onerror=", "onload="]
+        }
+      ]
+    }
+  },
+  "datadog/kotlin-datamodelpoisoning": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["ai.djl", "onnxruntime", "ortsession", "ortenvironment", "savedmodelbundle", "modelserializer", "kinference", "tensorflow", "huggingface", "modelzoo", "zoomodel", "deeplearning4j", "multilayernetwork", "computationgraph", "weka", "serializationhelper"]
+        },
+        {
+          "contains_any": ["loadmodel", "model.load", "createsession", "savedmodelbundle.load", "modelserializer", "kinference", "multilayernetwork.load", "computationgraph.load", "serializationhelper.read", ".fit(", ".train("]
+        },
+        {
+          "any": [
+            {
+              "contains_any": ["@requestbody", "@requestparam", "@pathvariable", "@requestheader", "@getmapping", "@postmapping", "@putmapping", "@deletemapping", "call.receive", "call.parameters", "call.request.queryparameters", ".getparameter(", ".getstringextra("]
+            },
+            {
+              "contains_any": ["huggingface", "resolve/main"]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/kotlin-excessiveagency": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["chatclient", "chatmodel", "chatlanguagemodel", "chatcompletion", "aiservices", "springframework.ai", "langchain4j", "openai", "anthropic", "aallam", "koog", "ollama", "/v1/completions", "/v1/chat/completions"]
+        },
+        {
+          "contains_any": ["@tool", "toolcallback", "methodtoolcallback", "functioncallback", "toolspecification", "chatcompletiontool", "functiondefinition", "tool.builder", "toolregistry", "modelcontextprotocol"]
+        }
+      ]
+    }
+  },
+  "datadog/kotlin-improperoutputhandling": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["chatclient", "chatmodel", "chatlanguagemodel", "chatcompletion", "aiservices", "springframework.ai", "langchain4j", "openai", "anthropic", "aallam", "koog", "ollama", "/v1/completions", "/v1/chat/completions"]
+        },
+        {
+          "any": [
+            {
+              "contains_any": ["call.respond", "call.respondtext", "call.respondredirect", "responseentity", "model.addattribute", "@restcontroller", ".writer.write(", ".writer.print(", ".getwriter(", ".outputstream.write(", ".getoutputstream(", ".sendredirect("]
+            },
+            {
+              "contains_any": ["executequery", "executeupdate", "jdbc", "processbuilder", "runtime.getruntime().exec", "eval(", "writehtml", "respondhtml", "unsafe", "println(", "print(", "logger.", "log.info", "log.debug", "files.write", "writetext(", "files.read", "readtext(", "readbytes(", "getforobject(", "getforentity(", ".exchange(", ".retrieve(", "parseexpression(", "evaluate("]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/kotlin-misinformation": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["chatclient", "chatmodel", "chatlanguagemodel", "chatcompletion", "aiservices", "springframework.ai", "langchain4j", "openai", "anthropic", "aallam", "koog", "ollama", "/v1/completions", "/v1/chat/completions"]
+        },
+        {
+          "contains_any": ["call.respond", "call.respondtext", "call.respondredirect", "responseentity", "model.addattribute", "@restcontroller", ".writer.write(", ".writer.print(", ".getwriter(", ".outputstream.write(", ".getoutputstream(", ".sendredirect("]
+        },
+        {
+          "contains_any": ["medical", "diagnosis", "financial", "legal", "prescription", "advice", "recommendation", "decision", "trade", "stock"]
+        }
+      ]
+    }
+  },
+  "datadog/kotlin-promptinjection": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["chatclient", "chatmodel", "chatlanguagemodel", "chatcompletion", "aiservices", "springframework.ai", "langchain4j", "openai", "anthropic", "aallam", "koog", "ollama", "/v1/completions", "/v1/chat/completions"]
+        },
+        {
+          "any": [
+            {
+              "contains_any": ["@requestbody", "@requestparam", "@pathvariable", "@requestheader", "@getmapping", "@postmapping", "@putmapping", "@deletemapping", "call.receive", "call.parameters", "call.request.queryparameters", ".getparameter(", ".getstringextra("]
+            },
+            {
+              "contains_any": [".prompt(", ".user(", ".system(", ".chat(", ".generate(", "chatcompletion", "usermessage", "systemprompt", "chatmessage", "/v1/chat/completions", "/v1/completions", "/api/generate", "agent.run("]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/kotlin-sensitiveinfodisclosure": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["chatclient", "chatmodel", "chatlanguagemodel", "chatcompletion", "aiservices", "springframework.ai", "langchain4j", "openai", "anthropic", "aallam", "koog", "ollama", "/v1/completions", "/v1/chat/completions"]
+        },
+        {
+          "contains_any": ["password", "secret", "api_key", "apikey", "token", "private_key", "email", "phone", "creditcard", "authorization", "credit_card", "ssn", "system.getenv"]
+        }
+      ]
+    }
+  },
+  "datadog/kotlin-supplychain": {
+    "version": 1,
+    "expression": {
+      "any": [
+        {
+          "all": [
+            {
+              "contains_any": ["ai.djl", "onnxruntime", "ortsession", "ortenvironment", "savedmodelbundle", "modelserializer", "kinference", "tensorflow", "huggingface", "modelzoo", "zoomodel", "deeplearning4j", "multilayernetwork", "computationgraph", "weka", "serializationhelper"]
+            },
+            {
+              "contains_any": ["createsession", "loadmodel", "model.load", "savedmodelbundle.load", "modelserializer", "http.get", "newcall", "readbytes", "optmodelurls"]
+            }
+          ]
+        },
+        {
+          "all": [
+            {
+              "contains_any": ["chatclient", "chatmodel", "chatlanguagemodel", "chatcompletion", "aiservices", "springframework.ai", "langchain4j", "openai", "anthropic", "aallam", "koog", "ollama", "/v1/completions", "/v1/chat/completions"]
+            },
+            {
+              "contains_any": ["gradle", "dependency:get", "processbuilder", "runtime.exec"]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/kotlin-systempromptleakage": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["system_prompt", "systemprompt", "system_message", "systemmessage", ".system("]
+        },
+        {
+          "any": [
+            {
+              "contains_any": ["call.respond", "call.respondtext", "call.respondredirect", "responseentity", "model.addattribute", "@restcontroller", ".writer.write(", ".writer.print(", ".getwriter(", ".outputstream.write(", ".getoutputstream(", ".sendredirect("]
+            },
+            {
+              "contains_any": ["logger.", "log.info", "log.debug", "println", "throw "]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/kotlin-unboundedconsumption": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["chatclient", "chatmodel", "chatlanguagemodel", "chatcompletion", "aiservices", "springframework.ai", "langchain4j", "openai", "anthropic", "aallam", "koog", "ollama", "/v1/completions", "/v1/chat/completions"]
+        },
+        {
+          "contains_any": ["chatcompletion", "completion", "generate", "stream", ".chat(", "openaistreamingchatmodel", "while (true)", "collect {", "collect{", "openaichatmodel.builder(", "azureopenaichatmodel.builder(", "openaichatoptions.builder(", ".prompt("]
+        }
+      ]
+    }
+  },
+  "datadog/kotlin-vectorembeddingweaknesses": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["qdrant", "pinecone", "weaviate", "chroma", "milvus", "pgvector", "lancedb", "embeddingstore", "vectorstore"]
+        },
+        {
+          "contains_any": ["upsert", "adddocument", "adddocuments", ".add(", ".addall(", ".ingest(", "insert", "index"]
+        }
+      ]
+    }
+  },
+  "datadog/php-datamodelpoisoning": {
+    "version": 1,
+    "expression": {
+      "any": [
+        {
+          "all": [
+            {
+              "contains_any": ["inferencesession", "onnxruntime", "persistentmodel", "rubix\\ml", "rubix\\persisters", "huggingface", "phpml\\"]
+            },
+            {
+              "any": [
+                {
+                  "contains_any": ["$_get", "$_post", "$_request", "$_cookie", "$_files", "php://input", "$request->input", "$request->query", "$request->request", "$request->getparsedbody", "$request->getqueryparams", "$request->file"]
+                },
+                {
+                  "contains_any": ["finetuning", "finetune", "fine_tune", "fine-tune", "training"]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "all": [
+            {
+              "contains_any": ["openai", "prism\\prism", "prism::text", "llphant", "neuronai", "symfony\\ai", "anthropic", "ollama", "chat()->create", "->generatetext(", "/v1/completions", "/v1/chat/completions"]
+            },
+            {
+              "contains_any": ["finetuning", "finetune", "fine_tune", "fine-tune", "training"]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/php-excessiveagency": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "any": [
+            {
+              "contains_any": ["openai", "prism\\prism", "prism::text", "llphant", "neuronai", "symfony\\ai", "anthropic", "ollama", "chat()->create", "->generatetext(", "/v1/completions", "/v1/chat/completions"]
+            },
+            {
+              "contains_any": ["mcp\\server", "phpmcp\\server"]
+            }
+          ]
+        },
+        {
+          "contains_any": ["#[tool", "#[mcptool", "#[astool", "function_call", "functioncall", "tool_call", "toolcall", "withtools", "setfunctions", "::destroy(", "mail::", "auth::"]
+        }
+      ]
+    }
+  },
+  "datadog/php-improperoutputhandling": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["openai", "prism\\prism", "prism::text", "llphant", "neuronai", "symfony\\ai", "anthropic", "ollama", "chat()->create", "->generatetext(", "/v1/completions", "/v1/chat/completions"]
+        },
+        {
+          "contains_any": ["->query(", "pdo::query", "shell_exec", "exec(", "passthru", "proc_open", "system(", "eval(", "include ", "include(", "require ", "require(", "|raw", "{!!", "header(", "file_get_contents(", "fopen(", "readfile(", "->get(", "->request(", "curl_exec(", "mysqli_query(", "->executequery(", "->prepare(", "db::statement(", "echo ", "print(", "fwrite(", "error_log(", "->info(", "->debug(", "->render(", "view("]
+        }
+      ]
+    }
+  },
+  "datadog/php-misinformation": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["openai", "prism\\prism", "prism::text", "llphant", "neuronai", "symfony\\ai", "anthropic", "ollama", "chat()->create", "->generatetext(", "/v1/completions", "/v1/chat/completions"]
+        },
+        {
+          "contains_any": ["echo ", "jsonresponse", "response()->json", "$response->getbody", "$this->render", "return response("]
+        },
+        {
+          "contains_any": ["medical", "diagnosis", "financial", "legal", "prescription", "advice", "recommendation", "stock", "trade"]
+        }
+      ]
+    }
+  },
+  "datadog/php-promptinjection": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["openai", "prism\\prism", "prism::text", "llphant", "neuronai", "symfony\\ai", "anthropic", "ollama", "chat()->create", "->generatetext(", "/v1/completions", "/v1/chat/completions"]
+        },
+        {
+          "any": [
+            {
+              "contains_any": ["$_get", "$_post", "$_request", "$_cookie", "$_files", "php://input", "$request->input", "$request->query", "$request->request", "$request->getparsedbody", "$request->getqueryparams", "$request->file"]
+            },
+            {
+              "contains_any": ["usermessage", "'role' => 'user'", "'role' => 'system'", "withprompt", "withsystemprompt", "->generatetext(", "chat()->create", "messagebag"]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/php-sensitiveinfodisclosure": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["openai", "prism\\prism", "prism::text", "llphant", "neuronai", "symfony\\ai", "anthropic", "ollama", "chat()->create", "->generatetext(", "/v1/completions", "/v1/chat/completions"]
+        },
+        {
+          "contains_any": ["password", "secret", "api_key", "apikey", "token", "private_key", "email", "phone", "creditcard", "authorization", "credit_card", "ssn", "getenv(", "$_env", "$_server"]
+        }
+      ]
+    }
+  },
+  "datadog/php-supplychain": {
+    "version": 1,
+    "expression": {
+      "any": [
+        {
+          "all": [
+            {
+              "contains_any": ["huggingface", "onnxruntime", "inferencesession", "persistentmodel", "rubix\\ml"]
+            },
+            {
+              "contains_any": ["file_get_contents", "->get(", "->request(", "curl_exec", "::load(", "new inferencesession", "new onnxruntime\\inferencesession"]
+            }
+          ]
+        },
+        {
+          "all": [
+            {
+              "contains_any": ["openai", "prism\\prism", "prism::text", "llphant", "neuronai", "symfony\\ai", "anthropic", "ollama", "chat()->create", "->generatetext(", "/v1/completions", "/v1/chat/completions"]
+            },
+            {
+              "contains_any": ["composer require", "exec(", "shell_exec", "proc_open"]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/php-systempromptleakage": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["system_prompt", "systemprompt", "system_message", "systemmessage", "'role' => 'system'"]
+        },
+        {
+          "any": [
+            {
+              "contains_any": ["echo ", "jsonresponse", "response()->json", "$response->getbody", "$this->render", "return response("]
+            },
+            {
+              "contains_any": ["error_log", "monolog", "log::debug", "log::info", "throw new"]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/php-unboundedconsumption": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["openai", "prism\\prism", "prism::text", "llphant", "neuronai", "symfony\\ai", "anthropic", "ollama", "chat()->create", "->generatetext(", "/v1/completions", "/v1/chat/completions"]
+        },
+        {
+          "contains_any": ["chat()->create", "chat()->createstreamed", "asstream", "astext", "generatetext", "->ask", "/v1/completions", "/v1/chat/completions", "/api/generate", "/api/chat"]
+        }
+      ]
+    }
+  },
+  "datadog/php-vectorembeddingweaknesses": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["qdrant", "pinecone", "weaviate", "chroma", "milvus", "pgvector", "lancedb", "qdrantvectorstore"]
+        },
+        {
+          "contains_any": ["upsert", "adddocument", "add(", "insert", "index"]
+        }
+      ]
+    }
+  },
+  "datadog/python-accesscontrol": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["@app.route", "@router.", "@api.", "def get(", "def post(", "def put(", "def delete("]
+        },
+        {
+          "contains_any": ["request.args.get", "request.form.get", "<int:id>", "<id>", "get_object_or_404", "filter("]
+        }
+      ]
+    }
+  },
+  "datadog/python-brokencrypto": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["from cryptography", "cryptography.hazmat", "from crypto", "pycryptodome", "from pycrypto"]
+        },
+        {
+          "contains_any": ["from crypto.cipher import des", "import des", "des.new(", "from crypto.cipher import des3", "des3.new(", "from crypto.cipher import arc4", "arc4.new(", "from crypto.cipher import arc2", "arc2.new(", "from crypto.cipher import blowfish", "blowfish.new(", "algorithms.des", "algorithms.tripledes", "algorithms.3des", "algorithms.arc4", "algorithms.blowfish", "algorithms.idea", "algorithms.cast5", "algorithms.seed", "desede", "tripledes", "3des", "/des/", "des/ecb", "des/cbc", "rc4", "rc2", "key_size=512", "key_size=1024", "rsa_key_size=512", "rsa_key_size=1024"]
+        }
+      ]
+    }
+  },
+  "datadog/python-cmdi": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["subprocess", "subprocess.run(", "subprocess.popen(", "subprocess.call(", "subprocess.check_output(", "os.system(", "os.popen(", "os.spawn", "commands.getoutput(", "shell=true", "/bin/sh", "/bin/bash"]
+    }
+  },
+  "datadog/python-codei": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["eval(", "exec(", "compile(", "__import__(", "importlib"]
+        },
+        {
+          "contains_any": ["request.args", "request.form", "request.data", "request.json", "input("]
+        }
+      ]
+    }
+  },
+  "datadog/python-deserialization": {
+    "version": 1,
+    "expression": {
+      "any": [
+        {
+          "all": [
+            {
+              "contains_any": ["yaml.load("]
+            },
+            {
+              "not": {
+                "contains_any": ["yaml.safe_load", "safeloader"]
+              }
+            }
+          ]
+        },
+        {
+          "all": [
+            {
+              "contains_any": ["pickle.loads", "pickle.load", "cpickle.loads", "cpickle.load", "yaml.load(", "yaml.unsafe_load", "marshal.loads", "shelve.open", "dill.loads", "jsonpickle.decode"]
+            },
+            {
+              "not": {
+                "contains_any": ["yaml.safe_load", "safeloader"]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/python-insecurecookie": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["set_cookie(", ".set_cookie(", "simplecookie"]
+    }
+  },
+  "datadog/python-ldapi": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["import ldap", "from ldap", "ldap3", "python-ldap", "ldap.search", "connection.search", "search_s(", "search_ext_s(", "simple_bind", "bind_s(", "filter=", "filter_str", "ldap_filter", "search_filter", "base_dn", "user_dn", "dc=", "cn=", "ou="]
+    }
+  },
+  "datadog/python-pathtraversal": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["open(", "send_file(", "send_from_directory(", "os.path.join(", "os.path.exists(", "os.path.isfile(", "os.path.isdir(", "os.path.abspath(", "os.path.realpath(", "os.listdir(", "os.remove(", "os.unlink(", "os.rename(", "os.makedirs(", "pathlib", "shutil."]
+        },
+        {
+          "contains_any": ["request.args", "request.form", "request.values", "request.files", "flask.request", "request.cookies", "request.headers", "request.get_json", "request.data"]
+        }
+      ]
+    }
+  },
+  "datadog/python-sqli": {
+    "version": 1,
+    "expression": {
+      "any": [
+        {
+          "all": [
+            {
+              "contains_any": ["sqlite3", "psycopg2", "mysql", "pymysql", "cx_oracle", "pyodbc", "sqlalchemy", "cursor(", ".cursor(", "execute(", "executemany(", "callproc(", ".raw(", ".extra(", "rawsql", "connection", "conn.", "db."]
+            },
+            {
+              "any": [
+                {
+                  "words_any": ["select", "update", "insert", "delete", "from", "where", "call", "exec"]
+                },
+                {
+                  "contains_any": ["% (", ".format(", "f\"", "f'", "+ bar", "+ param", "' +", "\" +"]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "all": [
+            {
+              "contains_any": ["\"select ", "'select ", "\"insert ", "'insert ", "\"update ", "'update ", "\"delete ", "'delete "]
+            },
+            {
+              "contains_any": ["% (", ".format(", "f\"", "f'", "+ bar", "+ param", "' +", "\" +"]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/python-trustboundary": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["session[", "flask.session", "request.session"]
+        },
+        {
+          "contains_any": ["request.args", "request.form", "request.data", "request.values", "request.cookies", "request.headers", "request.get", "request.post", "request.query_string"]
+        }
+      ]
+    }
+  },
+  "datadog/python-weakhash": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["hashlib.md5", "hashlib.sha1", "hashlib.new(\"md5\"", "hashlib.new(\"sha1\"", "hashlib.new('md5'", "hashlib.new('sha1'", "md5(", "sha1(", "hashlib", ".hexdigest(", ".digest("]
+    }
+  },
+  "datadog/python-weakrandomness": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["import random", "from random", "random.random", "random.randint", "random.choice", "random.choices", "random.sample", "random.shuffle", "random.getrandbits", "random.gauss", "random.randrange", "random.uniform", "random.triangular", "random.betavariate", "random.expovariate", "random.gammavariate", "random.normalvariate", "random.vonmisesvariate", "random.paretovariate", "random.weibullvariate", "random.random("]
+        },
+        {
+          "contains_any": ["token", "password", "session", "secret", "key", "otp", "verification", "csrf", "nonce", "api_key", "apikey", "cookie", "rememberme", "remember_me", "auth", "login", "credential"]
+        }
+      ]
+    }
+  },
+  "datadog/python-xpathi": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["lxml", "etree", ".xpath(", "from xml", "import xml"]
+    }
+  },
+  "datadog/python-xss": {
+    "version": 1,
+    "expression": {
+      "any": [
+        {
+          "contains_any": ["<html", "<body", "<script", "<form", "<input", "<img", "<iframe", "<div", "<span", "<a ", "<h1", "<h2", "<p>"]
+        },
+        {
+          "contains_any": ["response(", "response.", "make_response", "render_template", "render_template_string", "httpresponse", "jsonresponse", "markup(", ".write(", "return f\"", "return f'"]
+        },
+        {
+          "contains_any": ["request.args", "request.form", "request.values", "request.get_json", "request.data", "request.headers", "request.cookies", "flask.request"]
+        }
+      ]
+    }
+  },
+  "datadog/ruby-accesscontrol": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["def show", "def edit", "def update", "def destroy", "get '", "post '", "put '", "delete '", "resources :"]
+        },
+        {
+          "contains_any": ["params[:id]", "params['id']", "find(", "find_by(", "where(id:", "where(id ="]
+        }
+      ]
+    }
+  },
+  "datadog/ruby-brokencrypto": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["openssl::cipher::des", "openssl::cipher::rc4", "openssl::cipher::rc2", "openssl::cipher::bf", "openssl::digest::md5", "openssl::digest::sha1", "cipher.new('des", "cipher.new('rc4", "cipher.new('rc2", "cipher.new('bf"]
+    }
+  },
+  "datadog/ruby-cmdi": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["system(", "exec(", "`", "spawn(", "open(", "popen(", "io.popen(", "kernel#`", "%x{", "/bin/sh", "/bin/bash", "shellwords"]
+    }
+  },
+  "datadog/ruby-codei": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["eval(", "instance_eval(", "class_eval(", "module_eval(", "binding.eval("]
+        },
+        {
+          "contains_any": ["params[", "params.fetch", "request.params", "cookies["]
+        }
+      ]
+    }
+  },
+  "datadog/ruby-datamodelpoisoning": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["training_data", "fine_tune", "finetune", "dataset", "corpus", "llm", "model.train"]
+    }
+  },
+  "datadog/ruby-deserialization": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["marshal.load(", "marshal.restore(", "yaml.load(", "yaml.unsafe_load(", "oj.load(", "json.load(", "psych.load("]
+        },
+        {
+          "not": {
+            "contains_any": ["yaml.safe_load", "yaml.safe_load_file"]
+          }
+        }
+      ]
+    }
+  },
+  "datadog/ruby-errorinfoleak": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["rescue ", "rescue=>", "exception", "standarderror", "runtimeerror", "backtrace", ".message"]
+        },
+        {
+          "contains_any": ["render(", "render json:", "response.body", "to_json", "logger."]
+        }
+      ]
+    }
+  },
+  "datadog/ruby-excessiveagency": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["openai", "anthropic", "langchain", "llm", "chatgpt", "gpt-4", "tool_call", "function_call", "langchain::agent"]
+    }
+  },
+  "datadog/ruby-improperoutputhandling": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["render(", "render json:", "response.body", "response.write(", "send_data(", "to_json"]
+        },
+        {
+          "contains_any": ["params[", "params.fetch", "request.params", "cookies["]
+        }
+      ]
+    }
+  },
+  "datadog/ruby-insecurecookie": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["cookies[", "cookies.signed[", "cookies.encrypted[", "response.set_cookie", "rack::response", "actiondispatch::cookies"]
+    }
+  },
+  "datadog/ruby-integeroverflow": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": [".to_i", ".to_f", ".to_r", "integer(", "float(", "bigdecimal", "fiddle", "ffi"]
+        },
+        {
+          "contains_any": ["params[", "params.fetch", "request.params", "cookies["]
+        }
+      ]
+    }
+  },
+  "datadog/ruby-ldapi": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["net/ldap", "net::ldap", "ldap.search", "ldap.bind", "ldap.open"]
+    }
+  },
+  "datadog/ruby-loginjection": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["logger.", "rails.logger", "log.info", "log.warn", "log.error", "log.debug", "puts ", "print "]
+        },
+        {
+          "contains_any": ["params[", "params.fetch", "request.params", "cookies[", "session["]
+        }
+      ]
+    }
+  },
+  "datadog/ruby-misinformation": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["llm", "openai", "anthropic", "langchain", "chat_completion", "completions.create", "messages.create"]
+    }
+  },
+  "datadog/ruby-openredirect": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["redirect_to(", "redirect(", "response.redirect"]
+        },
+        {
+          "contains_any": ["params[", "params.fetch", "request.params", "request.referer", "cookies["]
+        }
+      ]
+    }
+  },
+  "datadog/ruby-pathtraversal": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["file.open(", "file.read(", "file.write(", "file.delete(", "file.new(", "io.read(", "send_file(", "send_data(", "dir.glob(", "fileutils.", "pathname.new("]
+        },
+        {
+          "contains_any": ["params[", "params.fetch", "request.params", "cookies[", "session["]
+        }
+      ]
+    }
+  },
+  "datadog/ruby-promptinjection": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["openai", "anthropic", "langchain", "llm", "chat(", "completion(", "generate(", "messages:", "prompt:"]
+        },
+        {
+          "contains_any": ["params[", "params.fetch", "request.params", "cookies[", "session[", "user_input", "user_message"]
+        }
+      ]
+    }
+  },
+  "datadog/ruby-sensitiveinfodisclosure": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["password", "passwd", "secret", "api_key", "apikey", "token", "private_key", "credit_card", "ssn", "social_security"]
+        },
+        {
+          "contains_any": ["render(", "render json:", "response.body", "to_json", "as_json", "logger.", "puts "]
+        }
+      ]
+    }
+  },
+  "datadog/ruby-sqli": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["sqlite3", "mysql2", "pg::connection", "require 'pg'", "require \"pg\"", "activerecord", "sequel", ".execute(", ".query(", "connection.exec", "connection.query", "db.exec", "db.query", "find_by_sql", "where(", "joins("]
+        },
+        {
+          "words_any": ["select", "update", "insert", "delete", "from", "where"]
+        }
+      ]
+    }
+  },
+  "datadog/ruby-systempromptleakage": {
+    "version": 1,
+    "expression": {
+      "any": [
+        {
+          "contains_any": ["system_prompt", "system prompt", "systemprompt", "role: 'system'", "role: \"system\""]
+        },
+        {
+          "contains_any": ["openai", "anthropic", "langchain", "llm"]
+        }
+      ]
+    }
+  },
+  "datadog/ruby-trustboundary": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["session[", "session.store", "session[:user", "session[:current"]
+        },
+        {
+          "contains_any": ["params[", "params.fetch", "request.params", "cookies[", "request.headers"]
+        }
+      ]
+    }
+  },
+  "datadog/ruby-unboundedconsumption": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["openai", "anthropic", "langchain", "llm"]
+        },
+        {
+          "contains_any": ["max_tokens", "max_length", "temperature"]
+        }
+      ]
+    }
+  },
+  "datadog/ruby-vectorembeddingweaknesses": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["embedding", "vector", "pgvector", "pinecone", "weaviate", "chroma", "faiss", "similarity_search", "cosine_similarity"]
+    }
+  },
+  "datadog/ruby-weakhash": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["digest::md5", "openssl::digest::md5", "digest::sha1", "openssl::digest::sha1", "md5.hexdigest", "md5.digest", "sha1.hexdigest", "sha1.digest"]
+    }
+  },
+  "datadog/ruby-weakrandomness": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["rand(", "random.rand", "kernel.rand", "srand("]
+        },
+        {
+          "contains_any": ["token", "password", "session", "secret", "otp", "verification", "csrf", "nonce", "api_key", "apikey", "cookie", "auth", "login", "credential"]
+        }
+      ]
+    }
+  },
+  "datadog/ruby-xpathi": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["nokogiri", "rexml", "libxml", ".xpath(", ".search(", "xpath("]
+    }
+  },
+  "datadog/ruby-xss": {
+    "version": 1,
+    "expression": {
+      "any": [
+        {
+          "contains_any": ["<html", "<body", "<script", "<form", "<input", "<img", "<iframe", "<div", "<span"]
+        },
+        {
+          "contains_any": ["render(", "html_safe", "raw(", "content_tag(", "response.body", "response.write(", "erb("]
+        },
+        {
+          "contains_any": ["params[", "params.fetch", "request.params", "request.query_string", "cookies[", "session["]
+        }
+      ]
+    }
+  },
+  "datadog/ruby-zipslip": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["zipfile", "rubyzip", "zip::file", "zip::inputstream", "minitar", "archive::tar", "zlib::gzipreader", "minizip"]
+    }
+  },
+  "datadog/swift-accesscontrol": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["find(", "findbyid", "query.filter", "database.query", "fluent", "model.find", "fetchrequest"]
+        },
+        {
+          "contains_any": ["req.query", "req.parameters", "req.content", "request.query", "request.parameters", "request.body", "url.queryitems"]
+        }
+      ]
+    }
+  },
+  "datadog/swift-brokencrypto": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["kccalgorithmdes", "kccalgorithm3des", "kccalgorithmrc2", "kccalgorithmrc4", "kccalgorithmblowfish", "kccalgorithmcast", "des.", "rc2", "rc4", "blowfish", "cast", "ecb", "ciphermode.ecb"]
+    }
+  },
+  "datadog/swift-cmdi": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["process()", "process.run(", "process.launch", "task.launch", "launchedprocess(", "launchpath", "executableurl", "nstask", "/bin/sh", "/bin/bash"]
+    }
+  },
+  "datadog/swift-codei": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["nsexpression", "evaluatescript(", "evaluatejavascript(", "jscontext", "javascriptcore", "nsapplescript", "dlopen("]
+        },
+        {
+          "contains_any": ["req.query", "req.parameters", "req.content", "request.query", "request.parameters", "request.body", "url.queryitems"]
+        }
+      ]
+    }
+  },
+  "datadog/swift-datamodelpoisoning": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["pinecone", "qdrant", "weaviate", "pgvector", "embedding", "vector"]
+        },
+        {
+          "contains_any": ["upsert", "insert", "add", "index", "document", "collection"]
+        }
+      ]
+    }
+  },
+  "datadog/swift-deserialization": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["nskeyedunarchiver.unarchive", "nskeyedunarchiver(", "unarchiveobject(with", "unarchivetoplevelobject(with", "decodeobject("]
+    }
+  },
+  "datadog/swift-errorinfoleak": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["localizeddescription", "debugdescription", "callstacksymbols", "stacktrace", "error as ns"]
+        },
+        {
+          "contains_any": ["response(", "response.body", "response.write", "body:", "render(", "return .ok"]
+        }
+      ]
+    }
+  },
+  "datadog/swift-excessiveagency": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["openai", "anthropic", "langchain", "llm", "chatcompletion", "generativeai"]
+        },
+        {
+          "contains_any": ["functioncall", "toolcall", "tools:", "function:", "execute(", "mcp"]
+        }
+      ]
+    }
+  },
+  "datadog/swift-improperoutputhandling": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["openai", "anthropic", "langchain", "llm", "chatcompletion", "generativeai"]
+        },
+        {
+          "contains_any": ["process()", "evaluatejavascript(", "nsexpression", "write(to:", "database.execute", "query("]
+        }
+      ]
+    }
+  },
+  "datadog/swift-insecurecookie": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["setcookie", "httpcookie", "cookie(", "cookie:", "response.cookies", ".setcookie", ".httponly", ".samesite", ".secure"]
+    }
+  },
+  "datadog/swift-integeroverflow": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["int8(", "int16(", "int32(", "uint8(", "uint16(", "uint32(", "truncatingifneeded", "addingreportingoverflow", "multipliedreportingoverflow"]
+        },
+        {
+          "contains_any": ["req.query", "req.parameters", "req.content", "request.query", "request.parameters", "request.body", "url.queryitems"]
+        }
+      ]
+    }
+  },
+  "datadog/swift-ldapi": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["ldapconnection", "ldapsearchrequest", "ldapsearch", "swiftldap", "ldap."]
+        },
+        {
+          "contains_any": ["filter", "base", "dn", "search"]
+        }
+      ]
+    }
+  },
+  "datadog/swift-loginjection": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["logger.", "os_log(", "nslog(", "print("]
+        },
+        {
+          "contains_any": ["req.query", "req.parameters", "req.content", "request.query", "request.parameters", "request.body", "url.queryitems"]
+        }
+      ]
+    }
+  },
+  "datadog/swift-misinformation": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["openai", "anthropic", "langchain", "llm", "chatcompletion", "generativeai"]
+        },
+        {
+          "contains_any": ["medical", "diagnosis", "financial", "legal", "decision", "recommendation", "answer", "response"]
+        }
+      ]
+    }
+  },
+  "datadog/swift-openredirect": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["redirect(to:", "response.redirect", "httpresponse.redirect", "location:"]
+        },
+        {
+          "contains_any": ["req.query", "req.parameters", "req.content", "request.query", "request.parameters", "request.body", "url.queryitems"]
+        }
+      ]
+    }
+  },
+  "datadog/swift-pathtraversal": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["filemanager.default", "filehandle(forreadingfrom:", "filehandle(forwritingto:", "string(contentsoffile:", "data(contentsof:", "contents(atpath:", "createfile(atpath:", "write(to:", "copyitem(at:", "moveitem(at:", "removeitem(at:", "appendingpathcomponent(", "fileurlwithpath("]
+        },
+        {
+          "contains_any": ["req.query", "req.parameters", "req.content", "request.query", "request.parameters", "request.body", "url.queryitems"]
+        }
+      ]
+    }
+  },
+  "datadog/swift-promptinjection": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["openai", "anthropic", "langchain", "llm", "chatcompletion", "generativeai"]
+        },
+        {
+          "any": [
+            {
+              "contains_any": ["req.query", "req.parameters", "req.content", "request.query", "request.parameters", "request.body", "url.queryitems"]
+            },
+            {
+              "contains_any": ["userinput", "usermessage", "document", "prompt:"]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/swift-sensitiveinfodisclosure": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["password", "secret", "api_key", "apikey", "token", "private_key", "credit_card", "ssn"]
+        },
+        {
+          "any": [
+            {
+              "contains_any": ["response(", "response.body", "response.write", "body:", "render(", "return .ok"]
+            },
+            {
+              "contains_any": ["openai", "anthropic", "langchain", "llm", "chatcompletion", "generativeai"]
+            },
+            {
+              "contains_any": ["logger.", "os_log(", "print("]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/swift-sqli": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["sqlite", "postgres", "mysql", "grdb", "fluent", "fmdb", "execute(", "query(", "rawsql", "sqlquery", "sqlrequest"]
+        },
+        {
+          "words_any": ["select", "update", "insert", "delete", "from", "where"]
+        }
+      ]
+    }
+  },
+  "datadog/swift-supplychain": {
+    "version": 1,
+    "expression": {
+      "contains_any": [".package(", "binarytarget(", "from:", "exact:", "revision:", "branch:", "checksum:"]
+    }
+  },
+  "datadog/swift-systempromptleakage": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["systemprompt", "system prompt", "role: .system", "role: \"system\""]
+        },
+        {
+          "any": [
+            {
+              "contains_any": ["response(", "response.body", "response.write", "body:", "render(", "return .ok"]
+            },
+            {
+              "contains_any": ["logger.", "os_log(", "print("]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "datadog/swift-trustboundary": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["session.", "usersdefaults", "keychain", "jwt", "setvalue("]
+        },
+        {
+          "contains_any": ["req.query", "req.parameters", "req.content", "request.query", "request.parameters", "request.body", "url.queryitems"]
+        }
+      ]
+    }
+  },
+  "datadog/swift-unboundedconsumption": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["openai", "anthropic", "langchain", "llm", "chatcompletion", "generativeai"]
+        },
+        {
+          "contains_any": ["chatcompletion", "completion", "generate", "stream", "while true", "for await"]
+        }
+      ]
+    }
+  },
+  "datadog/swift-vectorembeddingweaknesses": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["pinecone", "qdrant", "weaviate", "pgvector", "embedding", "vector", "cosinesimilarity"]
+        },
+        {
+          "contains_any": ["similarity", "nearest", "search", "query", "distance", "embedding"]
+        }
+      ]
+    }
+  },
+  "datadog/swift-weakhash": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["insecure.md5", "insecure.sha1", "cc_md5", "cc_sha1", "kccalgorithmsha1", "md5("]
+    }
+  },
+  "datadog/swift-weakrandomness": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["arc4random", "int.random", "uint.random", "random()"]
+        },
+        {
+          "contains_any": ["token", "password", "session", "secret", "otp", "nonce", "api_key", "cookie", "auth", "credential"]
+        }
+      ]
+    }
+  },
+  "datadog/swift-xpathi": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["xpath", "nodes(forxpath:", "aexml", "swxmlhash", "kissxml", "gdataxml"]
+    }
+  },
+  "datadog/swift-xss": {
+    "version": 1,
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["req.query", "req.parameters", "req.content", "request.query", "request.parameters"]
+        },
+        {
+          "contains_any": ["render(", "html", "response.body", "response.write", "body:"]
+        }
+      ]
+    }
+  },
+  "datadog/swift-zipslip": {
+    "version": 1,
+    "expression": {
+      "contains_any": ["zipfoundation", "archive(", ".extract(", "ssziparchive", "ziparchive"]
+    }
+  }
+}
