@@ -1,0 +1,129 @@
+{
+  "datadog/elixir-deserialization": {
+    "expression": {
+      "all": [
+        {
+          "contains_any": [":erlang.binary_to_term", "binary_to_term("]
+        },
+        {
+          "not": {
+            "all": [
+              {
+                "count_equals": {
+                  "count": 1,
+                  "substrings": ["binary_to_term("]
+                }
+              },
+              {
+                "regex_any": ["(?s)(?::erlang\\.)?binary_to_term\\s*\\([^()]*(?:,\\s*\\[\\s*:safe\\s*\\])\\s*\\)"]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "version": 1
+  },
+  "datadog/elixir-supplychain": {
+    "expression": {
+      "all": [
+        {
+          "not": {
+            "all": [
+              {
+                "not": {
+                  "contains_any": ["req.get(", "req.request(", "finch.request(", "httpoison.get(", ":httpc.request(", "download("]
+                }
+              },
+              {
+                "any": [
+                  {
+                    "all": [
+                      {
+                        "count_equals": {
+                          "count": 1,
+                          "substrings": ["bumblebee.load_model(", "bumblebee.load_featurizer(", "axon.deserialize(", "nx.deserialize("]
+                        }
+                      },
+                      {
+                        "not": {
+                          "contains_any": ["ortex"]
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "all": [
+                      {
+                        "count_equals": {
+                          "count": 0,
+                          "substrings": ["bumblebee.load_model(", "bumblebee.load_featurizer(", "axon.deserialize(", "nx.deserialize("]
+                        }
+                      },
+                      {
+                        "contains_any": ["ortex"]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "regex_any": ["(?s)bumblebee\\.load_(?:model|featurizer)\\s*\\(\\s*\\{:hf,\\s*\"[^\"]+\"\\s*,\\s*revision:\\s*\"[0-9a-f]{40}\"\\s*\\}"]
+              }
+            ]
+          }
+        },
+        {
+          "contains_any": ["bumblebee.load_model(", "bumblebee.load_featurizer(", "ortex", "axon.deserialize(", "nx.deserialize("]
+        },
+        {
+          "any": [
+            {
+              "contains_any": ["req.get(", "req.request(", "finch.request(", "httpoison.get(", ":httpc.request(", "download("]
+            },
+            {
+              "contains_any": ["{:hf,"]
+            }
+          ]
+        }
+      ]
+    },
+    "version": 1
+  },
+  "datadog/elixir-xss": {
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["phoenix.html.raw(", "{:safe,", "html(conn,", "send_resp(", "put_resp_content_type("]
+        },
+        {
+          "any": [
+            {
+              "contains_any": ["conn.params", "params[", "body_params", "query_params", "get_req_header("]
+            },
+            {
+              "regex_any": ["(?s)\\bdefp?\\s+[a-z_][a-z0-9_!?]*\\s*(?:\\(\\s*)?(?:_?conn|%plug\\.conn\\{.*?\\}\\s*=\\s*_?conn)\\s*,\\s*(?:%\\{\\s*\"|params\\b)"]
+            },
+            {
+              "regex_any": ["(?s)\\bdefp?\\s+handle_event\\s*(?:\\(\\s*)?(?:\"[^\"]*\"|[a-z_][a-z0-9_!?]*)\\s*,\\s*(?:%\\{\\s*\"|params\\b)"]
+            }
+          ]
+        }
+      ]
+    },
+    "version": 1
+  },
+  "datadog/java-sqli": {
+    "expression": {
+      "all": [
+        {
+          "contains_any": ["connection", "drivermanager", "preparedstatement", "statement", "resultset", "executequery(", "executeupdate(", "execute(", "jdbctemplate", "namedparamjdbctemplate", "simplejdbccall", "entitymanager", "createquery(", "createsqlquery(", "session.createquery", "session.createsqlquery", "dsl.", "dslcontext", "selectfrom("]
+        },
+        {
+          "words_any": ["select", "update", "insert", "delete", "from", "where"]
+        }
+      ]
+    },
+    "version": 1
+  }
+}
