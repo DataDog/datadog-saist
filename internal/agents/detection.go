@@ -16,18 +16,11 @@ import (
 	pkgerrors "github.com/pkg/errors"
 )
 
-// aIGatewayFallbackModel is the model used automatically when rate limit (429) is hit with AI Gateway.
-const aIGatewayFallbackModel = "openai/gpt-6-luna"
-
 type DetectionAgent struct {
 	llmClient             clients.LLMClient
 	verificationLLMClient clients.LLMClient
 
 	agentOption *AgentOption
-
-	// Prevents retrying fallback when it also returns 429 (verification can be called for many violations)
-	verificationFallbackAttempted bool
-	verificationFallbackMu        sync.Mutex
 }
 
 type AgentOption struct {
@@ -156,9 +149,11 @@ func NewDetectionAgent(ctx context.Context, agentOption *AgentOption) (*Detectio
 	}
 
 	return &DetectionAgent{
-		llmClient:             client,
-		verificationLLMClient: verificationClient,
-		agentOption:           agentOption,
+		llmClient: newRateLimitFallbackClient(client,
+			agentOption.DetectionModel.ToAPIModelWithFormat(agentOption.IsAIGateway), "detection", agentOption),
+		verificationLLMClient: newRateLimitFallbackClient(verificationClient,
+			agentOption.ValidationModel.ToAPIModelWithFormat(agentOption.IsAIGateway), "verification", agentOption),
+		agentOption: agentOption,
 	}, nil
 }
 
@@ -584,47 +579,11 @@ func (agent *DetectionAgent) verificationGenerateContent(ctx context.Context, sc
 	response, err := agent.verificationLLMClient.GenerateContent(contextWithDeadline,
 		systemPrompt, userPrompt, options)
 	if err != nil {
-		if clients.IsRateLimitError(err) && agent.agentOption.IsAIGateway {
-			agent.verificationFallbackMu.Lock()
-			alreadyTried := agent.verificationFallbackAttempted
-			if !alreadyTried {
-				agent.verificationFallbackAttempted = true
-			}
-			agent.verificationFallbackMu.Unlock()
-
-			if !alreadyTried {
-				logger.Warnf("Verification rate limit detected, switching to fallback validation model: %s",
-					aIGatewayFallbackModel)
-
-				fallbackClient, clientErr := clients.NewOpenAIClient(ctx,
-					aIGatewayFallbackModel,
-					agent.agentOption.OpenAiBaseUrl,
-					agent.agentOption.IsAIGateway,
-					agent.agentOption.AIGuardEnabled,
-					agent.agentOption.OrgID,
-					false)
-
-				if clientErr == nil {
-					agent.verificationLLMClient = fallbackClient
-					response, err = agent.verificationLLMClient.GenerateContent(contextWithDeadline,
-						systemPrompt, userPrompt, options)
-					if err != nil && agent.agentOption.DebugEnabled {
-						logger.Warnf("[debug] verification client call failed with fallback model for %s:%d: %s",
-							scanData.RelativeFilePath, violationLine, err)
-					}
-				} else {
-					logger.Warnf("Failed to create fallback verification client: %s", clientErr)
-				}
-			}
+		if agent.agentOption.DebugEnabled {
+			logger.Warnf("[debug] verification client call failed for %s:%d: %s",
+				scanData.RelativeFilePath, violationLine, err)
 		}
-
-		if err != nil {
-			if agent.agentOption.DebugEnabled {
-				logger.Warnf("[debug] verification client call failed for %s:%d: %s",
-					scanData.RelativeFilePath, violationLine, err)
-			}
-			return nil, err
-		}
+		return nil, err
 	}
 
 	return response, nil
@@ -675,31 +634,17 @@ func (agent *DetectionAgent) VerifyViolation(ctx context.Context, scanData *mode
 }
 
 func (agent *DetectionAgent) Detect(ctx context.Context, scanData *model.ScanData) (*DetectionResult, error) {
-	for i := 0; i < 3; i++ {
+	usedFallback := false
+	for i := 0; i < maxDetectionAttempts; i++ {
 		res, err := agent.basicDetection(ctx, scanData)
 		if err != nil {
-			// On rate limit with AI Gateway, try hardcoded fallback model once
-			if clients.IsRateLimitError(err) && agent.agentOption.IsAIGateway && i == 0 {
-				log.FromContext(ctx).Warnf("Rate limit detected, switching to fallback detection model: %s",
-					aIGatewayFallbackModel)
-
-				fallbackClient, clientErr := clients.NewOpenAIClient(ctx,
-					aIGatewayFallbackModel,
-					agent.agentOption.OpenAiBaseUrl,
-					agent.agentOption.IsAIGateway,
-					agent.agentOption.AIGuardEnabled,
-					agent.agentOption.OrgID,
-					false)
-
-				if clientErr == nil {
-					agent.llmClient = fallbackClient
-					continue // Retry with fallback
-				}
-				log.FromContext(ctx).Warnf("Failed to create fallback client: %s", clientErr)
-			}
-
-			// Fail fast on rate limit if no fallback or already tried fallback
 			if clients.IsRateLimitError(err) {
+				var fallbackErr *rateLimitFallbackError
+				if i+1 < maxDetectionAttempts && (i == 0 || usedFallback) && errors.As(err, &fallbackErr) &&
+					fallbackErr.client.advance(ctx, fallbackErr.next) {
+					usedFallback = true
+					continue
+				}
 				log.FromContext(ctx).Warnf("[fail-fast] rate limit detected, stopping analysis: %s", err)
 				return nil, err
 			}
