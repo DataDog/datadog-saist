@@ -50,31 +50,32 @@
 
   ```bash
   make build
-  ./bin/datadog-saist --directory <path> --output <output-file> --detection-model <model>
-  --validation-model <model> [options]
+  ./bin/datadog-saist --directory "<path>" --output "<output-file>" \
+  --detection-model "<model>" --validation-model "<model>"
 ```
 
-  Example with Gemini:
+  Example with Gemini (set `GOOGLE_API_KEY` first):
 ```bash
   make build
-  GOOGLE_API_KEY=<...> ./bin/datadog-saist --directory <path> --output <output-file>
+  ./bin/datadog-saist --directory "<path>" --output "<output-file>" \
   --detection-model gemini-2.5-flash --validation-model gemini-2.5-flash
 ```
 
   Example with GPT-5.6 Luna using OpenAI directly (set `OPENAI_API_KEY` first):
 ```bash
   make build
-  ./bin/datadog-saist --directory <path> --output <output-file> \
+  ./bin/datadog-saist --directory "<path>" --output "<output-file>" \
   --detection-model openai-gpt-5.6-luna --validation-model openai-gpt-5.6-luna \
   --openai-base-url https://api.openai.com
 ```
 
   The OpenAI base URL must omit `/v1`; the client appends it automatically.
 
-  Example with AI Gateway:
+  Example with AI Gateway: set `SAIST_GATEWAY_URL` to the intended gateway base URL (without `/v1`) and `OPENAI_BEARER_TOKEN` to its model-call token. `--ai-gateway` selects gateway request behavior; it does not configure the endpoint or obtain credentials. A `DD_JWT_TOKEN` for org-specific prompts is separate.
 ```bash
-  ./bin/datadog-saist --directory <path> --output <output-file> --ai-gateway \
-  --org-id <organization-id> --repository-id <repository-id> \
+  ./bin/datadog-saist --directory "<path>" --output "<output-file>" --ai-gateway \
+  --org-id "<organization-id>" --repository-id "<repository-id>" \
+  --openai-base-url "${SAIST_GATEWAY_URL:?Set the gateway base URL without /v1}" \
   --detection-model openai-gpt5-mini --validation-model openai-gpt5-mini
 ```
 
@@ -84,29 +85,10 @@
   - --detection-model: Model to use for vulnerability detection
   - --validation-model: Model to use for result validation
 
-  Available Models
-```
-  ┌───────────────────────┬───────────┐
-  │       CLI name        │ Provider  │
-  ├───────────────────────┼───────────┤
-  │ openai-gpt5-mini      │ OpenAI    │
-  ├───────────────────────┼───────────┤
-  │ openai-gpt5.2         │ OpenAI    │
-  ├───────────────────────┼───────────┤
-  │ openai-gpt5.2-codex   │ OpenAI    │
-  ├───────────────────────┼───────────┤
-  │ claude-4.5-sonnet     │ Anthropic │
-  ├───────────────────────┼───────────┤
-  │ claude-4.5-haiku      │ Anthropic │
-  ├───────────────────────┼───────────┤
-  │ gemini-2.5-pro        │ Google    │
-  ├───────────────────────┼───────────┤
-  │ gemini-2.5-flash      │ Google    │
-  ├───────────────────────┼───────────┤
-  │ gemini-2.0-flash-lite │ Google    │
-  ├───────────────────────┼───────────┤
-  │ gemini-3-flash        │ Google    │
-  └───────────────────────┴───────────┘
+  For the current model names and complete option list, use the built binary's help:
+
+```bash
+  ./bin/datadog-saist --help
 ```
   Optional Arguments
 
@@ -122,3 +104,16 @@
   Datadog API
   - --skip-indexing: Disable cross-file context indexing. Reduces memory usage on large
   repositories at the cost of cross-file vulnerability detection.
+
+## Development
+
+Start with the [development guide](docs/development.md) for scanning, driver behavior,
+and the hosted cache contract. It also covers:
+
+- [Tests, linting, and a one-file scan](docs/development.md#local-commands).
+- [Evaluating against existing ground truth](docs/development.md#evaluating-with-existing-ground-truth), including fixture/eval updates and baseline comparisons.
+- [Evidence to retain](docs/development.md#evidence-to-retain) when validating a change.
+- [Releasing and publishing](docs/development.md#releases-and-hosted-consumers), including the separate hosted version bump.
+
+See [filtering](internal/filtering/README.md) for expression semantics and keyword fallback,
+and [AGENTS.md](AGENTS.md) for repository conventions and documentation upkeep.
