@@ -1,90 +1,36 @@
-# Instructions for agent for `datadog-saist`
+# Working on datadog-saist
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+SAIST is a Go CLI that selects source files/rules, calls LLMs for detection and verification, and writes SARIF. It runs standalone and as a binary invoked by the hosted Code Security runner.
 
-## Project Overview
+Read [docs/development.md](docs/development.md) for the pipeline, validation, hosted cache contract, and releases. Read [internal/filtering/README.md](internal/filtering/README.md) when changing scan selection.
 
-This is the Datadog AI-native SAST (Static Application Security Testing) engine - a security analysis tool focused on identifying vulnerabilities in source code using AI-powered techniques.
+## Code map
 
-## Project Status
+- `cmd/datadog-saist`: CLI flags and startup.
+- `internal/api`, `internal/model/api`: prompts API client and rule/filter decoding.
+- `internal/analysis`: file/rule selection, scan scheduling, checkpoints, and aggregation.
+- `internal/codesecurity`: local Code Security YAML selection and path filters.
+- `internal/filtering`: comment preprocessing, conditional expressions, keyword fallback, and result exclusions.
+- `internal/agents`, `internal/clients`: detection/verification and provider clients.
+- `internal/prompt`: runtime prompt assembly; `internal/sarif`: output and successful-pair metadata.
 
-This repository is in early development stages. The codebase currently contains only basic repository setup files (README, LICENSE, .gitignore).
+## Contracts to preserve
 
-## Development Environment
+- The hosted driver supplies file/rule IDs, not rule definitions. It restricts scan scope without bypassing `filtering.ShouldAnalyze`.
+- Invalid or unsupported conditional metadata falls back to keyword filtering. Do not reintroduce per-language rule dispatch for ordinary keyword combinations.
+- Keep `RULE_SUCCESS` artifact metadata accurate: consumers distinguish successful zero-finding scans from pairs that were skipped or failed.
+- Release `Version` and cache `EngineVersion` in `internal/model/constants.go` are distinct. A model or release change does not automatically invalidate hosted caches.
 
-This project is set up as a Go project based on the directory structure and Go-specific .gitignore patterns.
+## Development
 
- - `cmd/` contains the code for the command-line (cli tool)
- - `internal/model` contains the structure definitions
- - `internal/sarif` handles all the SARIF creation files
- - `internal/api` contains all the code to handle the Datadog API
- - `internal/prompt` contains the code to handle the prompt
+- Put constants in the package's `constants.go`; general utilities belong in `internal/utils`.
+- Use `github.com/stretchr/testify/assert` and focused `_test.go` tests. Do not introduce table-driven tests.
+- Do not add maintainer Markdown directly under `internal/agents`: `embedded.go` loads every `*.md` there as a local detection rule. Put agent documentation under `docs/`.
+- Preserve source files as data; tests should not execute the programs being scanned.
+- Run `gofmt` on changed Go files and targeted `go test -race` / `go vet` checks. Build the CLI into a unique output directory, for example `build_dir=$(mktemp -d)` then `go build -o "$build_dir/datadog-saist" ./cmd/datadog-saist`; keep baseline and candidate binaries separate.
+- Use the linter version pinned in [.github/workflows/lint.yml](.github/workflows/lint.yml), with a Go toolchain supported by that linter. An incompatible local linter/export-data format is a tooling failure, not evidence of a source error.
+- Use [.github/workflows/build-test.yml](.github/workflows/build-test.yml) and [release.yml](.github/workflows/release.yml) for CI/release details. Local mocked tests do not establish live provider access or detection quality.
 
-When adding constants, use a file `constants.go` in the package where the constant should be used.
+## Keeping this context current
 
-For utility function, add functions in `internal/utils`.
-
-
-## Common Commands
-
-Since this is a Go project, the following commands will be relevant once source code is added.
-
-### Building
-```bash
-go build
-go build ./cmd/...
-```
-
-### Testing
-```bash
-go test ./...
-go test -v ./...
-go test -race ./...
-go test -cover ./...
-```
-
-### Linting and Formatting
-```bash
-go fmt ./...
-go vet ./...
-golangci-lint run
-```
-
-### Dependencies
-```bash
-go mod tidy
-go mod download
-go mod verify
-```
-
-## Coding Guidelines
-
- - Use constants when appropriate (e.g. avoid raw strings and magic numbers)
-
-## Tests
-
- - For writting tests and assertions, use `"github.com/stretchr/testify/assert"`
- - When updating code, update tests accordingly. The test file should append `_test` into the file name. For example, when having a file `foo.go`, the test file should be `foo_test.go` 
- - Do not use table tests, this is horrible, a real maintenance nightmware and it belongs to the "good intentions don't work" shelf
-
-## Security Focus
-
-This project is specifically for defensive security analysis (SAST). When working with this codebase:
-
-- All code should be focused on identifying and analyzing security vulnerabilities
-- The tool should help developers find and fix security issues
-- Code analysis should be performed safely without executing analyzed code
-- Security rules and detection logic should be well-documented
-
-## Architecture Notes
-
-As an AI-native SAST engine, the architecture will likely include:
-- Code parsing and AST analysis components
-- AI/ML models for vulnerability detection
-- Rule engines for security pattern matching
-- Reporting and output formatting
-- Integration points with CI/CD systems
-
-## License
-
-This project is licensed under the Apache License 2.0.
+Update the relevant guide in the same PR when scan ordering, filtering, SARIF completion metadata, cache compatibility, or development/release commands change. Verify instructions against the implementation and link to changing values rather than copying them. Propose a concise correction when an agent repeats a mistake; the code owners review it and remove stale guidance. Record task-specific results in the PR/ticket using the [evidence checklist](docs/development.md#evidence-to-retain).
