@@ -1,0 +1,11 @@
+# Install as .github/chainguard/owasp-ddeval-poc.sts.yaml in each input repository.
+issuer: https://gitlab.ddbuild.io
+subject: "project_path:DataDog/dd-source:ref_type:branch:ref:cole.maring/owasp-ddeval-poc"
+claim_pattern:
+  project_path: "^DataDog/dd-source$"
+  ref_type: "^branch$"
+  ref: '^cole\.maring/owasp-ddeval-poc$'
+  ref_path: '^refs/heads/cole\.maring/owasp-ddeval-poc$'
+  pipeline_source: "^parent_pipeline$"
+permissions:
+  contents: read
