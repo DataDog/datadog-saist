@@ -333,6 +333,30 @@ func TestGenerateSarifReport_MixedFingerprints(t *testing.T) {
 	}
 }
 
+func TestGenerateSarifReport_MixedRuleOutcomes(t *testing.T) {
+	info := SarifReportInformation{
+		FileResults: []model.FileResult{{
+			Path:           "mixed.go",
+			RulesSucceeded: []string{"test/succeeded"},
+			RulesFailed:    []string{"test/failed"},
+			RulesSkipped:   []string{"test/filtered"},
+		}},
+	}
+	report, err := GenerateSarifReport(&info)
+	if !assert.NoError(t, err) || !assert.Len(t, report.Runs, 1) {
+		return
+	}
+	artifacts := report.Runs[0].Artifacts
+	if assert.Len(t, artifacts, 1) {
+		assert.Equal(t, "mixed.go", *artifacts[0].Location.URI)
+		assert.Equal(t, []any{
+			"RULE_SUCCESS:test/succeeded",
+			"RULE_FAILURE:test/failed",
+			"RULE_SKIPPED:test/filtered",
+		}, artifacts[0].Properties["tags"])
+	}
+}
+
 func TestGenerateSarifReport_EmptyViolations(t *testing.T) {
 	sarifInfo := SarifReportInformation{
 		Violations:   []model.Violation{},

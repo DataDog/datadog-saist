@@ -182,7 +182,7 @@ func countFileRulePairs(m map[string][]string) int {
 	return n
 }
 
-func filterScanDataForDatadogDriver(filesAndRules map[string][]string, scans []model.ScanData) []model.ScanData {
+func filterScansToScope(filesAndRules map[string][]string, scans []model.ScanData) []model.ScanData {
 	scansToPerform := make([]model.ScanData, 0)
 
 	// we check all applicable rules and only add the ones
@@ -369,12 +369,12 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 			scansToPerform := res.Scans
 			res.Scans = nil // release backing array before LLM calls begin (besides FileContent)
 
-			// Datadog driver JSON or local Code Security YAML narrows (file, rule) pairs for scans
-			if effectiveDriver != nil {
-				scansToPerform = filterScanDataForDatadogDriver(effectiveDriver.Files, scansToPerform)
-				if len(scansToPerform) == 0 {
-					return
-				}
+			// Local Code Security YAML narrows scan scope after prompt preparation.
+			if opts.DatadogDriver == nil && effectiveDriver != nil {
+				scansToPerform = filterScansToScope(effectiveDriver.Files, scansToPerform)
+			}
+			if effectiveDriver != nil && len(scansToPerform) == 0 && len(res.rulesSkipped) == 0 {
+				return
 			}
 
 			runScanResult, err := ruleProcessor.RunScans(ctx, scansToPerform)
@@ -393,8 +393,10 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 
 			// Count only after RunScans succeeds, so the completion log reflects scans that
 			// actually ran rather than ones that were dispatched and then failed.
-			totalFilesScanned.Add(1)
-			totalScansRun.Add(int32(len(scansToPerform)))
+			if effectiveDriver == nil || len(scansToPerform) > 0 {
+				totalFilesScanned.Add(1)
+				totalScansRun.Add(int32(len(scansToPerform)))
+			}
 
 			fileResult := model.FileResult{
 				Path:           res.RelPath,
@@ -404,6 +406,7 @@ func analyzeFiles(ctx context.Context, files []fileMeta, opts *model.AnalysisOpt
 				LLMCalls:       runScanResult.FileLLMCalls,
 				RulesSucceeded: runScanResult.RulesSuccess,
 				RulesFailed:    runScanResult.RulesFailed,
+				RulesSkipped:   res.rulesSkipped,
 			}
 			resultSync.Lock()
 			allFilesResults = append(allFilesResults, fileResult)

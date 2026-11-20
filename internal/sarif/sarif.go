@@ -12,20 +12,6 @@ import (
 	"github.com/owenrumney/go-sarif/v2/sarif"
 )
 
-const toolName = "datadog-ai-static-analyzer"
-const toolInformationURI = "https://github.com/DataDog/datadog-saist"
-
-const ruleSuccessTag = "RULE_SUCCESS"
-const ruleFailureTag = "RULE_FAILURE"
-const inputTokensTag = "DATADOG_SAIST_INPUT_TOKENS"   // nolint: gosec
-const outputTokensTag = "DATADOG_SAIST_OUTPUT_TOKENS" // nolint: gosec
-const cweTag = "CWE"
-const ruleTypeTag = "DATADOG_RULE_TYPE"
-const tagsKey = "tags"
-const confidenceTag = "DATADOG_CONFIDENCE"
-const confidenceReasonTag = "DATADOG_CONFIDENCE_REASON"
-const highConfidence = "HIGH"
-
 type SarifReportInformation struct {
 	Violations    []model.Violation
 	InputTokens   int32
@@ -96,16 +82,14 @@ func GenerateSarifReport(sarifInformation *SarifReportInformation) (*sarif.Repor
 		}
 		newArtifact.Length = 0
 		newArtifact.Properties = sarif.Properties{}
-		ruleSuccessTagValue := make([]string, 0)
-		ruleFailureTagValue := make([]string, 0)
-
 		if len(fileResult.RulesSucceeded) > 0 {
-			ruleSuccessTagValue = append(ruleSuccessTagValue, fileResult.RulesSucceeded...)
-			run.Properties = AddPropertyTag(newArtifact.Properties, ruleSuccessTag, strings.Join(ruleSuccessTagValue, ","))
+			newArtifact.Properties = AddPropertyTag(newArtifact.Properties, ruleSuccessTag, strings.Join(fileResult.RulesSucceeded, ","))
 		}
 		if len(fileResult.RulesFailed) > 0 {
-			ruleFailureTagValue = append(ruleFailureTagValue, fileResult.RulesFailed...)
-			run.Properties = AddPropertyTag(newArtifact.Properties, ruleFailureTag, strings.Join(ruleFailureTagValue, ","))
+			newArtifact.Properties = AddPropertyTag(newArtifact.Properties, ruleFailureTag, strings.Join(fileResult.RulesFailed, ","))
+		}
+		if len(fileResult.RulesSkipped) > 0 {
+			newArtifact.Properties = AddPropertyTag(newArtifact.Properties, ruleSkippedTag, strings.Join(fileResult.RulesSkipped, ","))
 		}
 	}
 

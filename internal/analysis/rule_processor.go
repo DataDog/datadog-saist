@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"slices"
 	"strings"
 
 	"github.com/DataDog/datadog-saist/internal/agents"
@@ -85,11 +86,12 @@ type ProcessFileResult struct {
 	// RelPath is the relative path of the file processed.
 	RelPath string
 	// Scans contains scans that need to be executed for this file.
-	// If empty, no rules apply to this file.
+	// If empty, no rule will run for this file.
 	Scans []model.ScanData
 
 	// Internal fields for batched processing (not exported)
 	applicableRules []*api.AiPrompt // Rules that apply to this file
+	rulesSkipped    []string        // Hosted driver rules rejected by the analysis filter
 	fileMeta        fileMeta        // File metadata for building ScanData later
 }
 
@@ -174,6 +176,14 @@ func (rp *RuleProcessor) BuildScanDataForResult(ctx context.Context, result *Pro
 		return nil
 	}
 
+	var requestedRules []string
+	if driver := rp.opts.DatadogDriver; driver != nil {
+		requestedRules = driver.Files[result.RelPath]
+		if len(requestedRules) == 0 {
+			return nil
+		}
+	}
+
 	// Read file content
 	data, err := os.ReadFile(result.fileMeta.AbsPath)
 	if err != nil {
@@ -191,8 +201,12 @@ func (rp *RuleProcessor) BuildScanDataForResult(ctx context.Context, result *Pro
 	}
 
 	allScanData := make([]model.ScanData, 0, len(result.applicableRules))
+	var rulesSkipped []string
 
 	for _, rule := range result.applicableRules {
+		if requestedRules != nil && !slices.Contains(requestedRules, rule.ID) {
+			continue
+		}
 		dctx := model.DetectionContext{
 			ProjectContext:      *rp.aiContext,
 			Language:            fm.Language,
@@ -204,7 +218,9 @@ func (rp *RuleProcessor) BuildScanDataForResult(ctx context.Context, result *Pro
 			Rule:                *rule,
 		}
 		if !filtering.ShouldAnalyze(&dctx, log.FromContext(ctx)) {
-			// Skip files that don't need analysis
+			if requestedRules != nil {
+				rulesSkipped = append(rulesSkipped, rule.ID)
+			}
 			continue
 		}
 
@@ -244,6 +260,7 @@ func (rp *RuleProcessor) BuildScanDataForResult(ctx context.Context, result *Pro
 	}
 
 	result.Scans = allScanData
+	result.rulesSkipped = rulesSkipped
 	return nil
 }
 

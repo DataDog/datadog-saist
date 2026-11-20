@@ -13,4 +13,5 @@ type FileResult struct {
 	LLMCalls       int32
 	RulesSucceeded []string
 	RulesFailed    []string
+	RulesSkipped   []string
 }

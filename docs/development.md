@@ -8,10 +8,10 @@ The CLI loads rules from the prompts API by default; `--local-prompts` selects t
 
 ```text
 Load rules + discover source files + resolve configured scope
-  → match language/globs
+  → match language/globs and apply hosted driver scope
   → ShouldAnalyze: conditional expression or keyword fallback
   → build prompts and related-file context
-  → restrict scans to driver/local-config file-rule pairs
+  → apply local Code Security YAML scope when configured
   → detect candidate vulnerabilities
   → verify candidates and filter results
   → checkpoint/finalize SARIF
@@ -35,7 +35,7 @@ Hosted calls use `--ai-gateway`, provider-qualified model IDs, `--openai-base-ur
 
 ### Result contracts
 
-[internal/sarif/sarif.go](../internal/sarif/sarif.go) emits `RULE_SUCCESS` on artifacts. A successful scan with no findings still needs that metadata so a host can cache it. Skipped or failed pairs must not be represented as successful scans. The pipeline also writes checkpoints that a host can recover after interruption.
+[internal/sarif/sarif.go](../internal/sarif/sarif.go) emits rule outcomes on file artifacts. `RULE_SUCCESS` lets the host cache successful scans, including scans with no findings. `RULE_FAILURE` reports scan failures. `RULE_SKIPPED` reports requested hosted pairs rejected by `ShouldAnalyze`, including when all requested rules for a file are skipped. A pair can be absent if setup fails or its file or rule is unavailable. The pipeline writes these tags in checkpoints that the host can recover after interruption.
 
 Detection results are provisional: verification may reject them, and result-keyword exclusions can remove findings afterward. A log saying a violation was found followed by an empty SARIF is not by itself a selection failure. Inspect verification and result filtering separately.
 

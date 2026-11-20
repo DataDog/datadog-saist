@@ -10,6 +10,7 @@ import (
 	"github.com/DataDog/datadog-saist/internal/log"
 	"github.com/DataDog/datadog-saist/internal/model"
 	"github.com/DataDog/datadog-saist/internal/model/api"
+	"github.com/owenrumney/go-sarif/v2/sarif"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -127,4 +128,71 @@ func main() {}
 		"prompt must contain the cross-file taint source from main.go")
 	assert.Equal(t, 1, strings.Count(helperPrompt, "## Related Files"),
 		"Related Files header must appear exactly once")
+}
+
+func TestDriverWritesSkipOnlyArtifact(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "test-key")
+	dir := t.TempDir()
+	conditional := api.AiPrompt{
+		ID:                 "test/conditional",
+		Globs:              []string{"**/*.go"},
+		FileSearchKeywords: []string{"package"},
+		AnalysisFilter: &api.AnalysisFilter{
+			Version:    api.AnalysisFilterVersion,
+			Expression: api.FilterExpression{ContainsAny: []string{"missing"}},
+		},
+	}
+	keyword := api.AiPrompt{
+		ID:                 "test/keyword",
+		Globs:              []string{"**/*.go"},
+		FileSearchKeywords: []string{"missing"},
+	}
+	unrequested := keyword
+	unrequested.ID = "test/unrequested"
+	opts := &model.AnalysisOptions{
+		Directory:         dir,
+		Output:            filepath.Join(dir, "report.sarif"),
+		DetectionModel:    model.OpenAIGPT5Mini,
+		ValidationModel:   model.OpenAIGPT5Mini,
+		OpenAIBaseURL:     "http://127.0.0.1:0",
+		RequestTimeoutSec: 1,
+		FileConcurrency:   1,
+		SkipIndexing:      true,
+		Rules:             []api.AiPrompt{conditional, keyword, unrequested},
+		DatadogDriver: &model.DatadogDriverConfig{Files: map[string][]string{
+			"filtered.go": {"test/conditional", "test/keyword"},
+			"removed.go":  {"test/conditional"},
+			"unknown.go":  {"test/unknown"},
+			"missing.go":  {"test/conditional"},
+		}},
+	}
+	for _, name := range []string{"filtered.go", "removed.go", "unknown.go", "unrequested.go"} {
+		if !assert.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte("package example\n"), 0600)) {
+			return
+		}
+	}
+
+	ctx := ContextWithShimmedLogger(context.Background(), log.NewDefaultLogger())
+	files, aiContext, err := processDirectory(ctx, opts)
+	if !assert.NoError(t, err) || !assert.Len(t, files, 4) {
+		return
+	}
+	if !assert.NoError(t, os.Remove(filepath.Join(dir, "removed.go"))) {
+		return
+	}
+	results, err := analyzeFiles(ctx, files, opts, aiContext)
+	if !assert.NoError(t, err) || !assert.NoError(t, writeCheckpoint(opts, results)) {
+		return
+	}
+
+	report, err := sarif.Open(opts.Output)
+	if !assert.NoError(t, err) || !assert.Len(t, report.Runs, 1) {
+		return
+	}
+	run := report.Runs[0]
+	assert.Empty(t, run.Results)
+	if assert.Len(t, run.Artifacts, 1) {
+		assert.Equal(t, "filtered.go", *run.Artifacts[0].Location.URI)
+		assert.Equal(t, []any{"RULE_SKIPPED:test/conditional,test/keyword"}, run.Artifacts[0].Properties["tags"])
+	}
 }
