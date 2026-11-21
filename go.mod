@@ -26,7 +26,7 @@ require (
 	github.com/tree-sitter/tree-sitter-typescript v0.23.2
 	go.uber.org/zap v1.27.0
 	google.golang.org/api v0.186.0
-	gopkg.in/DataDog/dd-trace-go.v1 v1.74.7-rc.5
+	gopkg.in/DataDog/dd-trace-go.v1 v1.999.0-rc.44
 )
 
 replace github.com/tree-sitter/tree-sitter-elixir => github.com/elixir-lang/tree-sitter-elixir v0.3.5
